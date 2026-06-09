@@ -33,6 +33,14 @@
         .mob-target { padding: 0.75rem; border: 2px solid #334155; border-radius: 0.5rem; background: #0f172a; cursor: pointer; flex: 1; text-align: center; display: flex; flex-direction: column; justify-content: center; transition: all 0.2s; min-height: 185px;}
         .mob-target.active { border-color: #ef4444; background: #450a0a; }
         .mob-target:hover:not(.active) { background: #1e293b; }
+        /* 區域背景：背景圖由 JS 依地圖/分類設為 inline 樣式（特殊地圖逐張不同）；卡片較不透明，使背景不過於顯眼 */
+        #battle-view.has-bg { background-size: cover; background-position: center; border-radius: 0.5rem; }
+        #battle-view.has-bg .mob-target { background: rgba(15,23,42,0.66); border-color: rgba(148,163,184,0.5); }
+        #battle-view.has-bg .mob-target.active { background: rgba(69,10,10,0.72); border-color: #ef4444; }
+        #battle-view.has-bg .mob-target:hover:not(.active) { background: rgba(30,41,59,0.72); }
+        #town-view.has-bg { background-size: cover; background-position: center; border-radius: 0.5rem; }
+        #town-view.has-bg #town-npc-container > div { background: rgba(30,41,59,0.72); }
+        #town-view.has-bg #town-npc-container > div:hover { background: rgba(51,65,85,0.78); }
         .tip-host { cursor: help; }
         .stat-row { display: contents; }
         .stat-row.row-hidden { display: none; }
@@ -4991,6 +4999,7 @@ function updateUI() {
     document.getElementById('st-lv').innerText = player.lv;
     { let rb = document.getElementById('btn-return-town'); if (rb) rb.textContent = siegeVictoryActive() ? '回城' : '回村'; }
     { let vb = document.getElementById('victory-badge'); if (vb) vb.style.display = siegeVictoryActive() ? 'inline-flex' : 'none'; }   // 攻城獲勝淡金黃標記（inline-flex 讓👑與文字水平置中）
+    applyAreaBackground();   // 區域背景：地監/攻城→戰鬥區、城堡→村莊畫面
     
     // 處理顯示文字：只顯示 騎士、法師、妖精
     let clsDisplayName = '';
@@ -5921,7 +5930,7 @@ const MAP_CATEGORIES = {
     ],
     special: [
         {v:'training',t:'新兵修練場'}, {v:'dream_island',t:'夢幻之島'},
-        {v:'antaras_lair',t:'安塔瑞斯棲息地',c:'#fb923c'}, {v:'fafurion_lair',t:'法利昂巢穴',c:'#60a5fa'}, {v:'valakas_lair',t:'巴拉卡斯巢穴',c:'#f87171'}
+        {v:'antaras_lair',t:'安塔瑞斯棲息地',c:'#fb923c'}, {v:'fafurion_lair',t:'法利昂洞穴',c:'#60a5fa'}, {v:'valakas_lair',t:'巴拉卡斯巢穴',c:'#f87171'}
     ]
 };
 function mapCategoryOf(v) {
@@ -6891,6 +6900,31 @@ const ELF_ELE = {
 };
 const ELF_SWITCH_COST = 500000;
 
+const SPECIAL_AREA_BG = {   // 特殊地圖：逐張對應背景
+    training: 'train.png',
+    dream_island: 'Dream Island.png',
+    antaras_lair: "Antharas's Lair.png",
+    fafurion_lair: "Fafurion's Lair.png",
+    valakas_lair: "Valakas' Lair.png"
+};
+const CATEGORY_AREA_BG = { wild: 'forest.png', dungeon: 'dungeon.png', siege: 'castle.png' };   // 戰鬥區依分類
+const TOWN_AREA_BG = { village: 'village.png', castle: 'castle.png' };                            // 村莊畫面依分類
+function applyAreaBackground() {
+    let cur = mapState.current, cat = mapCategoryOf(cur);
+    let ov = a => `linear-gradient(rgba(15,23,42,${a}), rgba(15,23,42,${a}))`;
+    let bv = document.getElementById('battle-view');
+    if (bv) {
+        let img = SPECIAL_AREA_BG[cur] || CATEGORY_AREA_BG[cat] || null;   // 特殊地圖逐張優先，否則依分類(野外/地監/攻城)
+        if (img) { bv.style.backgroundImage = `${ov(0.68)}, url("assets/background/${img}")`; bv.classList.add('has-bg'); }
+        else { bv.style.backgroundImage = ''; bv.classList.remove('has-bg'); }
+    }
+    let tv = document.getElementById('town-view');
+    if (tv) {
+        let timg = TOWN_AREA_BG[cat] || null;
+        if (timg) { tv.style.backgroundImage = `${ov(0.7)}, url("assets/background/${timg}")`; tv.classList.add('has-bg'); }
+        else { tv.style.backgroundImage = ''; tv.classList.remove('has-bg'); }
+    }
+}
 function applyElfBorder() {
     if(!document.body) return;
     let e = (player.cls === 'elf' && player.elfEle) ? ELF_ELE[player.elfEle] : null;
