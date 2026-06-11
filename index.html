@@ -223,7 +223,7 @@
     <!-- 👇 修改 1：將寬度放大為 max-w-5xl 以容納三欄排版 -->
     <div id="creation-screen" class="w-[1000px] panel p-8 flex flex-col gap-6 z-50 absolute shadow-2xl" style="background: rgba(42, 44, 46, 0.78); backdrop-filter: blur(6px);">
         <div class="text-center border-b border-slate-700 pb-4">
-            <h1 class="text-4xl font-bold text-yellow-400 mb-2">放置天堂-歐瑞</h1>
+            <h1 class="text-4xl font-bold text-yellow-400 mb-2">放置天堂-冰之女王</h1>
             <p class="text-base text-slate-400">創造您的角色並開始冒險</p>
         </div>
         
@@ -5895,7 +5895,7 @@ function renderMobs() {
                         <div class="flex justify-center mb-3">
                             <img src="${imgUrl}" alt="${m.n}" onerror="this.onerror=null; this.src='https://placehold.co/100x100/1e293b/ffffff?text=?';" class="w-24 h-24 p-1 object-contain pointer-events-none ${hitClass}">
                         </div>
-                        ${((m.bleeds && m.bleeds.length) || (m._bluntShow && state.ticks < m._bluntShow)) ? `<div class="flex justify-center items-center gap-2 mb-1">${(m.bleeds && m.bleeds.length) ? `<span class="text-[11px] font-bold text-red-400" title="出血層數">🩸×${m.bleeds.length}</span>` : ''}${(m._bluntShow && state.ticks < m._bluntShow) ? `<span class="text-[11px] font-bold text-amber-300" title="鈍擊：攻擊延遲中">🔨鈍</span>` : ''}</div>` : ''}
+                        <div class="flex justify-center items-center gap-2 mb-1" style="height:16px;">${(m.bleeds && m.bleeds.length) ? `<span class="text-[11px] font-bold text-red-400" title="出血層數">🩸×${m.bleeds.length}</span>` : ''}${(m._bluntShow && state.ticks < m._bluntShow) ? `<span class="text-[11px] font-bold text-amber-300" title="鈍擊：攻擊延遲中">🔨鈍</span>` : ''}</div>
                         <div class="w-full bg-slate-700 h-2.5 rounded-full overflow-hidden">
                             <div class="bg-red-500 h-full transition-all" style="width:${pct}%"></div>
                         </div>
@@ -9851,4 +9851,4 @@ window.onload = () => {
 })();
 </script>
 </body>
-</html>
+</html>                                                                       
