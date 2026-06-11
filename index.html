@@ -3849,6 +3849,14 @@ function pledgeBonusDrop(mob) {
 
 // ===== 內建效率/掉落統計（接在 killMob/gainItem，換地圖重置；不靠函數劫持）=====
 let _audit = { start: Date.now(), gold0: 0, exp: 0, kills: 0, scrollWpn: 0, scrollArm: 0, watch: [], watchCnt: {} };
+const AUDIT_WATCH_KEY = 'lineage_idle_audit_watch';
+function saveAuditWatch() { try { localStorage.setItem(AUDIT_WATCH_KEY, JSON.stringify(_audit.watch)); } catch(e) {} }
+(function loadAuditWatch() {   // 自訂掉落追蹤清單跨重開保留（只存名稱；計數仍每段觀測重置）
+    try {
+        let arr = JSON.parse(localStorage.getItem(AUDIT_WATCH_KEY));
+        if (Array.isArray(arr)) { _audit.watch = arr.filter(x => typeof x === 'string'); _audit.watch.forEach(t => { _audit.watchCnt[t] = 0; }); }
+    } catch(e) {}
+})();
 function auditReset() {
     _audit.start = Date.now();
     _audit.gold0 = (typeof player !== 'undefined' && player) ? (player.gold || 0) : 0;
@@ -3873,12 +3881,12 @@ function auditTrackGain(res) {
 }
 function auditAddTarget(name) {
     name = (name || '').trim(); if (!name) return;
-    if (!_audit.watch.includes(name)) { _audit.watch.push(name); if (_audit.watchCnt[name] === undefined) _audit.watchCnt[name] = 0; }
+    if (!_audit.watch.includes(name)) { _audit.watch.push(name); if (_audit.watchCnt[name] === undefined) _audit.watchCnt[name] = 0; saveAuditWatch(); }
     renderAuditTab();
 }
 function auditRemoveIdx(i) {
     let t = _audit.watch[i];
-    if (t !== undefined) { _audit.watch.splice(i, 1); delete _audit.watchCnt[t]; }
+    if (t !== undefined) { _audit.watch.splice(i, 1); delete _audit.watchCnt[t]; saveAuditWatch(); }
     renderAuditTab();
 }
 function auditAddFromInput() {
