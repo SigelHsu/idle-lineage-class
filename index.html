@@ -423,9 +423,11 @@
                 </div>
             </div>
 
-            <div id="combat-log-panel" class="panel flex-1 flex flex-col overflow-hidden">
+            <div id="combat-log-panel" class="panel flex-1 flex flex-col overflow-hidden relative">
                 <div class="panel-header text-slate-100 text-lg border-b border-red-900/40">戰鬥日誌</div>
                 <div id="combat-log" class="flex-1 p-4 overflow-y-auto log-bg rounded-b-xl shadow-inner text-base tracking-wide"></div>
+                <!-- 🔒 戰鬥日誌捲動鎖定提示（向上捲動查看舊訊息時鎖定刷新，捲回底部自動解除） -->
+                <button id="combat-log-unlock" onclick="combatLogToBottom()" class="hidden absolute left-1/2 -translate-x-1/2 bottom-2 z-10 px-3 py-1 text-xs font-bold rounded-full shadow-lg bg-amber-700/90 hover:bg-amber-600 border border-amber-400 text-amber-50">🔒 已鎖定捲動 ▾ 回到最新</button>
             </div>
 
             <div class="panel h-1/3 flex flex-col overflow-hidden">
@@ -782,7 +784,7 @@ const DB = {
         "new_item_bless_wpn": { n: "賦予武器祝福卷軸", type: "misc", p: 0, c: "text-purple-300", d: "於象牙塔『碧恩』處用來祝福武器（無法直接使用）。", isAnc: true, noUse: true, gachaWeight: 1 },
         "new_item_bless_arm": { n: "賦予盔甲祝福卷軸", type: "misc", p: 0, c: "text-purple-300", d: "於象牙塔『碧恩』處用來祝福防具（無法直接使用）。", isAnc: true, noUse: true, gachaWeight: 1 },
         "new_item_bless_acc": { n: "賦予飾品祝福卷軸", type: "misc", p: 0, c: "text-purple-300", d: "於象牙塔『碧恩』處用來祝福飾品（無法直接使用）。", isAnc: true, noUse: true, gachaWeight: 1 },
-        "new_item_uncurse": { n: "解除詛咒的卷軸", type: "misc", p: 0, c: "text-cyan-200", d: "於象牙塔『碧恩』處用來移除裝備的詛咒（無法直接使用）。", noUse: true, gachaWeight: 10 },
+        "new_item_uncurse": { n: "解除詛咒的卷軸", type: "misc", p: 0, c: "text-cyan-200", d: "於象牙塔『碧恩』處用來移除裝備的詛咒（無法直接使用）。", noUse: true, gachaWeight: 0 },   // 🔧 潘朵拉不出（改由克里斯特兌換）
         "new_item_143": { n: "肉", type: "pot", req: "all", p: 1, d: "食用後獲得『誘捕』狀態300秒", eff: "meat", gachaWeight: 0 },
         "new_item_144": { n: "夏洛伯之爪", p: 1, c: "text-blue-300", gachaWeight: 0 },   // 🔧 試煉材料統一藍色
         "new_item_145": { n: "阿吐巴圖騰", p: 600, gachaWeight: 0 },
@@ -1864,6 +1866,7 @@ function startGameTimers() {
     _loopLast = null; _tickDebt = 0;
     _gameLoopId = setInterval(gameLoop, 100);
     _saveLoopId = setInterval(saveGame, 300000); // 每 5 分鐘自動存檔
+    if (typeof initCombatLogLock === 'function') initCombatLogLock();   // 🔒 綁定戰鬥日誌捲動鎖定（含去重）
 }
 
 // 補跑（掛機/背景）所得累積：補跑期間 logSys 被靜音，先把所得累積起來，
@@ -2115,6 +2118,35 @@ function getWisBlueBonus(wis) {
     ], 31); // 60 = +31
 }
 
+// 🔒 戰鬥日誌捲動鎖定：玩家向上捲動查看舊訊息時，鎖定自動捲到底（避免新訊息把畫面拉走）；
+//    捲回接近底部則自動解除。鎖定期間保留量加大（150 行），確保往上看得到更多歷史。
+let _combatLogLocked = false;
+const COMBAT_LOG_MAX = 50;          // 一般保留行數
+const COMBAT_LOG_MAX_LOCKED = 150;  // 鎖定捲動時的加大保留量
+function _combatLogIsAtBottom(el) { return (el.scrollHeight - el.scrollTop - el.clientHeight) < 24; }
+function combatLogToBottom() {
+    let el = document.getElementById('combat-log');
+    if (!el) return;
+    _combatLogLocked = false;
+    el.scrollTop = el.scrollHeight;
+    let btn = document.getElementById('combat-log-unlock'); if (btn) btn.classList.add('hidden');
+}
+function initCombatLogLock() {
+    let el = document.getElementById('combat-log');
+    if (!el || el._lockInit) return;
+    el._lockInit = true;
+    let onScroll = () => {
+        let btn = document.getElementById('combat-log-unlock');
+        if (_combatLogIsAtBottom(el)) {            // 回到底部：自動解除鎖定
+            if (_combatLogLocked) { _combatLogLocked = false; if (btn) btn.classList.add('hidden'); }
+        } else {                                    // 離開底部（向上看）：鎖定
+            if (!_combatLogLocked) { _combatLogLocked = true; if (btn) btn.classList.remove('hidden'); }
+        }
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    el.addEventListener('touchmove', onScroll, { passive: true });
+}
+
 function logCombat(msg, type="player") {
     if(state.ff) return; // 補跑期間不洗版
     const el = document.getElementById('combat-log');
@@ -2132,8 +2164,10 @@ function logCombat(msg, type="player") {
     else if (type === "evade") { colorClass = "text-teal-300"; } // ER獨立迴避 (淡青綠色)
     
     el.innerHTML += `<div class="log-entry ${colorClass}">${msg}</div>`;
-    if(el.children.length > 50) el.removeChild(el.firstChild);
-    el.scrollTop = el.scrollHeight;
+    // 🔒 鎖定捲動時保留更多歷史；未鎖定時維持一般上限
+    let _max = _combatLogLocked ? COMBAT_LOG_MAX_LOCKED : COMBAT_LOG_MAX;
+    while(el.children.length > _max && el.children.length > 1) el.removeChild(el.firstChild);
+    if(!_combatLogLocked) el.scrollTop = el.scrollHeight;   // 鎖定時不自動捲到底，保留玩家檢視位置
 }
 
 function logSys(msg) {
@@ -5786,28 +5820,16 @@ function autoCastSpells() {
 
 // 詞綴抽取（新制）：單詞綴1% / 雙詞綴0.1% / 三詞綴0.01%（互斥）；屬性詞綴再依階級機率(rollAttrAffix)決定種類
 // 🔮 席琳的世界擊殺掉落（_sherineLootCtx 生效時）：單/雙/三詞綴機率一律 ×3
+// 🔧 詞綴抽取：怪物掉落 / 製作 / 潘朵拉 / 血盟怪掉落 等管道「只可能獲得 祝福的」詞綴（1%）。
+//    屬性詞綴與遠古系詞綴不再由這些管道隨機產生（改由象牙塔『碧恩』的賦予祝福卷軸取得）。
+//    🔮 席琳的世界擊殺掉落仍套用 ×3（祝福機率 3%）。
 function rollAffixesNew() {
     let m = _sherineLootCtx ? 3 : 1;
-    let r = Math.random();
-    let attr = false, bless = false, anc = false;
-    if (r < 0.0001 * m) { attr = rollAttrAffix(); bless = true; anc = true; }            // 0.01% 三詞綴
-    else if (r < 0.0011 * m) {                                                            // 0.1% 雙詞綴（屬性+遠古 / 遠古+祝福 / 屬性+祝福 等機率）
-        let c = Math.floor(Math.random() * 3);
-        if (c === 0) { attr = rollAttrAffix(); anc = true; }
-        else if (c === 1) { anc = true; bless = true; }
-        else { attr = rollAttrAffix(); bless = true; }
-    } else if (r < 0.030503 * m) {                                                        // 2.9403% 單詞綴（比照舊制 3×1%×0.99²；屬性 / 遠古 / 祝福 等機率）
-        let p = Math.floor(Math.random() * 3);
-        if (p === 0) attr = rollAttrAffix();
-        else if (p === 1) anc = true;
-        else bless = true;
-    }
-    return { attr, bless, anc };
+    return { attr: false, bless: (Math.random() < 0.01 * m), anc: false };
 }
-// 詞綴抽取（舊制）：屬性 / 祝福 / 遠古 各自獨立 1%（潘朵拉、血盟掉落沿用）；🔮 席琳擊殺掉落 ×3
 function rollAffixesOld() {
     let m = _sherineLootCtx ? 3 : 1;
-    return { attr: (Math.random() < 0.01 * m) ? rollAttrAffix() : false, bless: (Math.random() < 0.01 * m), anc: (Math.random() < 0.01 * m) };
+    return { attr: false, bless: (Math.random() < 0.01 * m), anc: false };
 }
 function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false) {
     // 卷軸變祝福機率
@@ -6211,15 +6233,19 @@ function equipItem(item) {
         else slot = 'ring1'; 
     }
 
+    // 🔧 詛咒鎖定：欲換裝的欄位若有詛咒裝備，無法替換（等同被迫卸下）
+    if (isEquipCursed(slot)) { logSys('<span class="text-red-400 font-bold">原本的裝備被詛咒纏身，無法更換！</span><span class="text-red-300">請先解除詛咒。</span>'); return; }
     // 雙手武器（弓 / w2h）無法與盾牌並存：裝雙手武器自動卸盾、裝盾自動卸雙手武器
     if (slot === 'wpn' && isTwoHandedWpn(d) && player.eq.shield) {
+        if (isEquipCursed('shield')) { logSys('<span class="text-red-400 font-bold">被詛咒的盾牌無法卸下，無法裝備雙手武器！</span>'); return; }
         returnEquipToInv('shield');
         logSys(`雙手武器無法持盾，已卸下盾牌。`);
     } else if (slot === 'shield' && player.eq.wpn && isTwoHandedWpn(DB.items[player.eq.wpn.id])) {
+        if (isEquipCursed('wpn')) { logSys('<span class="text-red-400 font-bold">被詛咒的雙手武器無法卸下，無法裝備盾牌！</span>'); return; }
         returnEquipToInv('wpn');
         logSys(`裝備盾牌，已卸下雙手武器。`);
     }
-    
+
     let invItem = player.inv.find(i => i.uid === item.uid);
     if (!invItem) return;
 
@@ -6255,7 +6281,11 @@ function equipItem(item) {
     closeModal();
 }
 
+// 🔧 詛咒鎖定：裝備出現「詛咒的」時無法卸下，也無法被換裝退回背包；需先用解除詛咒卷軸消除詛咒
+function isEquipCursed(slot) { let e = player.eq[slot]; return !!(e && e.bless === 'cursed'); }
+
 function unequipItem(slot) {
+    if (isEquipCursed(slot)) { logSys('<span class="text-red-400 font-bold">這件裝備被詛咒纏身，無法卸下！</span><span class="text-red-300">請至象牙塔『碧恩』處使用 解除詛咒的卷軸 消除詛咒。</span>'); return; }
     if (player.eq[slot]) {
         let e = player.eq[slot];
         let ex = player.inv.find(i => sameItemSig(i, e) && !i.lock && !i.junk);   // 🔧 架構#3：統一簽章比對
@@ -7132,7 +7162,12 @@ function openModal(item, isEq, slot) {
     
     let act = '';
     if (isEq) {
-        act += `<button class="col-span-2 w-full btn border-red-700 bg-red-900 hover:bg-red-800 text-red-200 py-3 text-lg font-bold" onclick="unequipItem('${slot}')">卸除</button>`;
+        // 🔧 詛咒裝備無法卸下：按鈕變灰並禁用
+        if (item.bless === 'cursed') {
+            act += `<button class="col-span-2 w-full btn border-slate-600 bg-slate-700 text-slate-400 py-3 text-lg font-bold cursor-not-allowed" disabled title="被詛咒的裝備無法卸下，需先解除詛咒">🔒 詛咒中・無法卸除</button>`;
+        } else {
+            act += `<button class="col-span-2 w-full btn border-red-700 bg-red-900 hover:bg-red-800 text-red-200 py-3 text-lg font-bold" onclick="unequipItem('${slot}')">卸除</button>`;
+        }
     } else {
         if(d.type === 'pot' || d.type === 'skillbk' || d.eff === 'panacea') {   // 萬能藥(misc/eff=panacea)亦顯示使用按鈕
             act += `<button class="col-span-2 w-full btn border-green-700 bg-emerald-800 hover:bg-emerald-700 text-green-100 py-3 text-lg font-bold" onclick="useItem('${item.uid}')">使用</button>`;
@@ -7827,9 +7862,12 @@ function ismaelExchange(kind) {
 // ===== 克里斯特：施法卷軸 + 金幣 → 賦予祝福卷軸 =====
 function kristaExchange(kind) {
     if (kind === 'uncurse') {
+        let UNCURSE_GOLD = 1000000;   // 🔧 兌換條件新增 100 萬金幣
+        if ((player.gold || 0) < UNCURSE_GOLD) { logSys(`<span class="text-red-400">金幣不足（需 ${UNCURSE_GOLD.toLocaleString()}）。</span>`); return; }
         if (pledgeCountItem('scroll_weapon_b') < 1 || pledgeCountItem('scroll_armor_b') < 1) {
             logSys(`<span class="text-red-400">需要 1 張 祝福的 對武器施法的卷軸 與 1 張 祝福的 對盔甲施法的卷軸。</span>`); return;
         }
+        player.gold -= UNCURSE_GOLD;
         let leftW = 1, leftA = 1;
         for (let it of player.inv) {
             if (it.id === 'scroll_weapon_b' && leftW > 0) { let t = Math.min(it.cnt, leftW); it.cnt -= t; leftW -= t; }
@@ -7838,7 +7876,7 @@ function kristaExchange(kind) {
         player.inv = player.inv.filter(it => it.cnt > 0);
         gainItem('new_item_uncurse', 1, true, true);
         renderTabs(); updateUI(); saveGame();
-        logSys(`以 1 張 祝福的 對武器施法的卷軸 ＋ 1 張 祝福的 對盔甲施法的卷軸，換得 1 張 <span class="text-cyan-200 font-bold">解除詛咒的卷軸</span>。`);
+        logSys(`花費 ${UNCURSE_GOLD.toLocaleString()} 金幣 ＋ 1 張 祝福的 對武器施法的卷軸 ＋ 1 張 祝福的 對盔甲施法的卷軸，換得 1 張 <span class="text-cyan-200 font-bold">解除詛咒的卷軸</span>。`);
         let _eu = document.getElementById('interaction-content'); if (_eu) renderKristaExchange(_eu);
         return;
     }
@@ -7874,7 +7912,7 @@ function renderKristaExchange(el) {
             ${row('arm','scroll_armor',100,'對盔甲施法的卷軸','賦予盔甲祝福卷軸')}
             ${row('acc','scroll_acc',5,'對飾品施法的卷軸','賦予飾品祝福卷軸')}
             <div class="flex items-center justify-between gap-2 bg-slate-800/60 border border-slate-600 rounded p-3">
-                <div class="text-sm text-slate-200 leading-relaxed">1 張 <span class="text-yellow-300">祝福的 對武器施法的卷軸</span> ＋ 1 張 <span class="text-yellow-300">祝福的 對盔甲施法的卷軸</span> → 1 張 <span class="text-cyan-200 font-bold">解除詛咒的卷軸</span><br><span class="text-xs text-slate-400">持有：${pledgeCountItem('scroll_weapon_b')} / ${pledgeCountItem('scroll_armor_b')} 張</span></div>
+                <div class="text-sm text-slate-200 leading-relaxed">100 萬金幣 ＋ 1 張 <span class="text-yellow-300">祝福的 對武器施法的卷軸</span> ＋ 1 張 <span class="text-yellow-300">祝福的 對盔甲施法的卷軸</span> → 1 張 <span class="text-cyan-200 font-bold">解除詛咒的卷軸</span><br><span class="text-xs text-slate-400">持有：${pledgeCountItem('scroll_weapon_b')} / ${pledgeCountItem('scroll_armor_b')} 張</span></div>
                 <button class="btn bg-purple-800 hover:bg-purple-700 border-purple-500 py-2 px-4 font-bold shrink-0" onclick="kristaExchange('uncurse')">兌換</button>
             </div>
         </div>`;
@@ -7883,6 +7921,7 @@ function renderKristaExchange(el) {
 function doBianBless(slotKey) {
     let item = player.eq[slotKey];
     if (!item) { logSys('該欄位沒有裝備。'); return; }
+    if (item.bless === 'cursed') { logSys('<span class="text-red-400 font-bold">被詛咒的裝備無法施加祝福，請先解除詛咒。</span>'); return; }   // 🔧 詛咒裝備不可祝福
     let isAcc = (slotKey === 'ring1' || slotKey === 'ring2' || slotKey === 'amulet' || slotKey === 'belt');
     let scrollId = (slotKey === 'wpn') ? 'new_item_bless_wpn' : (isAcc ? 'new_item_bless_acc' : 'new_item_bless_arm');
     let scrollNm = { 'new_item_bless_wpn':'賦予武器祝福卷軸', 'new_item_bless_arm':'賦予盔甲祝福卷軸', 'new_item_bless_acc':'賦予飾品祝福卷軸' }[scrollId];
@@ -7936,10 +7975,15 @@ function renderBianBless(el) {
     let rows = slots.map(sl => {
         let it = player.eq[sl.k];
         let name = it ? getItemFullName(it) : '<span class="text-slate-500">（未裝備）</span>';
-        let _uncurse = (it && it.bless === 'cursed') ? `<button class="btn py-1 px-2 text-sm font-bold shrink-0 bg-cyan-800 border-cyan-500 text-cyan-100" onclick="doBianUncurse('${sl.k}')">解除詛咒</button>` : '';
+        let _cursed = !!(it && it.bless === 'cursed');
+        let _uncurse = _cursed ? `<button class="btn py-1 px-2 text-sm font-bold shrink-0 bg-cyan-800 border-cyan-500 text-cyan-100" onclick="doBianUncurse('${sl.k}')">解除詛咒</button>` : '';
+        // 🔧 詛咒裝備：祝福按鈕變灰禁用
+        let _blessBtn = (it && !_cursed)
+            ? `<button class="btn py-1 px-2 text-sm font-bold w-24 text-center bg-purple-800 border-purple-500 text-purple-100" onclick="doBianBless('${sl.k}')">祝福${sl.n}</button>`
+            : `<button class="btn py-1 px-2 text-sm font-bold w-24 text-center bg-slate-700 border-slate-600 text-slate-400 cursor-not-allowed" disabled title="${_cursed ? '被詛咒的裝備需先解除詛咒' : ''}">${_cursed ? '🔒 詛咒中' : '祝福'+sl.n}</button>`;
         return `<div class="flex items-center justify-between gap-2 bg-slate-800/60 border border-slate-600 rounded p-2 text-sm">
             <span class="truncate"><b class="text-amber-300">${sl.n}</b>：${name}</span>
-            <div class="flex items-center gap-1 shrink-0">${_uncurse}<button class="btn py-1 px-2 text-sm font-bold w-24 text-center ${it?'bg-purple-800 border-purple-500 text-purple-100':'bg-slate-700 border-slate-600 text-slate-400 cursor-not-allowed'}" ${it?'':'disabled'} onclick="doBianBless('${sl.k}')">祝福${sl.n}</button></div>
+            <div class="flex items-center gap-1 shrink-0">${_uncurse}${_blessBtn}</div>
         </div>`;
     }).join('');
     el.innerHTML = `
@@ -8094,6 +8138,8 @@ function chooseMastery(id) {
             logSys(`<span class="text-red-400 font-bold">更換精通需要 ${cost.gold.toLocaleString()} 金幣與 王族搜索狀 ×${cost.warrants}。</span>`);
             return;
         }
+        // 更換前確認
+        if (!confirm(`確定要將精通由「${md.list[player.mastery].n}」更換為「${md.list[id].n}」嗎？\n將消耗 ${cost.gold.toLocaleString()} 金幣與 王族搜索狀 ×${cost.warrants}。`)) return;
         player.gold -= cost.gold;
         let _need = cost.warrants;
         for (let it of player.inv.filter(i => i.id === 'new_item_241')) { if (_need <= 0) break; let dd = Math.min(it.cnt, _need); it.cnt -= dd; _need -= dd; }
@@ -10429,6 +10475,11 @@ function refreshGachaTicketCount() {
         } else {
             item.gachaWeight = 100;  // 便宜貨超容易抽到
         }
+    }
+    // 🔧 低稀有度提升：權重 ≥ 50 的物品權重加倍（含手動設定與上方自動分配者），提高低稀有度出現率
+    for (let id in DB.items) {
+        let item = DB.items[id];
+        if ((item.gachaWeight || 0) >= 50) item.gachaWeight *= 2;
     }
 })();
 
