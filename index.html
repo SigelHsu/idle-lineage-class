@@ -7579,53 +7579,30 @@ function killMob(idx) {
     if (state.oblivion === 'travel' && mob.boss && !player.dead) state._oblivionAdvance = true;   // 🏝️ 途中擊敗傳送門「遺忘之島」：清算時進入本島
 }
 
-// 🔧 架構#2：統一清算所有已標記死亡的怪 —— 輸送帶遞補（右:2 → 左:0 → 中:1）＋目標重映射。
-// 逐隻套用與原版單死相同的位移規則；多隻同時死亡時迭代至無屍體為止，結果與逐一擊殺一致。
+// 🔧 架構#2：統一清算所有已標記死亡的怪 —— 5 格輸送帶遞補（中1→左0→右2→後3→後4）＋目標重映射。
+// 把前排(0,1,2)與後排(3,4)視為單一輸送帶：存活怪依優先序往前壓實，後排怪會遞補進空出的前排；
+// 常見情境(各格皆滿、單隻死)結果與原 3 格輸送帶一致；多隻同死於一次處理完成（不需迭代）。
 function settleDeadMobs() {
-    let guard = 0, changed = false;
-    while (guard++ < 6) {
-        let idx = -1;
-        for (let i = 0; i < 3; i++) { let m = mapState.mobs[i]; if (m && m._dead) { idx = i; break; } }
-        if (idx === -1) break;
+    let changed = false;
+    const _ORDER = [1, 0, 2, 3, 4];   // 遞補/填補優先序：前排 中→左→右，再後排 左→右（與 getTarget 自動鎖定序一致）
+    if (_ORDER.some(i => mapState.mobs[i] && mapState.mobs[i]._dead)) {
         changed = true;
-        if (idx === 1) {
-            // 中央死亡：左(0)補到中(1)，右(2)補到左(0)，右(2)清空
-            mapState.mobs[1] = mapState.mobs[0];
-            mapState.mobs[0] = mapState.mobs[2];
-            mapState.mobs[2] = null;
-            if (mapState.spawnAt) {
-                mapState.spawnAt[1] = mapState.spawnAt[0];
-                mapState.spawnAt[0] = mapState.spawnAt[2];
-                mapState.spawnAt[2] = null;
-            }
-            if (mapState.targetIdx === 1) mapState.targetIdx = -1;
-            else if (mapState.targetIdx === 0) mapState.targetIdx = 1;
-            else if (mapState.targetIdx === 2) mapState.targetIdx = 0;
-        } else if (idx === 0) {
-            // 左方死亡：右(2)補到左(0)，右(2)清空，中央(1)不變
-            mapState.mobs[0] = mapState.mobs[2];
-            mapState.mobs[2] = null;
-            if (mapState.spawnAt) {
-                mapState.spawnAt[0] = mapState.spawnAt[2];
-                mapState.spawnAt[2] = null;
-            }
-            if (mapState.targetIdx === 0) mapState.targetIdx = -1;
-            else if (mapState.targetIdx === 2) mapState.targetIdx = 0;
-        } else {
-            // 右方死亡：直接清空，其餘不變
-            mapState.mobs[2] = null;
-            if (mapState.spawnAt) mapState.spawnAt[2] = null;
-            if (mapState.targetIdx === 2) mapState.targetIdx = -1;
+        let _tgtUid = (mapState.targetIdx >= 0 && mapState.mobs[mapState.targetIdx] && !mapState.mobs[mapState.targetIdx]._dead) ? mapState.mobs[mapState.targetIdx].uid : null;
+        let _alive = [], _pending = [];
+        for (let i of _ORDER) {
+            let m = mapState.mobs[i];
+            if (m && m._dead) continue;                                                                       // 死亡→移出輸送帶
+            if (m) _alive.push(m);
+            else if (mapState.spawnAt && mapState.spawnAt[i] != null) _pending.push(mapState.spawnAt[i]);     // 既有空格的「待出怪倒數」保留並順移
         }
-    }
-    // 🆕 後排(3,4)死亡：原地清空，不參與前排輸送帶位移（後排為固定位置的獨立格，各自重新排程出怪）
-    for (let i = 3; i < mapState.mobs.length; i++) {
-        if (mapState.mobs[i] && mapState.mobs[i]._dead) {
-            mapState.mobs[i] = null;
-            if (mapState.spawnAt) mapState.spawnAt[i] = null;
-            if (mapState.targetIdx === i) mapState.targetIdx = -1;
-            changed = true;
+        let _seq = _alive.map(m => ({ mob: m })).concat(_pending.map(sa => ({ sa: sa })));                    // 先怪、再待出怪倒數、最後空格
+        for (let k = 0; k < _ORDER.length; k++) {
+            let slot = _ORDER[k], it = _seq[k];
+            if (it && it.mob) { mapState.mobs[slot] = it.mob; if (mapState.spawnAt) mapState.spawnAt[slot] = null; }
+            else if (it && it.sa != null) { mapState.mobs[slot] = null; if (mapState.spawnAt) mapState.spawnAt[slot] = it.sa; }
+            else { mapState.mobs[slot] = null; if (mapState.spawnAt) mapState.spawnAt[slot] = null; }          // 其餘空格交回出怪迴圈重新排程
         }
+        mapState.targetIdx = _tgtUid ? mapState.mobs.findIndex(m => m && m.uid === _tgtUid) : -1;             // 以 uid 重映射目標（目標死亡→-1）
     }
     if (changed) renderMobs();
     // 🔧 軍王之室：擊敗頭目（掉落已於 killMob 發放）後處理；補跑期間延後到回到即時再執行。
@@ -15447,13 +15424,31 @@ const CATEGORY_AREA_BG = { wild: 'assets/area/村莊周邊.jpg', dungeon: 'asset
 const AREA_BG_FIT = new Set(['assets/area/沙漠.jpg', 'assets/area/水晶洞穴.jpg', 'assets/area/地監.jpg', 'assets/area/火龍窟.jpg', 'assets/area/森林.jpg', 'assets/area/村莊周邊.jpg', 'assets/area/傲慢之塔.jpg', 'assets/area/洞窟.jpg', 'assets/area/象牙塔.jpg', 'assets/area/伊娃王國.jpg', 'assets/area/城鎮周邊.jpg', 'assets/area/歐瑞.jpg', 'assets/area/拉斯塔巴德.jpg', 'assets/area/軍王之室.jpg', 'assets/area/安塔瑞斯.jpg', 'assets/area/法利昂.jpg', 'assets/area/巴拉卡斯.jpg', 'assets/area/底比斯沙漠.jpg', 'assets/area/底比斯.jpg', 'assets/area/龍之谷.jpg', 'assets/area/說話之島港口.jpg', 'assets/area/遺忘之島.jpg', 'assets/area/夢幻之島.jpg', 'assets/area/艾爾摩.jpg', 'assets/area/地監深層.jpg', 'assets/area/象牙塔深層.jpg', 'assets/area/龍之谷地監深層.jpg']);   // 🏜️ 條狀比例(非16:9·1920×580)背景：用 contain+area-fit(框高鎖圖比例·無上下黑邊·省空間給戰鬥日誌)。所有新狩獵區背景都列於此→自動套沙漠格式。⚠️這些 jpg 需放 assets/area/（同沙漠.jpg）；未放檔時背景空白但版面/格式仍正確。日後新增條狀背景就把路徑加進來
 const SPECIAL_TOWN_BG = { town_silent: 'silentcave.png' };                                        // 🔧 安全區逐張對應背景（沉默洞穴）
 const TOWN_AREA_BG = { village: 'village.png', castle: 'castle.png', tower: 'TowerofInsolence.png', rift: 'Rift.png' };   // 村莊畫面依分類（🗼 傲慢之塔入口；🌀 時空裂痕入口 Rift.png）
+// 🆕 同名背景圖：地圖顯示名稱(MAP_CATEGORIES 的 t) → 嘗試 assets/area/[名稱].jpg；探測結果快取(undefined=未探測、null=探測中、{found,fit}=結果)
+let _areaNameBgCache = {};
+function mapDisplayName(v) { for (let _c in MAP_CATEGORIES) { let _e = MAP_CATEGORIES[_c].find(x => x.v === v); if (_e) return _e.t; } return null; }
 function applyAreaBackground() {
     let cur = mapState.current, cat = mapCategoryOf(cur);
     let ov = a => `linear-gradient(rgba(15,23,42,${a}), rgba(15,23,42,${a}))`;
     let bv = document.getElementById('battle-view');
     if (bv) {
-        let img = SPECIAL_AREA_BG[cur] || CATEGORY_AREA_BG[cat] || null;   // 特殊地圖逐張優先，否則依分類(野外/地監/攻城)
-        if (img) { let _src = img.indexOf('/') >= 0 ? img : `assets/background/${img}`; let _fit = AREA_BG_FIT.has(img); bv.style.backgroundImage = `url("${_src}")`; bv.style.backgroundSize = _fit ? 'contain' : ''; bv.classList.toggle('area-fit', _fit); bv.classList.add('has-bg'); }   // 🔧 狩獵區不再加半透明遮罩(去除 ov)；完整路徑(assets/area/沙漠.jpg)直接用、否則預設 background 資料夾；條狀比例背景(沙漠)用 contain＋area-fit(框高鎖定圖比例、無上下黑邊、省空間給日誌)、其餘清空 inline 回退 CSS 的 cover
+        let fbImg = SPECIAL_AREA_BG[cur] || CATEGORY_AREA_BG[cat] || null;   // 既有設定圖(fallback)：特殊地圖逐張優先，否則依分類(野外/地監/攻城)
+        let useSrc = null, useFit = false;
+        // 🆕 優先尋找「同名地圖圖檔」assets/area/[地圖名稱].jpg：存在才用、找不到才退回 fallback。瀏覽器無法同步判斷檔案是否存在→非同步探測＋快取(首訪先顯示 fallback、載入成功後切換)
+        let _nm = mapDisplayName(cur);
+        let _c = _nm ? _areaNameBgCache[cur] : null;
+        if (_c && _c.found) { useSrc = `assets/area/${_nm}.jpg`; useFit = _c.fit; }   // 已知存在→直接用(條狀比例 1920/580→area-fit)
+        else {
+            if (_nm && _areaNameBgCache[cur] === undefined) {   // 首次探測：背景先走 fallback，同名圖若載入成功則切換並快取
+                _areaNameBgCache[cur] = null;   // pending
+                let _probe = new Image(), _id = cur;
+                _probe.onload = function(){ let _r = _probe.naturalHeight ? (_probe.naturalWidth / _probe.naturalHeight) : 0; _areaNameBgCache[_id] = { found: true, fit: Math.abs(_r - 1920 / 580) < 0.4 }; if (mapState.current === _id) applyAreaBackground(); };
+                _probe.onerror = function(){ _areaNameBgCache[_id] = { found: false }; };
+                _probe.src = `assets/area/${_nm}.jpg`;
+            }
+            if (fbImg) { useSrc = fbImg.indexOf('/') >= 0 ? fbImg : `assets/background/${fbImg}`; useFit = AREA_BG_FIT.has(fbImg); }
+        }
+        if (useSrc) { bv.style.backgroundImage = `url("${useSrc}")`; bv.style.backgroundSize = useFit ? 'contain' : ''; bv.classList.toggle('area-fit', useFit); bv.classList.add('has-bg'); }   // 🔧 條狀比例背景用 contain＋area-fit(框高鎖圖比例)、其餘清空 inline 回退 CSS 的 cover
         else { bv.style.backgroundImage = ''; bv.style.backgroundSize = ''; bv.classList.remove('area-fit'); bv.classList.remove('has-bg'); }
     }
     let tv = document.getElementById('town-view');
