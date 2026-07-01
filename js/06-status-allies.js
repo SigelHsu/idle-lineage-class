@@ -1779,7 +1779,7 @@ function allyTryHeal(ally) {
 }
 // 🍶 傭兵自動喝藥水：當傭兵 HP% 低於「HP 安全線」(_hpSafePct·隊伍面板設定)，消耗「隊長設定的藥水」(自動化設定的 set-pot·紅/橙/白藥水)回血。
 //   ・藥水從隊長(玩家)道具欄扣 1 瓶；恢復量＝藥水 val ×(1+傭兵自身 CON 藥水加成%)（夾到傭兵上限）。每 ~1 秒冷卻 1 次（_potCd），獨立於攻擊行動、硬控中仍可喝。
-//   ・安全線=0／無設定＝關閉；隊長無該藥水＝略過（不自動購買；隊長若開自動補貨會自行補滿庫存）。只認 val 型治癒藥水（紅/橙/白），加速/勇敢等無 val 藥水不喝。
+//   ・安全線=0／無設定＝關閉；隊長無該藥水：若勾「自動購買藥水」→ 傭兵喝藥水也會觸發自動補貨（v2.6.43·補到 100 瓶）、否則略過。只認 val 型治癒藥水（紅/橙/白），加速/勇敢等無 val 藥水不喝。
 function allyTryPotion(ally) {
     if (!ally || ally._downed) return;
     let thr = allyPotHpPct(ally);   // 🍶 v2.6.4：喝藥水門檻(獨立·回退舊 _hpSafePct)
@@ -1793,7 +1793,20 @@ function allyTryPotion(ally) {
     let pdef = DB.items[potId];
     if (!pdef || pdef.val == null) return;                  // 只認固定 val 的治癒藥水（紅/橙/白）
     let stack = player.inv && player.inv.find(i => i.id === potId && (i.cnt || 0) > 0);
-    if (!stack) return;                                     // 隊長身上沒有這瓶藥水
+    if (!stack) {
+        // 🍶 v2.6.43 用戶要求：隊長沒有這瓶藥水時，若勾選「自動購買藥水」→ 傭兵喝藥水也能觸發自動補貨（比照玩家 autoActions：補到 100 瓶），讓傭兵有藥水可喝。
+        //   受 _potCd(~1 秒冷卻·上方已擋) 節流→不會每 tick 狂買；同 tick 多傭兵時第一位補滿 100 瓶、其餘直接用新庫存（不重複購買）。
+        let _buyChk = (typeof document !== 'undefined') ? document.getElementById('set-auto-buy-pot') : null;
+        if (!_buyChk || !_buyChk.checked) return;           // 未勾選自動購買 → 維持原行為（略過、不喝）
+        let _unit = (typeof shopPrice === 'function') ? shopPrice(pdef.p || 0) : (pdef.p || 0);   // 攻城獲勝 8 折亦適用
+        let _need = 100;                                     // 補到 100 瓶（隊長身上目前 0 瓶）
+        if ((player.gold || 0) < _need * _unit) return;     // 金幣不足 → 買不了、也喝不了
+        player.gold -= _need * _unit;
+        gainItem(potId, _need, true, true);
+        logSys(`自動消耗 ${_need * _unit} 金幣購買了 ${_need} 瓶${pdef.n}（供協力傭兵飲用）。`);
+        stack = player.inv.find(i => i.id === potId && (i.cnt || 0) > 0);
+        if (!stack) return;                                 // 保險：理論上已購入
+    }
     stack.cnt--; player.inv = player.inv.filter(i => (i.cnt || 0) > 0);   // 消耗隊長 1 瓶
     let _conPct = (typeof getConPotionPct === 'function') ? getConPotionPct((ally.d && ally.d.con) || 0) : 0;   // 比照玩家：CON 提升藥水恢復%
     let _dollPot = (ally.eq && ally.eq.doll && DB.items[ally.eq.doll.id]) ? (DB.items[ally.eq.doll.id].potionBonus || 0) : 0;   // 🆕 v2.6.10 #3：魔法娃娃 potionBonus%（吸血鬼娃娃）
