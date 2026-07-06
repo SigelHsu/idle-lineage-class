@@ -352,6 +352,17 @@ player.inv.forEach(i => {
 
 // 🎨 v3.0.40 1.8 風格道具欄皮膚（移植自參考版）：把分頁內容搬進「八格框底圖」的可捲動 viewport，
 //    工具列（負重/快速強化/快速廢品 sticky 列）保留在 viewport 外恆顯。列事件（點擊/雙擊）掛在 .list-item 上不受影響。
+// 🔧 v3.0.92 背包排序選單(↕)開啟狀態持久化：原本 .open class 只掛在每次 renderTabs 重建的 DOM 上→掛機掉物(gainItem→renderTabs)＋自動販賣(每10秒 renderTabs(true))不斷重建此選單、一直把它關掉，導致無法點選分類。改存模組旗標·重建時復原·點選排序或點選單外關閉。
+let _invSortMenuOpen = false;
+if (typeof document !== 'undefined' && document.addEventListener && !document._invSortOutsideBound) {
+    document.addEventListener('click', function(ev){
+        if (!_invSortMenuOpen) return;
+        if (ev.target && ev.target.closest && ev.target.closest('.classic-sort-wrap')) return;   // 點在 ↕ 鈕或選單本體內→不關
+        _invSortMenuOpen = false;
+        try { document.querySelectorAll('.classic-sort-menu.open').forEach(function(m){ m.classList.remove('open'); }); } catch(e){}
+    });
+    document._invSortOutsideBound = true;
+}
 function decorateClassicInventoryTab(div){
     if(!div)return;
     div.classList.add('classic-inventory-tab');
@@ -380,10 +391,11 @@ function decorateClassicInventoryTab(div){
     sortBtn.type='button'; sortBtn.className='classic-sort-button'; sortBtn.title='整理背包'; sortBtn.setAttribute('aria-label','整理背包'); sortBtn.textContent='↕';
     let sortMenu=document.createElement('div');
     sortMenu.className='classic-sort-menu';
+    if(_invSortMenuOpen)sortMenu.classList.add('open');   // 🔧 v3.0.92 重繪時依持久旗標復原開啟（掛機掉物/自動販賣不再關閉）
     let mode=inventorySortMode();
     sortMenu.innerHTML=`<button type="button" data-sort="category" class="${mode==='category'?'active':''}">分類整理</button><button type="button" data-sort="quality" class="${mode==='quality'?'active':''}">品質整理</button><button type="button" data-sort="name" class="${mode==='name'?'active':''}">名稱整理</button><label><input type="checkbox" ${player.inventoryAutoSort===false?'':'checked'}> 取得物品時自動整理</label>`;
-    sortBtn.onclick=(ev)=>{ev.stopPropagation();sortMenu.classList.toggle('open');};
-    sortMenu.querySelectorAll('[data-sort]').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();setInventorySortMode(b.dataset.sort);});
+    sortBtn.onclick=(ev)=>{ev.stopPropagation();_invSortMenuOpen=!_invSortMenuOpen;sortMenu.classList.toggle('open',_invSortMenuOpen);};
+    sortMenu.querySelectorAll('[data-sort]').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();_invSortMenuOpen=false;setInventorySortMode(b.dataset.sort);});
     let auto=sortMenu.querySelector('input');if(auto)auto.onchange=()=>toggleInventoryAutoSort(auto.checked);
     sortWrap.appendChild(sortBtn);sortWrap.appendChild(sortMenu);
     shell.appendChild(viewport); shell.appendChild(up); shell.appendChild(down); shell.appendChild(sortWrap);
