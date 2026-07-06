@@ -48,7 +48,7 @@ const SPECIAL_AREA_BG = {   // 特殊地圖：逐張對應背景
     law_king_room: 'assets/area/軍王之室.jpg',      // 👑 法令軍王之室
     necro_king_room: 'assets/area/軍王之室.jpg',    // 👑 冥法軍王之室
     assassin_king_room: 'assets/area/軍王之室.jpg', // 👑 暗殺軍王之室
-    elder_room: 'assets/area/長老之室.jpg',         // 🏛️ 格蘭肯神殿．長老之室（拉斯塔巴德新狩獵地圖·專屬背景）
+    elder_room: 'assets/area/軍王之室.jpg',         // 🏛️ 格蘭肯神殿．長老之室（無專屬背景圖·借用軍王之室背景）
     thebes_desert: 'assets/area/底比斯沙漠.jpg',   // 🏛️ 底比斯 沙漠（專屬背景）
     thebes_pyramid: 'assets/area/底比斯.jpg',      // 🏛️ 底比斯 金字塔內部（與祭壇共用底比斯背景）
     thebes_temple: 'assets/area/底比斯.jpg',        // 🏛️ 底比斯 歐西里斯祭壇（純BOSS房）
@@ -270,7 +270,7 @@ function _summaryFromRaw(s){
     s = _saveUnwrap(s).payload;   // 🛡️ 先解存檔簽章（摘要顯示不驗章、僅取 payload；舊明文檔原樣回傳）
     try { let d = JSON.parse(s); let p = d.p;
         let clsName = { knight:'騎士', mage:'法師', elf:'妖精', dark:'黑暗妖精', illusion:'幻術士', dragon:'龍騎士', warrior:'戰士', royal:'王族' }[p.cls] || p.cls;
-        return { name: p.name || '', cls: clsName, lv: p.lv || 1, gold: p.gold || 0, classic: !!p.classicMode, traditional: !!p.traditionalMode, avatar: p.avatar || null };   // 🎮 經典／🏛️ 傳統模式旗標：供存檔位顯示與傭兵同模式招募限制；avatar＝職業性別頭像名（assets/character/<avatar>.png）；name 未命名時留空字串（顯示端自行省略）
+        return { name: p.name || '', cls: clsName, lv: p.lv || 1, gold: p.gold || 0, classic: !!p.classicMode, avatar: p.avatar || null };   // 🎮 經典模式旗標：供存檔位顯示與傭兵同模式招募限制（🏛️v3.0.83 傳統已取消·未載入過的舊傳統存檔以 classicMode 歸類）；avatar＝職業性別頭像名（assets/character/<avatar>.png）；name 未命名時留空字串（顯示端自行省略）
     } catch(e){ return null; }
 }
 function slotSummary(n){ return _summaryFromRaw(_lzGet('lineage_idle_save_' + n)); }
@@ -278,7 +278,7 @@ function slotBackupSummary(n){ return _summaryFromRaw(_lzGet('lineage_idle_save_
 let _slotMode = 'new';
 function openSlotSelect(mode){
     _slotMode = mode;
-    { let _ct = document.getElementById('create-classic-toggle'); if (_ct && mode === 'new') _ct.checked = false; let _tt = document.getElementById('create-traditional-toggle'); if (_tt && mode === 'new') _tt.checked = false; }   // 🎮🏛️ 創角流程重置經典＋傳統模式開關（預設皆關閉，兩者獨立）
+    { let _ct = document.getElementById('create-classic-toggle'); if (_ct && mode === 'new') _ct.checked = false; }   // 🎮 創角流程重置經典模式開關（預設關閉）
     document.getElementById('main-menu').classList.add('hidden');
     document.getElementById('creation-panel').classList.add('hidden');
     document.getElementById('slot-select-panel').classList.remove('hidden');
@@ -286,12 +286,11 @@ function openSlotSelect(mode){
     let list = document.getElementById('slot-list'); list.innerHTML = '';
     for(let n = 1; n <= 8; n++){
         let sum = slotSummary(n);
-        let _classic = !!(sum && sum.classic);   // 🎮 經典模式存檔：以琥珀金顯示
-        let _trad = !!(sum && sum.traditional);  // 🏛️ 傳統模式存檔：以淡紫顯示（傳統角色 classic 亦為 true，故先判 traditional）
-        let _tag = (_classic && _trad) ? '⚔🏛️ ' : (_trad ? '🏛️ ' : (_classic ? '⚔ ' : ''));
-        let _modeName = (_classic && _trad) ? '（經典＋傳統）' : (_trad ? '（傳統）' : (_classic ? '（經典）' : ''));
+        let _classic = !!(sum && sum.classic);   // 🎮 經典模式存檔：以琥珀金顯示（🏛️v3.0.83 傳統已取消·舊傳統存檔依 classicMode 顯示為一般/經典）
+        let _tag = _classic ? '⚔ ' : '';
+        let _modeName = _classic ? '（經典）' : '';
         let label = sum ? `${_tag}存檔 ${n}　${sum.cls} Lv.${sum.lv}${sum.name ? '　' + sum.name : ''}${_modeName}` : `存檔 ${n}　（空）`;   // 未命名時不顯示名稱（連同前置全形空白一併省略）
-        let _classicStyle = (_classic && _trad) ? 'color:#2dd4bf;border-color:#0d9488;' : (_trad ? 'color:#c4b5fd;border-color:#7c3aed;' : (_classic ? 'color:#fbbf24;border-color:#d97706;' : ''));   // 經典＋傳統＝青綠；🏛️ 傳統＝淡紫；🎮 經典＝琥珀金
+        let _classicStyle = _classic ? 'color:#fbbf24;border-color:#d97706;' : '';   // 🎮 經典＝琥珀金
         let disabled = (mode === 'load' && !sum);
         let bak = (mode === 'load') ? slotBackupSummary(n) : null;
         // 動作區固定寬度：匯入(+復原)鈕各 flex-1。無備份時匯入鈕獨佔整個動作區
@@ -514,19 +513,10 @@ function updateCreateUI() {
     document.getElementById('btn-start').disabled = left <= 0 ? false : true;
 }
 
-function _setTraditionalToggle(enabled){   // 創角流程重置用：取消傳統勾選（傳統已可獨立勾選、不再受經典鎖定）
-    let _tt = document.getElementById('create-traditional-toggle');
-    if (_tt && !enabled) _tt.checked = false;
-}
 function onToggleClassic(el) {
-    if (!el.checked) return;   // 取消勾選不需確認（經典與傳統已獨立、互不連動）
-    let ok = confirm('⚔ 經典模式（硬核挑戰）\n\n開啟後，此角色將「永久」套用下列規則，建立後無法關閉：\n\n‧ 物品掉落機率 → 原本的 1/10\n‧ 經驗值取得 → 減半\n‧ 怪物金幣 → 僅剩一般模式的 1/2\n‧ 死亡 → 損失該等級 5% 最大經驗（不會降等）\n‧ 無法賦予裝備祝福、無法進行職業精通\n‧ 無法進入「席琳的世界」\n\n（可單獨開啟，或與「傳統模式」並用）\n\n確定要以「經典模式」創建此角色嗎？');
-    if (!ok) { el.checked = false; return; }
-}
-function onToggleTraditional(el) {
     if (!el.checked) return;   // 取消勾選不需確認
-    let ok = confirm('🏛️ 傳統模式（可單獨開啟，或與「經典模式」並用）\n\n開啟後，此角色將「永久」套用下列規則，建立後無法關閉：\n\n‧ 所有武器/防具/飾品 → 沒有強化選項（隱藏快速強化）\n‧ 怪物不掉落、黑市不販售「對武器/盔甲/飾品施法的卷軸」\n‧ 隱藏肯特城的兌換 NPC（伊賽馬利）\n‧ 取而代之 → 怪物掉落／潘朵拉黑市／製作 的裝備會「隨機自帶已強化值」（商店購買仍為 +0）\n‧ 倉庫與角色 與其他模式組合（一般／經典／經典＋傳統）皆不共通\n\n確定要以「傳統模式」創建此角色嗎？');
-    if (!ok) el.checked = false;   // 取消 → 還原為未勾選
+    let ok = confirm('⚔ 經典模式（硬核挑戰）\n\n開啟後，此角色將「永久」套用下列規則，建立後無法關閉：\n\n‧ 死亡 → 損失該等級 5% 最大經驗（不會降等）\n‧ 無法賦予裝備祝福、無法進行職業精通\n‧ 無法進入「席琳的世界」\n\n（掉落率、經驗值與金幣獲得皆與一般模式相同）\n\n確定要以「經典模式」創建此角色嗎？');   // ⚠️v3.0.82 經驗×0.5／金幣÷2 已移除、v3.0.85 掉落×1/10 已移除 → 文案同步
+    if (!ok) { el.checked = false; return; }
 }
 function startGame() {
     document.getElementById('creation-screen').classList.add('hidden');
@@ -547,11 +537,10 @@ function startGame() {
     player.cls = curCreate.cls;
     // 👑 王族：依性別自動入盟、不可選擇／退出（王子→特羅斯 tros、公主→依詩蒂 esti）
     if (player.cls === 'royal') player.bloodPledge = (curCreate.rawCls && curCreate.rawCls.startsWith('f_')) ? 'esti' : 'tros';
-    player.classicMode = !!(document.getElementById('create-classic-toggle') && document.getElementById('create-classic-toggle').checked);   // 🎮 經典模式：依創角開關決定（此角色永久生效）
-    player.traditionalMode = !!(document.getElementById('create-traditional-toggle') && document.getElementById('create-traditional-toggle').checked);   // 🏛️ 傳統模式：依創角開關決定（與經典獨立·可單開或＋經典·此角色永久生效）
+    player.classicMode = !!(document.getElementById('create-classic-toggle') && document.getElementById('create-classic-toggle').checked);   // 🎮 經典模式：依創角開關決定（此角色永久生效）；🏛️v3.0.83 傳統模式已取消（traditionalMode 由 SAVE_DEFAULTS 恆 false）
     player.name = null;   // 預設未取名，狀態欄顯示「點擊取名」，玩家可點擊命名
     player.enSeed = 'es' + uid() + uid();   // 🎲 強化決定論種子（創角產生一次、存進存檔永久固定）：讓強化成敗由種子決定、不可用 save/load 刷
-    player.expMigV = 1;   // ⚠️ v2.6.47 新角色天生在新經驗刻度→標記為「免遷移」，避免日後升到 Lv50+ 時被 loadGame 的一次性經驗遷移誤放大
+    player.expMigV = 2;   // ⚠️ 新角色天生在最新經驗刻度（v3.0.82 天堂經典表）→ 標記免遷移
 
     let b = createBase[curCreate.cls];
     player.base = { str: b.str+curCreate.str, dex: b.dex+curCreate.dex, con: b.con+curCreate.con, int: b.int+curCreate.int, wis: b.wis+curCreate.wis, cha: b.cha+curCreate.cha };
@@ -813,10 +802,20 @@ function loadGame() {
         if(player.name === undefined) player.name = null;   // 相容舊存檔：未取名則狀態欄顯示「點擊取名」
         if(!player.blessings || typeof player.blessings !== 'object') player.blessings = {};   // 相容舊存檔：盟主祝福
         if(!player.blessingAuto || typeof player.blessingAuto !== 'object') player.blessingAuto = {};   // 🩸 v2.6.24 盟主祝福「切換式自動續期」開關（每祝福 bool·舊存檔預設全關）
-        // 相容舊存檔：屬性詞綴舊版僅為 true/false，新版需為 12 種代碼之一；非法值一律清除（視為普通武器）
-        let _normAttr = (i) => { if (i && !getAttrAffix(i.attr)) i.attr = false; };
+        // 🔥 v3.0.78 試煉接取制：初始化任務狀態；幻術士/戰士/龍騎士 50 級試煉原以 demonTempleOpen 為唯一狀態 → 統一遷移為 trialStage=2（最終兌換階段·一次性）
+        if(!player.trialQ || typeof player.trialQ !== 'object') player.trialQ = {};
+        if(['illusion','warrior','dragon'].includes(player.cls) && player.demonTempleOpen && (player.trialStage || 0) < 2) player.trialStage = 2;
+        // 🔥 v3.0.77 屬性詞綴改版遷移：舊12代碼→新5階代碼（fire1/3/5→fr1/fr2/fr3…名稱身分不變·冪等）；
+        //    屬性詞綴只能存在於武器→防具/飾品上的舊屬性詞綴一律清除；非法值（true/未知碼）清除。
+        //    倉庫刻意不改寫（資料遺失敏感）——讀取路徑 getAttrAffix 相容舊碼，提領後下次載入在此轉正。
+        let _normAttr = (i) => {
+            if (!i) return;
+            if (typeof i.attr === 'string' && ATTR_LEGACY[i.attr]) i.attr = ATTR_LEGACY[i.attr];
+            if (i.attr) { let dd = DB.items[i.id]; if (!getAttrAffix(i.attr) || !dd || dd.type !== 'wpn') i.attr = false; }
+        };
         player.inv.forEach(_normAttr);
         for (let k in player.eq) _normAttr(player.eq[k]);
+        (player.allies || []).forEach(a => { if (a && a.eq) { for (let k in a.eq) _normAttr(a.eq[k]); } if (a && a.inv) a.inv.forEach(_normAttr); });
         // 🔮 席琳套裝效果改置腰帶：一次性清除既有「項鍊」上的套裝效果（背包/裝備/傭兵快照/共用倉庫）
         {
             let _fixSet = (it) => { if (it && it.seteff) { let dd = DB.items[it.id]; if (dd && dd.slot === 'amulet') it.seteff = false; } };
@@ -846,6 +845,37 @@ function loadGame() {
             }
             player.expMigV = 1;   // 標記本檔已遷移（存檔時固化·跨載入不重跑）
         }
+        // ⚠️ v3.0.82 經驗刻度遷移（expMigV=2）：升級需求改「天堂經典表」——等級不變、該級剩餘經驗以進度 % 等比換算（玩家＋受雇傭兵）。
+        //   newExp = floor(oldExp ÷ 舊需求(lv) × 新需求(lv))，夾在 < 新需求（絕不因遷移白升級）；滿等(100)歸 0。
+        if ((player.expMigV || 0) < 2) {
+            let _mig2 = (lv, exp) => {
+                lv = Math.max(1, Math.min(100, Math.floor(lv || 1)));
+                if (lv >= 100) return 0;
+                let o = _expReqOldV1(lv), n = getExpReq(lv);
+                if (!isFinite(o) || !isFinite(n) || o <= 0) return 0;
+                return Math.min(Math.floor(Math.max(0, exp || 0) / o * n), n - 1);
+            };
+            player.exp = _mig2(player.lv, player.exp);
+            (player.allies || []).forEach(a => { if (a) a.exp = _mig2(a.lv, a.exp); });
+            player.expMigV = 2;
+        }
+        // 🏛️ v3.0.83 傳統模式已取消：舊傳統角色一次性併入對應基礎模式（一般+傳統→一般、經典+傳統→經典）。
+        //   共用倉庫/圖鑑桶另由 js/12 _mergeTradBuckets 於頁面載入時合併（'_tradonly'→''、'_trad'→'_classic'）。
+        //   已入血盟的舊傳統角色補發入盟禮（傳統入盟時未發放·現行退盟一律需交還）；王族入盟本無禮物、不補發。
+        if (player.traditionalMode) {
+            player.traditionalMode = false;
+            if (player.bloodPledge && player.cls !== 'royal') PLEDGE_GIFT.forEach(g => gainItem(g.id, g.cnt, true, true));
+            logSys(`<span class="text-amber-300 font-bold">🏛️ 傳統模式已取消：此角色已轉為${player.classicMode ? '「經典模式」' : '「一般模式」'}，裝備強化與施法卷軸恢復可用。</span>`);
+        }
+
+        // ⚔️ v3.0.75 武器強化上限 +20→+15：既有 >+15 武器一律實體降為 +15（數值＝能力·搭配 ENHANCE_CAP.wpn=15＋capWpnEn/enhanceWpnFinalMult 讀取夾擠）。
+        //    範圍＝玩家背包／已裝備（含副手 offwpn）／傭兵裝備；每次載入都跑（只夾 >15·冪等·免版本戳）。倉庫武器靠 capEn 顯示 +15、提領後下次載入自動夾。
+        try {
+            let _cwp = it => { if (it && it.id && DB.items[it.id] && DB.items[it.id].type === 'wpn' && (Number(it.en) || 0) > 15) it.en = 15; };
+            (player.inv || []).forEach(_cwp);
+            if (player.eq) Object.values(player.eq).forEach(_cwp);
+            (player.allies || []).forEach(a => { if (a && a.eq) Object.values(a.eq).forEach(_cwp); });
+        } catch (e) {}
 
         // 🔧 架構#6：集中式預設值合併（放在所有「轉換型」遷移之後，作為缺漏欄位的統一保底）。
         // 日後新增欄位只需登錄於 SAVE_DEFAULTS；上方逐項 if(undefined) 為歷史遷移，不必再增列。

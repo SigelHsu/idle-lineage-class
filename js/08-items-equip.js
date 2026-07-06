@@ -1,6 +1,4 @@
 function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false) {
-    // 🏛️ 僅「經典+傳統」任何來源都不產生施法卷軸（武器/盔甲/飾品＋祝福/詛咒變體）——掉落／黑市／歐西里斯寶箱／血盟入盟禮／兌換等全擋；一般+傳統照常產生（供克里斯特→賦予祝福）
-    if (TRAD_NO_SCROLLS[id] && tradNoScrolls()) return null;
     // 卷軸變祝福／詛咒機率：各 1%（互斥）
     if (!forceNormal && (id === 'scroll_weapon' || id === 'scroll_armor')) {
         let _r = lootRng('scrollvar');   // 🎲 committed RNG（防 SL 重抽卷軸祝福/詛咒變體）
@@ -54,8 +52,7 @@ function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false) {
         }
     }
 
-    // 🏛️ 傳統模式：掉落／黑市／製作的「裝備」隨機自帶強化值（_tradLootCtx 期間；商店 forceNormal=true 不設→恆 +0；箭矢/材料/消耗品不套）
-    let _tEn = (_tradLootCtx && !forceNormal && d && !d.noEnhance && ((d.type === 'wpn' && !d.isArrow) || d.type === 'arm' || d.type === 'acc') && traditionalActive()) ? rollTraditionalEnhance(d) : 0;   // 🏛️ 無法強化的裝備（古老系列 noEnhance）恆 +0，不自帶強化值
+    let _tEn = 0;   // 🏛️ v3.0.83 傳統模式已取消：掉落自帶強化值停用（任何來源恆 +0·手動強化照常）
     let _probe = { id: id, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff };
     let ex = player.inv.find(i => sameItemSig(i, _probe));   // 🔧 架構#3：統一簽章比對（itemSig 已含 en→+0 只併 +0、+3 只併 +3，永不誤併不同強化值）；🏛️ 傳統自帶強化：同名同強化值同詞綴自動疊加（移除原 en>0 不疊加限制）
     if(ex) ex.cnt += cnt;   // 不論是否鎖定都疊加；僅加數量、不更動既有堆疊的鎖定/廢品狀態
@@ -76,33 +73,49 @@ function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false) {
     return itemInfo; // 👈 讓拉霸機可以讀取最終產生的物品
 }
 
-// ===== 屬性詞綴定義（12種，武器/防具/飾品皆可出現） =====
-// fix = 武器固定傷害；counter = 武器對剋屬性怪物的額外固定傷害；ele = 武器轉變的屬性
-// res = 防具/飾品對應元素抗性%；mr = 防具/飾品魔防
+// ===== 🔥 屬性詞綴定義（v3.0.77 屬性強化系統改版：4 屬性 × 5 階，只能存在於武器） =====
+// dmg = 額外傷害+N；mp = 額外魔法點數+N（N＝1/3/5/7/9，走 recompute d.extraDmg/d.extraMp·玩家＋傭兵 buildAlly 共用）
+// ele = 一般攻擊轉變的屬性（剋制走 elementCounterMult ×1.4/×0.6）；tier = 階級（第4階需武器+10、第5階需+11，見 doBianAttr）
+// 取得途徑＝屬性強化卷軸（四元素·怪物掉落）於象牙塔『碧恩』賦予，每次 7% 獨立事件，失敗僅消耗卷軸
 const ATTR_AFFIX = {
-    fire1:  { n: '火之', ele: 'fire',  fix: 1, counter: 6,  res: 1, mr: 1 },
-    water1: { n: '水之', ele: 'water', fix: 1, counter: 6,  res: 1, mr: 1 },
-    wind1:  { n: '風之', ele: 'wind',  fix: 1, counter: 6,  res: 1, mr: 1 },
-    earth1: { n: '地之', ele: 'earth', fix: 1, counter: 6,  res: 1, mr: 1 },
-    fire3:  { n: '爆炎', ele: 'fire',  fix: 3, counter: 9,  res: 2, mr: 2 },
-    water3: { n: '海嘯', ele: 'water', fix: 3, counter: 9,  res: 2, mr: 2 },
-    wind3:  { n: '暴風', ele: 'wind',  fix: 3, counter: 9,  res: 2, mr: 2 },
-    earth3: { n: '崩裂', ele: 'earth', fix: 3, counter: 9,  res: 2, mr: 2 },
-    fire5:  { n: '火靈', ele: 'fire',  fix: 5, counter: 12, res: 3, mr: 3 },
-    water5: { n: '水靈', ele: 'water', fix: 5, counter: 12, res: 3, mr: 3 },
-    wind5:  { n: '風靈', ele: 'wind',  fix: 5, counter: 12, res: 3, mr: 3 },
-    earth5: { n: '地靈', ele: 'earth', fix: 5, counter: 12, res: 3, mr: 3 },
+    fr1: { n: '火之',     ele: 'fire',  tier: 1, dmg: 1, mp: 1 },
+    fr2: { n: '爆炎',     ele: 'fire',  tier: 2, dmg: 3, mp: 3 },
+    fr3: { n: '火靈',     ele: 'fire',  tier: 3, dmg: 5, mp: 5 },
+    fr4: { n: '赤炎',     ele: 'fire',  tier: 4, dmg: 7, mp: 7 },
+    fr5: { n: '帕格里奧', ele: 'fire',  tier: 5, dmg: 9, mp: 9 },
+    wa1: { n: '水之',     ele: 'water', tier: 1, dmg: 1, mp: 1 },
+    wa2: { n: '海嘯',     ele: 'water', tier: 2, dmg: 3, mp: 3 },
+    wa3: { n: '水靈',     ele: 'water', tier: 3, dmg: 5, mp: 5 },
+    wa4: { n: '霜凍',     ele: 'water', tier: 4, dmg: 7, mp: 7 },
+    wa5: { n: '伊娃',     ele: 'water', tier: 5, dmg: 9, mp: 9 },
+    wi1: { n: '風之',     ele: 'wind',  tier: 1, dmg: 1, mp: 1 },
+    wi2: { n: '暴風',     ele: 'wind',  tier: 2, dmg: 3, mp: 3 },
+    wi3: { n: '風靈',     ele: 'wind',  tier: 3, dmg: 5, mp: 5 },
+    wi4: { n: '蒼蘭',     ele: 'wind',  tier: 4, dmg: 7, mp: 7 },
+    wi5: { n: '沙哈',     ele: 'wind',  tier: 5, dmg: 9, mp: 9 },
+    ea1: { n: '地之',     ele: 'earth', tier: 1, dmg: 1, mp: 1 },
+    ea2: { n: '崩裂',     ele: 'earth', tier: 2, dmg: 3, mp: 3 },
+    ea3: { n: '地靈',     ele: 'earth', tier: 3, dmg: 5, mp: 5 },
+    ea4: { n: '輝岩',     ele: 'earth', tier: 4, dmg: 7, mp: 7 },
+    ea5: { n: '馬普勒',   ele: 'earth', tier: 5, dmg: 9, mp: 9 },
 };
-// 隨機產生一個屬性詞綴代碼：之60% / 中階30% / 靈10%，四元素均分
-function rollAttrAffix() {
-    let r = lootRng('attrtier');   // 🎲 committed RNG（防 SL 重抽屬性詞綴階）
-    let tier = r < 0.60 ? 1 : (r < 0.90 ? 3 : 5);
-    let ele = ['fire', 'water', 'wind', 'earth'][Math.floor(lootRng('attrele') * 4)];
-    return ele + tier;
+const ATTR_ELE_PREFIX = { fire: 'fr', water: 'wa', wind: 'wi', earth: 'ea' };   // 元素 → 代碼字首（碧恩賦予/升階用）
+// 舊12代碼 → 新代碼（名稱身分不變：火之→fr1、爆炎→fr2、火靈→fr3…）。讀取路徑自動解析（含倉庫舊資料，零寫入）；
+// 玩家側（背包/裝備/傭兵）另由 loadGame 一次性實體改寫為新代碼（見 js/13）。
+const ATTR_LEGACY = {
+    fire1: 'fr1', fire3: 'fr2', fire5: 'fr3', water1: 'wa1', water3: 'wa2', water5: 'wa3',
+    wind1: 'wi1', wind3: 'wi2', wind5: 'wi3', earth1: 'ea1', earth3: 'ea2', earth5: 'ea3',
+};
+// 正規化屬性代碼（舊碼→新碼；非法值→null）
+function attrCanon(attr) {
+    if (typeof attr !== 'string') return null;
+    let c = ATTR_LEGACY[attr] || attr;
+    return ATTR_AFFIX[c] ? c : null;
 }
-// 取得詞綴定義（相容舊存檔：attr 為非法值/true 時回傳 null）
+// 取得詞綴定義（相容舊存檔：舊12代碼自動映射；attr 為非法值/true 時回傳 null）
 function getAttrAffix(attr) {
-    return (typeof attr === 'string' && ATTR_AFFIX[attr]) ? ATTR_AFFIX[attr] : null;
+    let c = attrCanon(attr);
+    return c ? ATTR_AFFIX[c] : null;
 }
 // 武器實際屬性（屬性詞綴優先，否則用基底物品 ele）
 function getWpnEle(wpnInst, wpnBase) {
@@ -180,6 +193,7 @@ function getGlowClass(item, d) {
     if (attr && bless) return 'bless-glow-strong';         // 屬性+祝福：金光（顯眼度＝雙詞綴）
     if (anc) return 'ancient-glow';                        // 單遠古：紫光（原樣）
     if (bless) return 'bless-glow';   // 單祝福（詛咒已於上方優先處理）                        // 單祝福：金光（原樣）
+    if (attr) return 'attr-glow-' + attrCanon(item.attr);  // 🔥 單屬性：武器圖示帶該屬性同色系光芒（階級越高越亮，第5階呼吸光）
     return '';
 }
 
@@ -228,12 +242,12 @@ function getItemFullName(item) {
     let segs = '';
     let aff = getAttrAffix(item.attr);
     if (aff) {
-        let acls = 'c-attr-' + item.attr + (item.attr.charAt(item.attr.length - 1) === '5' ? ' c-attr-glow' : '');
-        segs += `<span class="${acls}">${aff.n} </span>`;   // 屬性詞綴：12 種專屬色
+        let acls = 'c-attr-' + attrCanon(item.attr) + (aff.tier === 5 ? ' c-attr-glow' : '');
+        segs += `<span class="${acls}">${aff.n} </span>`;   // 🔥 屬性詞綴：4 屬性 × 5 階漸變同色系（第5階加光暈）
     }
     if (item.anc)   segs += `<span class="${ancColorClass(item.anc)}">${ancName(item.anc)} </span>`;   // 遠古系：遠古紫/永恆紅/不朽綠/太初藍
     if (item.bless) segs += `<span class="${blessColorClass(item.bless)}">${blessName(item.bless)} </span>`;   // 祝福的金/詛咒的紅
-    let en = (item.en > 0) ? (`+${capEn(item.en, d)} `) : "";   // 🔧 一律顯示 +N（夾擠至上限：武器+20/防具+15/飾品+5；過往超過上限的資料以上限顯示）
+    let en = (item.en > 0) ? (`+${capEn(item.en, d)} `) : ((Number(item.en) || 0) < 0 ? `${item.en} ` : "");   // 🔧 一律顯示 +N（夾擠至上限：武器/防具+15、飾品+5）；🏰 詛咒降階的負值(如 -1)原樣顯示
     let cnt = item.cnt > 1 ? ` (${item.cnt})` : "";
     let setPrefix = item.seteff ? item.seteff.slice(0, 2) : "";   // 🔮 席琳套裝：套裝名冠在裝備名稱前（如「紅獅環甲」）；顏色沿用 getItemColor（規則同前）
     return `${segs}<span class="${getItemColor(item)}">${en}${setPrefix}${d.n}${cnt}</span>`;
@@ -303,8 +317,7 @@ function useItem(u, silent = false) {
             let _seteff = _wand.seteff || false;
             item.cnt--; if (item.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== item.uid);   // 消耗靈魂之球 ×1
             _wand.cnt--; if (_wand.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== _wand.uid);   // 消耗失去魔力魔杖 ×1
-            // 🏛️ 傳統模式：解封印時才為「重獲魔力的魔杖」附加隨機強化值（封印狀態 noEnhance 恆 +0）；一般/經典模式維持 +0（沿用手動強化）。committed RNG（rollTraditionalEnhance 內走 lootRng）防 SL 重抽
-            let _tEn = traditionalActive() ? rollTraditionalEnhance(DB.items[resultId]) : 0;
+            let _tEn = 0;   // 🏛️ v3.0.83 傳統模式已取消：重獲魔力的魔杖恆 +0（沿用手動強化）
             let _probe = { id:resultId, en:_tEn, bless:false, anc:false, attr:false, seteff:_seteff };
             let _ex = _tEn > 0 ? null : player.inv.find(i => (i.en||0)===0 && sameItemSig(i, _probe));   // 🏛️ 自帶強化(en>0)獨立成堆、不併入 +0（比照 gainItem）
             if (_ex) _ex.cnt += 1;
@@ -833,7 +846,6 @@ function buyItem(id, qty) {
 
 let activeScroll = null;
 function openEnhanceModal(scroll) {
-    if (traditionalActive()) { logSys('<span class="text-amber-300">🏛️ 傳統模式無法強化裝備。</span>'); return; }   // 🏛️ 縱深防護：傳統模式封鎖卷軸強化路徑
     activeScroll = scroll;
     let targets = Object.values(player.eq).filter(e => e && DB.items[e.id].type === scroll.target && !isMaxEnhanced(e) && !DB.items[e.id].noEnhance);   // 🔧 已達強化上限者不列入；🏛️ 無法強化的裝備（古老系列）不列入
     
@@ -856,7 +868,6 @@ function openEnhanceModal(scroll) {
 }
 
 function doEnhance(targetUid, isEq = true) {
-    if (traditionalActive()) return;   // 🏛️ 縱深防護：傳統模式不可強化
     if(!activeScroll) return;
     
     let target, slot;
@@ -870,7 +881,7 @@ function doEnhance(targetUid, isEq = true) {
     if(!target) return;
 
     let d = DB.items[target.id];
-    let _cap = enhanceCap(d);   // 🔧 強化上限：武器+20 / 防具+15 / 飾品+10
+    let _cap = enhanceCap(d);   // 🔧 強化上限：武器+15 / 防具+15 / 飾品+5
     if ((Number(target.en) || 0) >= _cap) {   // 已達上限：不消耗卷軸，提示後返回
         logSys(`<span class="text-amber-300">${getItemFullName(target)} 已達強化上限（+${_cap}），無法再強化。</span>`);
         activeScroll = null; closeModal();
@@ -889,39 +900,22 @@ function doEnhance(targetUid, isEq = true) {
     }
     
     let success = false, destroy = false, nochange = false;
-    let safe = d.safe || 0;
     // 防呆：強化值正規化為有效數字。若 en 為 undefined/NaN，(undefined < safe) 會是 false 而誤入失敗/爆裝分支，
     //        導致看似 +0 的武器仍可能消失。此處統一視為 0，確保 +0(含未初始化 en)在安定值內必定成功、不會爆裝。
     target.en = Number(target.en) || 0;
-    
-    // 強化成功率：採用固定值（非浮動公式）。
-    //   安定值之前(en < safe)一律 100% 成功；祝福卷軸跳級到安定值以上也不套用失敗/爆裝（成功在加值前判定）。
-    //   武器(安定值6)：+6→60%、+7→50%、+8→40%、+9以上→35%
-    //   防具安定值0：+0~+4→50%、+5→40%、+6→30%、+7以上→20%
-    //   防具安定值4：+4→50%、+5→40%、+6→30%、+7以上→20%
-    //   防具安定值6：+6→30%、+7以上→20%
-    if (target.en < safe) {
-        success = true;   // 安定值之前必定成功（祝福卷軸跳級超過安定值也算這次，不爆裝）
-    } else {
-        let en = target.en, rate;
-        if (d.type === 'wpn') {                       // 武器一律安定值6
-            rate = en === 6 ? 0.60 : en === 7 ? 0.50 : en === 8 ? 0.40 : 0.35;
-        } else if (d.type === 'acc') {                // 飾品：一律安定值0（+0 50%、+1 40%、+2 30%、+3↑ 20%）
-            rate = en === 0 ? 0.50 : en === 1 ? 0.40 : en === 2 ? 0.30 : 0.20;
-        } else if (safe === 0) {                      // 防具：安定值0
-            rate = en <= 4 ? 0.50 : en === 5 ? 0.40 : en === 6 ? 0.30 : 0.20;
-        } else if (safe === 4) {                      // 防具：安定值4
-            rate = en === 4 ? 0.50 : en === 5 ? 0.40 : en === 6 ? 0.30 : 0.20;
-        } else {                                      // 防具：安定值6（其餘安定值防呆比照）
-            rate = en === safe ? 0.30 : 0.20;
-        }
-        if (Math.random() < rate) success = true;     // 🎲 即時擲骰：成敗純機率（每次嘗試獨立，可 save/load 重抽）
-        else destroy = true;                          // 失敗即爆裝
-    }
-    
+
+    // 🏰 天堂經典衝裝規則（v3.0.76·機率單一真相 enhanceRollOutcome，見 js/01）：
+    //   安定值內 100% 成功（祝福卷軸跳級到安定值以上也不套用失敗/爆裝——成功在加值前判定）；
+    //   武器超過安定值：+9 前 1/3 過、2/3 爆；+9 起 1/6 過、1/6 無事、4/6 爆
+    //   防具(安定值>0)：1/目前強化值；防具(安定值0)/飾品：+0 1/2、+1 以上 1/(強化值×2)；失敗即爆裝
+    let _oc = enhanceRollOutcome(d, target.en);
+    if (_oc === 'ok') success = true;
+    else if (_oc === 'break') destroy = true;
+    else nochange = true;   // 武器 +9 起 1/6 無事：卷軸已消耗、強化值不變
+
     let fn = getItemFullName(target);
     if (success) {
-        let add = (DB.items[scroll.id] && DB.items[scroll.id].isB) ? (1 + Math.floor(Math.random() * 3)) : 1;   // 🌟 祝福卷成功時隨機 +1~+3（純機率）
+        let add = (DB.items[scroll.id] && DB.items[scroll.id].isB) ? blessEnhanceGain(target.en) : 1;   // 🌟 祝福卷：+2 以下(含負值) +1~+3、+3~+5 +1~+2、+6 起等同一般卷 +1（純機率）
         target.en = Math.min(_cap, target.en + add);   // 🔧 祝福卷軸跳級不超過上限
         let prefix = (target.en > (d.safe||0)) ? "持續" : "";
         let _enTxt = '+' + capEn(target.en, d);   // 🔧 顯示 +N（夾擠至強化上限）
@@ -1135,7 +1129,7 @@ function _updateUIImpl() {
       // ⚠️ 用「狀態改變才寫 DOM」的守衛：避免每個 tick 重複 toggle class / 設 display 造成按鈕閃爍。
       { let tpb = document.getElementById('btn-teleport'); if (tpb) { let _hideTp = !!(KING_ROOMS[mapState.current] || (typeof prideTeleportBlocked === 'function' && prideTeleportBlocked()) || state.oblivion); if (tpb.classList.contains('hidden') !== _hideTp) { tpb.classList.toggle('hidden', _hideTp); tpb.style.display = _hideTp ? 'none' : ''; } } } }   // ⚠️ _hideTp 必須 !! 強轉布林：否則 (undefined||false||undefined)===undefined → 守衛 (boolean!==undefined) 恆真 → toggle('hidden', undefined) 變成「無參數 bare toggle」每幀翻轉 → 按鈕閃爍
     { let vb = document.getElementById('victory-badge'); if (vb) { let _va = siegeVictoryActive(); vb.style.display = _va ? 'inline-flex' : 'none'; if (_va) vb.title = `攻城獲勝期間：全商店8折、開放${victoryCityCfg().castleName}`; } }   // 攻城獲勝淡金黃標記（inline-flex 讓👑與文字水平置中；🔧 tooltip 依實際獲勝城池動態，不再固定肯特）
-    { let cb = document.getElementById('classic-badge'); if (cb) cb.style.display = player.classicMode ? 'inline' : 'none'; let tb = document.getElementById('traditional-badge'); if (tb) tb.style.display = player.traditionalMode ? 'inline' : 'none'; }   // 🎮 經典／🏛️ 傳統模式標記（兩者獨立：經典+傳統 兩個徽章都顯示；一般+傳統 只顯示傳統）
+    { let cb = document.getElementById('classic-badge'); if (cb) cb.style.display = player.classicMode ? 'inline' : 'none'; }   // 🎮 經典模式標記（🏛️v3.0.83 傳統徽章已移除）
     applyAreaBackground();   // 區域背景：地監/攻城→戰鬥區、城堡→村莊畫面
     
     // 處理顯示文字：只顯示 騎士、法師、妖精、黑暗妖精

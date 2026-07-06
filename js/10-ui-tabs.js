@@ -1,20 +1,28 @@
 let _tabPointerDown = false, _tabWheelActive = false, _tabWheelTimer = null, _tabRebuildPending = false, _tabThrottleTimer = null;
 const TAB_REBUILD_THROTTLE_MS = 250;
-const TAB_WHEEL_IDLE_MS = 180;   // 🚀 滾輪停止多久後才補做延後的重建
+const TAB_WHEEL_IDLE_MS = 180;
+function plainInventoryItemName(item) {
+    let tmp = document.createElement('span');
+    tmp.innerHTML = getItemFullName(item);
+    return (tmp.textContent || tmp.innerText || (DB.items[item.id] && DB.items[item.id].n) || item.id).trim();
+}
 function _initTabGuard() {
     let panel = document.getElementById('tab-content-panel');
     if (!panel || panel._tabGuardInit) return;
     panel._tabGuardInit = true;
     panel.addEventListener('pointerdown', function(){ _tabPointerDown = true; });
-    // 🚀 滾輪捲動期間：戰鬥掉落/扣箭若直接替換背包 DOM，會中斷瀏覽器的慣性捲動，物品越多越像整頁卡住。
-    //    改為滾輪進行中把重建標記為 pending、延後到滾輪停止 180ms 後補一次（與 _tabPointerDown 拖曳守衛同理）。
+    // 狩獵掉落、箭矢消耗會要求重建背包。滾輪操作期間若直接替換 DOM，
+    // 瀏覽器會中斷慣性捲動，物品越多時越容易看起來像整頁卡住。
     panel.addEventListener('wheel', function(){
         _tabWheelActive = true;
         if (_tabWheelTimer) clearTimeout(_tabWheelTimer);
         _tabWheelTimer = setTimeout(function(){
             _tabWheelTimer = null;
             _tabWheelActive = false;
-            if (_tabRebuildPending) { _tabRebuildPending = false; renderTabs(); }
+            if (_tabRebuildPending) {
+                _tabRebuildPending = false;
+                renderTabs();
+            }
         }, TAB_WHEEL_IDLE_MS);
     }, { passive:true, capture:true });
     let _release = function(){ if (!_tabPointerDown) return; _tabPointerDown = false; if (_tabRebuildPending) { _tabRebuildPending = false; setTimeout(function(){ renderTabs(); }, 0); } };   // 放開後(讓 click 先觸發)再補一次重建
@@ -59,6 +67,11 @@ function classicSkillSyncTierFromScroll(view) {
         else break;
     }
     if (tier !== classicSkillBookState.tier) classicSkillSelectTier(tier);
+}
+function classicSkillScrollRows(direction) {
+    let view = document.querySelector('#tab-skill .classic-skill-grid-scroll');
+    if (!view) return;
+    view.scrollBy({ top:(direction < 0 ? -1 : 1) * (view.clientHeight / 8), behavior:'smooth' });
 }
 function classicSkillChooseMode(mode) {
     classicSkillBookState.mode = mode;
@@ -135,6 +148,8 @@ function renderClassicSkillBook(sDiv) {
         + '<div class="classic-skill-mode">' + modeButtons + '</div>'
         + '<div class="classic-skill-tier-strip" style="background-image:url(\'assets/ui/skill-level/' + sprite + '.png\')">' + tierButtons + '</div>'
         + '<div class="classic-skill-grid-scroll" onscroll="classicSkillSyncTierFromScroll(this)"><div class="classic-skill-grid">' + cells + '</div></div>'
+        + '<button type="button" class="classic-skill-scroll classic-skill-scroll-up" aria-label="技能向上捲動" onclick="classicSkillScrollRows(-1)"></button>'
+        + '<button type="button" class="classic-skill-scroll classic-skill-scroll-down" aria-label="技能向下捲動" onclick="classicSkillScrollRows(1)"></button>'
         + '<div class="classic-skill-stat classic-skill-stat-sp">' + _spv + '</div>'
         + '<div class="classic-skill-stat classic-skill-stat-mr">' + _mrv + '</div>'
         + '</div>';
@@ -152,7 +167,7 @@ function renderTabs(force) {
         let inv = player.inv.map(i => itemSig(i) + '.' + (i.cnt||1) + '.' + (i.lock?1:0) + '.' + (i.junk?1:0)).join(';');   // 🔧 架構#3：改用統一簽章（修正先前祝福/詛咒同被壓成 1 的重繪遺漏）
         let eq = Object.keys(player.eq).map(k => { let e = player.eq[k]; return e ? `${k}:${itemSig(e)}.${e.cnt||0}` : k+':'; }).join(',');   // 🔧 補上先前缺漏的 attr / anc
         let dd = player.d;
-        return `${inv}#${eq}#${(player.skills||[]).join(',')}#${(player.grantedSkills||[]).join(',')}#${player.cls}#${player.lv}#${player.elfEle||''}#${dd.str+dd.dex+dd.con+dd.int+dd.wis}`;
+        return `${inv}#${eq}#${(player.skills||[]).join(',')}#${(player.grantedSkills||[]).join(',')}#${player.cls}#${player.lv}#${player.elfEle||''}#${player.mastery||''}#${dd.str+dd.dex+dd.con+dd.int+dd.wis}`;
     })();
     if(!force && _sig === renderTabs._sig) return;
     renderTabs._sig = _sig;
@@ -209,11 +224,14 @@ function renderTabs(force) {
             // 👇 判斷如果裝備本身是祝福的，或者物品基底(卷軸)是祝福的，就套用螢光特效
             let glowClass = getGlowClass(eq, d);
             let imgHtml = `<img src="${imgUrl}" onerror="this.style.opacity='0';" class="object-contain pointer-events-none ${glowClass}">`;
-            el.innerHTML = `<div class="classic-icon-box">${imgHtml}</div><div class="classic-name-box"><span class="classic-slot-name">${s.n}</span><span class="${getItemColor(eq)} font-bold">${getItemFullName(eq)}</span></div>`;
+            el.title = `${s.n}：${plainInventoryItemName(eq)}`;
+            if (eq.lock) el.classList.add('classic-item-locked');
+            el.innerHTML = `<div class="classic-icon-box">${imgHtml}</div><div class="classic-name-box"><span class="classic-slot-name">${s.n}</span><span class="${getItemColor(eq)} font-bold">${getItemFullName(eq)}</span></div>${eq.lock ? '<span class="classic-item-lock-badge" aria-hidden="true">🔒</span>' : ''}`;
             el.onclick = () => openModal(eq, true, s.k);
         } else {
             let _rlv = (s.k === 'ring3') ? 55 : (s.k === 'ring4') ? 65 : (s.k === 'ear2') ? 50 : 0;   // 🔧 第3/4戒指欄、第2耳環欄等級需求
             let _locked = _rlv && player.lv < _rlv;
+            el.title = _locked ? `${s.n}（需 Lv${_rlv}）` : `${s.n}（空）`;
             el.innerHTML = `<div class="classic-icon-box"></div><div class="classic-name-box"><span class="classic-slot-name">${s.n}</span><span class="${_locked ? 'text-red-400' : 'text-slate-500'}">${_locked ? '需 Lv' + _rlv : '- 空 -'}</span></div>`;
         }
         eDiv.appendChild(el);
@@ -265,6 +283,9 @@ player.inv.forEach(i => {
     let el = document.createElement('div'); 
     // className 這裡移除了 isDisabled 相關的判定，讓所有項目都可以互動
     el.className = `list-item text-base ${itemBg} rounded mb-1 ${i.lock ? 'border-red-900 border-2' : ''}`;
+    el.title = plainInventoryItemName(i);
+    if (i.lock) el.classList.add('classic-item-locked');
+    else if (i.junk) el.classList.add('classic-item-junk');
     
     // 判斷如果背包裡的物品是祝福的，套用螢光特效
     let imgUrl = getIconUrl(d);
@@ -272,12 +293,12 @@ player.inv.forEach(i => {
     let imgHtml = `<img src="${imgUrl}" onerror="this.style.opacity='0';" class="w-6 h-6 object-contain pointer-events-none ${glowClass}">`;
     
     // 內容組合 (加入了 statusTag)
-    let _rowInner = `<div class="classic-item-main"><div class="classic-icon-box">${imgHtml}</div><div class="classic-name-box"><span class="${getItemColor(i)} font-bold">${getItemFullName(i)}</span><span class="classic-item-flags">${statusTag} ${i.lock ? '<span class="text-red-400">[🔒]</span>' : ''} ${(i.junk && !i.lock) ? '<span class="text-amber-400 font-bold">[廢]</span>' : ''}</span></div></div>`;   // 🎨 v3.0.40 1.8皮膚列結構
+    let _rowInner = `<div class="classic-item-main"><div class="classic-icon-box">${imgHtml}</div><div class="classic-name-box"><span class="${getItemColor(i)} font-bold">${getItemFullName(i)}</span><span class="classic-item-flags">${statusTag}</span></div>${i.lock ? '<span class="classic-item-lock-badge" aria-hidden="true">🔒</span>' : ''}${(i.junk && !i.lock) ? '<span class="classic-item-junk-label">廢品</span>' : ''}</div>`;   // 方格狀態：上鎖右上角；廢品灰階＋底部紅字
 
     // ⚡ 快速強化模式：對應分頁啟用且為可強化裝備（未鎖定）時，右側顯示勾選欄，點整列切換勾選
     let _qeType = (d.type === 'wpn' && !d.isArrow) ? 'wpn' : ((d.type === 'arm' || d.type === 'acc') ? 'arm' : null);
     let _qjType = (d.type === 'wpn') ? 'wpn' : ((d.type === 'arm' || d.type === 'acc') ? 'arm' : 'item');   // 🗑️ 快速廢品分頁歸屬（含箭矢→武器分頁、其餘→道具分頁）
-    if (_qeType && quickEnh[_qeType].active && !i.lock && !traditionalActive()) {   // 🏛️ 傳統模式：不顯示快速強化勾選列
+    if (_qeType && quickEnh[_qeType].active && !i.lock) {
         let _checked = !!quickEnh[_qeType].sel[i.uid];
         el.innerHTML = `<div class="flex items-center justify-between gap-2">${_rowInner}<input type="checkbox" class="pointer-events-none w-4 h-4 mr-1 flex-shrink-0" ${_checked ? 'checked' : ''}></div>`;
         if (_checked) el.className += ' ring-2 ring-blue-500/70';
@@ -316,7 +337,6 @@ player.inv.forEach(i => {
         iDiv.appendChild(el); 
     }
 });
-    
     // 🎨 v3.0.40 1.8 物品介面：保留原清單事件與功能，只把內容搬入八格皮膚的可捲動區。
     [eDiv,wDiv,aDiv,iDiv].forEach(decorateClassicInventoryTab);
 
@@ -335,12 +355,41 @@ player.inv.forEach(i => {
 function decorateClassicInventoryTab(div){
     if(!div)return;
     div.classList.add('classic-inventory-tab');
+    let shell=document.createElement('div');
+    shell.className='classic-inventory-shell';
     let viewport=document.createElement('div');
     viewport.className='classic-inventory-viewport';
     Array.from(div.children).filter(x=>!x.classList.contains('classic-list-toolbar')&&!x.classList.contains('sticky')).forEach(x=>viewport.appendChild(x));
+    // 532 原圖的實際格線為 4 欄 × 8 排（x=45~191、y=21~309）；內部格位才是捲動內容。
+    let used=viewport.querySelectorAll('.list-item').length;
+    for(let n=used;n<32;n++){
+        let empty=document.createElement('div');
+        empty.className='classic-grid-empty';
+        empty.setAttribute('aria-hidden','true');
+        viewport.appendChild(empty);
+    }
+    let up=document.createElement('button');
+    up.type='button'; up.className='classic-inventory-scroll classic-inventory-scroll-up'; up.setAttribute('aria-label','向上捲動');
+    up.onclick=()=>viewport.scrollBy({top:-Math.max(32,viewport.clientHeight/8),behavior:'smooth'});
+    let down=document.createElement('button');
+    down.type='button'; down.className='classic-inventory-scroll classic-inventory-scroll-down'; down.setAttribute('aria-label','向下捲動');
+    down.onclick=()=>viewport.scrollBy({top:Math.max(32,viewport.clientHeight/8),behavior:'smooth'});
+    let sortWrap=document.createElement('div');
+    sortWrap.className='classic-sort-wrap';
+    let sortBtn=document.createElement('button');
+    sortBtn.type='button'; sortBtn.className='classic-sort-button'; sortBtn.title='整理背包'; sortBtn.setAttribute('aria-label','整理背包'); sortBtn.textContent='↕';
+    let sortMenu=document.createElement('div');
+    sortMenu.className='classic-sort-menu';
+    let mode=inventorySortMode();
+    sortMenu.innerHTML=`<button type="button" data-sort="category" class="${mode==='category'?'active':''}">分類整理</button><button type="button" data-sort="quality" class="${mode==='quality'?'active':''}">品質整理</button><button type="button" data-sort="name" class="${mode==='name'?'active':''}">名稱整理</button><label><input type="checkbox" ${player.inventoryAutoSort===false?'':'checked'}> 取得物品時自動整理</label>`;
+    sortBtn.onclick=(ev)=>{ev.stopPropagation();sortMenu.classList.toggle('open');};
+    sortMenu.querySelectorAll('[data-sort]').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();setInventorySortMode(b.dataset.sort);});
+    let auto=sortMenu.querySelector('input');if(auto)auto.onchange=()=>toggleInventoryAutoSort(auto.checked);
+    sortWrap.appendChild(sortBtn);sortWrap.appendChild(sortMenu);
+    shell.appendChild(viewport); shell.appendChild(up); shell.appendChild(down); shell.appendChild(sortWrap);
     let quick=Array.from(div.children).find(x=>x.classList.contains('sticky'));
     if(quick)quick.classList.add('classic-list-toolbar');
-    div.appendChild(viewport);
+    div.appendChild(shell);
 }
 
 // ===== 召喚類技能互斥：迷魅 / 召喚 / 造屍 / 召喚屬性精靈 / 召喚強力屬性精靈 同時只能開啟一個 =====
@@ -744,12 +793,8 @@ function buildItemDescHTML(item) {
     let _aff = getAttrAffix(item.attr);
     if(_aff) {
         let eleName = { fire:'火', water:'水', wind:'風', earth:'地' }[_aff.ele];
-        if(d.type === 'wpn') {
-            let counterName = { fire:'地', water:'火', wind:'水', earth:'風' }[_aff.ele];
-            desc += `<br><span class="c-attr-${item.attr}">${_aff.n}：固定傷害+${_aff.fix}，武器轉為${eleName}屬性，對${counterName}屬性怪物額外+${_aff.counter}固定傷害。</span>`;
-        } else {
-            desc += `<br><span class="c-attr-${item.attr}">${_aff.n}：${eleName}屬性抗性+${_aff.res}，魔防(MR)+${_aff.mr}。</span>`;
-        }
+        let counterName = { fire:'地', water:'火', wind:'水', earth:'風' }[_aff.ele];
+        desc += `<br><span class="c-attr-${attrCanon(item.attr)}">${_aff.n}（屬性第${_aff.tier}階）：額外傷害+${_aff.dmg}、額外魔法點數+${_aff.mp}，一般攻擊轉為${eleName}屬性（剋${counterName} ×1.4）。</span>`;   // 🔥 v3.0.77 五階制
     }
 
     // 🛡️ 適用職業：以職業 logo 顯示可裝備此裝備的職業（騎士/妖精/法師/黑暗妖精/幻術士；黑暗妖精走 darkEquipOk 真實規則）
@@ -841,7 +886,7 @@ function openModal(item, isEq, slot) {
     }
 
     // 👇 修改：為武器、防具、飾品加入專屬的「強化」按鈕 (加入 !d.isArrow 防呆，箭矢不顯示強化按鈕)
-    if (((d.type === 'wpn' && !d.isArrow) || d.type === 'arm' || d.type === 'acc') && !isMaxEnhanced(item) && !d.noEnhance && !traditionalActive()) {   // 🔧 已達淬鍊（強化上限）：隱藏強化按鈕；🏛️ 無法強化的裝備（古老系列）不顯示強化鈕；🏛️ 傳統模式：所有裝備皆無強化選項
+    if (((d.type === 'wpn' && !d.isArrow) || d.type === 'arm' || d.type === 'acc') && !isMaxEnhanced(item) && !d.noEnhance) {   // 🔧 已達淬鍊（強化上限）：隱藏強化按鈕；🏛️ 無法強化的裝備（古老系列）不顯示強化鈕
         act += `<button class="col-span-2 w-full btn border-purple-700 bg-purple-900 hover:bg-purple-800 text-purple-200 py-3 text-lg font-bold mt-2" onclick="showEnhanceOptions('${item.uid}', ${isEq})">強化</button>`;
     }
 
@@ -972,8 +1017,8 @@ function showEnhanceOptions(uid, isEq) {
     document.getElementById('modal-actions').innerHTML = act;
 }
 
-// 👇 一鍵強化到指定值：逐級嘗試直到目標值。安定值前必定成功；安定值起依固定機率，
-//    過程中任一階失敗即爆裝（視為失敗）；卷軸用盡則停在目前等級。
+// 👇 一鍵強化到指定值：逐級嘗試直到目標值。安定值前必定成功；安定值起依天堂經典衝裝規則（enhanceRollOutcome js/01），
+//    過程中任一階失敗即爆裝（視為失敗）；武器 +9 起 1/6 無事（卷軸消耗、強化值不變、續衝）；卷軸用盡則停在目前等級。
 function executeAutoSafeEnhance(targetUid, isEq, scrollId, goal) {
     let target;
     if (isEq) {
@@ -1029,24 +1074,10 @@ function executeAutoSafeEnhance(targetUid, isEq, scrollId, goal) {
             target.en += 1;   // 安定值前必定成功
         } else {
             hadRisk = true;
-            let en = target.en, rate;
-            if (d.type === 'wpn') {                       // 武器一律安定值6
-                rate = en === 6 ? 0.60 : en === 7 ? 0.50 : en === 8 ? 0.40 : 0.35;
-            } else if (d.type === 'acc') {                // 飾品：一律安定值0
-                rate = en === 0 ? 0.50 : en === 1 ? 0.40 : en === 2 ? 0.30 : 0.20;
-            } else if (safe === 0) {                      // 防具：安定值0
-                rate = en <= 4 ? 0.50 : en === 5 ? 0.40 : en === 6 ? 0.30 : 0.20;
-            } else if (safe === 4) {                      // 防具：安定值4
-                rate = en === 4 ? 0.50 : en === 5 ? 0.40 : en === 6 ? 0.30 : 0.20;
-            } else {                                      // 防具：安定值6（其餘安定值防呆比照）
-                rate = en === safe ? 0.30 : 0.20;
-            }
-            if (Math.random() < rate) {   // 🎲 即時擲骰：成敗純機率（與單抽 doEnhance 同一套機率表）
-                target.en += 1;   // 成功
-            } else {
-                destroyed = true; // 失敗即爆裝，過程視為失敗
-                break;
-            }
+            let _oc = enhanceRollOutcome(d, target.en);   // 🏰 天堂經典衝裝規則（機率單一真相 js/01·與單抽 doEnhance 同一套）；🎲 即時擲骰可 save/load 重抽
+            if (_oc === 'ok') target.en += 1;             // 成功
+            else if (_oc === 'none') continue;            // 武器 +9 起 1/6 無事：卷軸已消耗、強化值不變，續衝
+            else { destroyed = true; break; }             // 失敗即爆裝，過程視為失敗
         }
     }
 
@@ -1080,7 +1111,7 @@ function executeCurseDeEnhance(targetUid, isEq, scrollId) {
     if (!target) return;
     target.en = Number(target.en) || 0;
     let d = DB.items[target.id];
-    if (target.en <= 0) { logSys(`<span class="text-red-400 font-bold">${d.n} 已是 +0，無法再降低強化值。</span>`); return; }
+    if (target.en <= -1) { logSys(`<span class="text-red-400 font-bold">${d.n} 已是 -1，無法再降低強化值。</span>`); return; }   // 🏰 天堂經典：可降至 -1（紅變後祝福卷必成功，見 enhanceRollOutcome）
 
     let scrollItem = player.inv.find(i => i.id === scrollId);
     let scrollName = DB.items[scrollId] ? DB.items[scrollId].n : "詛咒卷軸";
@@ -1099,7 +1130,7 @@ function executeCurseDeEnhance(targetUid, isEq, scrollId) {
     if (scrollItem.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== scrollItem.uid);
 
     target.en -= 1;   // 100% 成功降 1 階（強化已改純機率→重爬時各階自然重新擲骰，無需重骰身份）
-    logSys(`消耗了 1 個 <span class="c-cursed">${scrollName}</span>，<span class="text-red-300 font-bold">+${target.en} ${d.n} 散發出黯淡的光芒。</span>`);
+    logSys(`消耗了 1 個 <span class="c-cursed">${scrollName}</span>，<span class="text-red-300 font-bold">${target.en < 0 ? target.en : '+' + target.en} ${d.n} 散發出黯淡的光芒。</span>`);
 
     calcStats();
     renderTabs();
@@ -1108,14 +1139,7 @@ function executeCurseDeEnhance(targetUid, isEq, scrollId) {
 }
 
 // ========== ⚡ 快速強化（批次強化）==========
-// 強化成功率（與 doEnhance/executeAutoSafeEnhance 同一套固定機率），安定值之前由呼叫端視為必定成功
-function _enhanceRate(d, en, safe) {
-    if (d.type === 'wpn') return en === 6 ? 0.60 : en === 7 ? 0.50 : en === 8 ? 0.40 : 0.35;   // 武器一律安定值6
-    if (d.type === 'acc') return en === 0 ? 0.50 : en === 1 ? 0.40 : en === 2 ? 0.30 : 0.20;   // 飾品一律安定值0
-    if (safe === 0)       return en <= 4 ? 0.50 : en === 5 ? 0.40 : en === 6 ? 0.30 : 0.20;    // 防具安定值0
-    if (safe === 4)       return en === 4 ? 0.50 : en === 5 ? 0.40 : en === 6 ? 0.30 : 0.20;   // 防具安定值4
-    return en === safe ? 0.30 : 0.20;                                                          // 防具安定值6（其餘比照）
-}
+// 強化成敗一律走 enhanceRollOutcome（js/01·天堂經典衝裝規則·與 doEnhance/executeAutoSafeEnhance 同一套機率）
 
 // 該分頁可被批次強化的背包裝備（未鎖定；武器分頁＝武器(非箭矢)，防具分頁＝防具/飾品）
 function _qeEligibleItems(type) {
@@ -1141,9 +1165,10 @@ function _quickEnhanceUnit(d, startEn, goal, scrollStacks, useBless) {
         let st = scrollStacks[scrollId];
         if (!st || st.cnt <= 0) break;   // 卷軸用盡：停在目前等級（不爆裝）
         st.cnt -= 1; used += 1;
-        let ok = (en < safe) || (Math.random() < _enhanceRate(d, en, safe));   // 安定值前必成功；之後依機率（🎲 即時擲骰，可 save/load 重抽）
-        if (!ok) { destroyed = true; break; }   // 失敗即爆裝
-        let add = bless ? (1 + Math.floor(Math.random() * 3)) : 1;   // 🌟 祝福卷成功時隨機 +1~+3（純機率）；一般卷 +1
+        let _oc = enhanceRollOutcome(d, en);   // 🏰 天堂經典衝裝規則（機率單一真相 js/01）：安定值前必成功；🎲 即時擲骰可 save/load 重抽
+        if (_oc === 'break') { destroyed = true; break; }   // 失敗即爆裝
+        if (_oc === 'none') continue;   // 武器 +9 起 1/6 無事：卷軸已消耗、強化值不變，續衝
+        let add = bless ? blessEnhanceGain(en) : 1;   // 🌟 祝福卷：+2 以下 +1~+3、+3~+5 +1~+2、+6 起 +1；一般卷 +1
         en = Math.min(cap, en + add);   // 跳級不超過淬鍊上限
     }
     return { en, destroyed, used };
@@ -1186,7 +1211,6 @@ function quickEnhanceSelectAll(type, checked) { let st = quickEnh[type]; st.sel 
 function toggleQuickItem(type, uid) { let st = quickEnh[type]; if (st.sel[uid]) delete st.sel[uid]; else st.sel[uid] = true; renderTabs(true); }
 
 function runQuickEnhance(type) {
-    if (traditionalActive()) return;   // 🏛️ 縱深防護：傳統模式不可批次強化
     let st = quickEnh[type];
     let goal = Number((document.getElementById('qe-target-' + type) || {}).value) || st.target || 0;
     let entries = _qeEligibleItems(type).filter(i => st.sel[i.uid]);
@@ -1248,7 +1272,7 @@ function _qjEligibleItems(type) {
 }
 // ⚡🗑️ 分頁頂端快速操作表頭：武器/防具＝[快速強化][快速廢品]；道具＝[快速廢品]（強化進行中沿用原強化表頭）
 function buildQuickHeader(type) {
-    let hasEnh = (type === 'wpn' || type === 'arm') && !traditionalActive();   // 🏛️ 傳統模式：無強化→隱藏「快速強化」按鈕與面板（只保留快速廢品）
+    let hasEnh = (type === 'wpn' || type === 'arm');
     if (hasEnh && quickEnh[type].active) return buildQuickEnhanceHeader(type);   // 強化進行中：沿用原強化表頭
     let jnk = quickJunk[type];
     if (jnk.active) _qjSync(type);   // 🔧 渲染前先同步新掉落物品到面板狀態（新廢品預先勾選），確認時才不會誤取消其標記
@@ -1349,7 +1373,7 @@ function toggleJunk(uid) {
 
 // 一鍵排列：依規則重新排序背包（武器 / 防具飾品 / 道具 各自分頁內排序）
 // ===== 🔧 物品排序比較器（背包「一鍵排列」與倉庫「一鍵排列」共用，規則完全相同）=====
-const invSortCmp = (function () {
+const legacyInvSortCmp = (function () {
     // 防具/飾品「特效」判定：基底物品具有 AC 以外的加成欄位即視為有特效
     const MUNDANE = new Set(['n','type','slot','ac','req','safe','p','c','d','img','gachaWeight','unBonus']);
     let hasArmEffect = (d) => { for (let k in d) { if (!MUNDANE.has(k) && d[k]) return true; } return false; };
@@ -1425,10 +1449,74 @@ const invSortCmp = (function () {
 
 // 🔧 v2.6.73 一鍵排列改「獲得物品時自動觸發」（gainItem 尾端掛點）：每 10 秒最多 1 次·靜默（不 saveGame·排序結果隨其他存檔點落地）
 // 🔧 v2.6.80 與「啟用自動販賣」合併控制（用戶要求）：player.autoSellOn=false 時自動排列一併停用
+// 背包整理：判斷物品目前的結果，不區分加工或掉落來源。
+const INV_SORT_MODE_KEY = 'inventorySortMode';
+function inventorySortMode(){ return (player && player[INV_SORT_MODE_KEY]) || 'category'; }
+function inventoryDef(i){ return (i && DB.items[i.id]) || {}; }
+function inventoryTypeRank(i,d){ return d.type==='wpn'?0:((d.type==='arm'||d.type==='acc'||d.doll||d.slot==='doll')?1:2); }
+function weaponSortRank(i,d){
+    let s=(i.id||'')+'|'+(d.n||'')+'|'+(typeof getWeaponTags==='function'?getWeaponTags(i.id).join('|'):'');
+    if(/dagger|匕首/.test(s))return 0; if(/katana|武士刀/.test(s))return 1;
+    if(/2hsword|雙手劍/.test(s))return 3; if(/sword|劍/.test(s))return 2;
+    if(/spear|矛|槍/.test(s))return 4; if(/2h.*axe|giantaxe|battleaxe|雙手鈍器|雙手斧/.test(s))return 6;
+    if(/axe|hammer|mace|鈍器|斧/.test(s))return 5; if(/bow|弓/.test(s))return 7;
+    if(/claw|鋼爪/.test(s))return 8; if(/dual|雙刀/.test(s))return 9;
+    if(/chain|鎖鏈劍/.test(s))return 10; if(/wand|staff|法杖/.test(s))return 11; return 90;
+}
+function armorSortRank(i,d){
+    let s=(d.slot||'')+'|'+(i.id||'')+'|'+(d.n||'');
+    if(/helm|head|頭盔/.test(s))return 0; if(/shirt|內衣|T恤/.test(s))return 1;
+    if(/armor|body|盔甲/.test(s))return 2; if(/cloak|斗篷/.test(s))return 3;
+    if(/shield|盾/.test(s))return 4; if(/glove|手套/.test(s))return 5;
+    if(/boot|shoe|長靴|靴/.test(s))return 6; if(/ear|耳環/.test(s))return 7;
+    if(/amulet|neck|項鍊/.test(s))return 8; if(/ring|戒指/.test(s))return 9;
+    if(/belt|腰帶/.test(s))return 10; if(d.doll||/doll|娃娃/.test(s))return 11; return 90;
+}
+function itemSortRank(i,d){
+    if(d.eff==='card')return 0;
+    let s=(d.type||'')+'|'+(i.id||'')+'|'+(d.n||'');
+    if(/pot|potion|藥水/.test(s))return 1; if(/scroll|卷軸/.test(s))return 2;
+    if(/skillbk|魔法書|法術書|精靈水晶|技能書/.test(s))return 3;
+    if(/gem|crystal|寶石|水晶/.test(s))return 4; if(/material|材料/.test(s))return 5;
+    if(/quest|任務/.test(s))return 6; return 90;
+}
+function inventorySubRank(i,d){ let c=inventoryTypeRank(i,d); return c===0?weaponSortRank(i,d):(c===1?armorSortRank(i,d):itemSortRank(i,d)); }
+function inventoryNameCmp(a,b){ return (inventoryDef(a).n||a.id||'').localeCompare(inventoryDef(b).n||b.id||'','zh-Hant'); }
+function ancientSortRank(v){ return v==='primordial'?4:(v==='immortal'?3:(v==='eternal'?2:(v?1:0))); }
+function attributeSortRank(v){ if(!v||(typeof getAttrAffix==='function'&&!getAttrAffix(v)))return 0; let m=String(v).match(/(\d+)/g); return 1+(m?Number(m[m.length-1]):0); }
+function inventoryQualityCmp(a,b){
+    if(!!a.lock!==!!b.lock)return a.lock?-1:1; if(!!a.junk!==!!b.junk)return a.junk?1:-1;
+    if((b.en||0)!==(a.en||0))return (b.en||0)-(a.en||0);
+    if(!!a.seteff!==!!b.seteff)return a.seteff?-1:1;
+    if(a.seteff&&b.seteff){let s=String(a.seteff).localeCompare(String(b.seteff),'zh-Hant');if(s)return s;}
+    let aa=ancientSortRank(a.anc),ab=ancientSortRank(b.anc);if(aa!==ab)return ab-aa;
+    let xa=attributeSortRank(a.attr),xb=attributeSortRank(b.attr);if(xa!==xb)return xb-xa;
+    let ba=a.bless===true?1:0,bb=b.bless===true?1:0;if(ba!==bb)return bb-ba;
+    let la=inventoryDef(a).legend?1:0,lb=inventoryDef(b).legend?1:0;if(la!==lb)return lb-la;
+    let ca=a.bless==='cursed'?1:0,cb=b.bless==='cursed'?1:0;if(ca!==cb)return ca-cb;
+    let ta=inventoryDef(a).cardTier||0,tb=inventoryDef(b).cardTier||0;if(ta!==tb)return tb-ta;
+    return inventoryNameCmp(a,b);
+}
+const invSortCmp=function(a,b){
+    let da=inventoryDef(a),db=inventoryDef(b),mode=inventorySortMode();
+    if(!!a.lock!==!!b.lock)return a.lock?-1:1; if(!!a.junk!==!!b.junk)return a.junk?1:-1;
+    let ca=inventoryTypeRank(a,da),cb=inventoryTypeRank(b,db);if(ca!==cb)return ca-cb;
+    let sa=inventorySubRank(a,da),sb=inventorySubRank(b,db);
+    if(mode==='name'){let n=inventoryNameCmp(a,b);return n||inventoryQualityCmp(a,b);}
+    if(mode==='quality'){let q=inventoryQualityCmp(a,b);return q||(sa-sb)||inventoryNameCmp(a,b);}
+    if(sa!==sb)return sa-sb; return inventoryQualityCmp(a,b);
+};
+function setInventorySortMode(mode){
+    if(!player||!['category','quality','name'].includes(mode))return;
+    player[INV_SORT_MODE_KEY]=mode; player.inv.sort(invSortCmp);
+    if(typeof saveGame==='function')saveGame(); renderTabs(true);
+}
+function toggleInventoryAutoSort(on){ if(!player)return;player.inventoryAutoSort=!!on;if(typeof saveGame==='function')saveGame(); }
+
 let _autoSortAt = -99999;
 function autoSortInventory() {
     if (!player || !Array.isArray(player.inv) || typeof state === 'undefined' || !state.running) return;   // 遊戲未開始（創角配發起始道具等）不排
-    if (player.autoSellOn === false) return;   // 🔗 與自動販賣同開關（undefined 視為開）
+    if (player.inventoryAutoSort === false) return;   // 整理開關獨立於自動販賣
     if (state.ticks - _autoSortAt < 100) return;   // ⏲️ 10 秒節流（100 ticks）
     _autoSortAt = state.ticks;
     player.inv.sort(invSortCmp);
@@ -1491,7 +1579,7 @@ function _renderAutoSellBtn() {
     b.textContent = on ? '自動賣出' : '停止賣出';
     b.style.opacity = on ? '' : '0.4';            // 變暗＝停止
     b.style.filter = on ? '' : 'grayscale(0.85)';
-    b.title = on ? '自動販賣＋自動排列已開啟（每 10 秒賣出標記廢品；獲得物品自動排列背包）。' : '自動販賣＋自動排列已停止。';   // 🔗 v2.6.80 兩者合併同一開關（as-on 勾選）
+    b.title = on ? '自動販賣已開啟。' : '自動販賣已停止。';
 }
 
 // ===== 自動販賣規則（初版） =====
@@ -1613,7 +1701,7 @@ function openAutoSellRules() {
       .as-box{width:min(720px,92vw);max-height:88vh;overflow:auto;background:#172033;border:2px solid #b7791f;border-radius:14px;padding:18px;box-shadow:0 18px 60px #000}
       .as-head{display:flex;justify-content:space-between;align-items:center;font-size:23px;font-weight:bold;color:#fde68a}.as-sec{background:#0f172acc;border:1px solid #475569;border-radius:10px;padding:12px;margin-top:12px}.as-title{font-weight:bold;color:#fbbf24;margin-bottom:7px}.as-row{display:block;padding:5px 0}.as-row input[type=number]{width:72px;background:#020617;border:1px solid #64748b;border-radius:5px;padding:3px;text-align:center}.as-row input[type=checkbox]{width:18px;height:18px;vertical-align:middle}.as-help,.as-muted{font-size:13px;color:#94a3b8}.as-actions{display:flex;gap:8px;margin-top:12px}.as-actions button,.as-head button,.as-ex button,.as-ex-tools button{background:#334155;border:1px solid #64748b;border-radius:6px;padding:6px 12px}.as-actions .primary{background:#92400e;border-color:#f59e0b}.as-ex{display:flex;gap:10px;align-items:center;padding:5px;border-bottom:1px solid #334155}.as-ex span{flex:1}.as-ex b{color:#fcd34d}.as-ex-tools{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}.as-ex-tools input,.as-ex-tools select,select{background:#020617;border:1px solid #64748b;padding:6px;border-radius:6px}.as-ex-tools input{min-width:180px;flex:1}.as-btnrow{display:flex;align-items:center;flex-wrap:wrap;gap:6px}.as-sell-now-btn{margin-left:10px;height:38px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;line-height:1;padding:0 12px;border:2px solid #fb923c;border-radius:7px;background:#7c2d12;color:#ffedd5;font-weight:bold;cursor:pointer;box-shadow:0 2px 7px #0008}.as-sell-now-btn:hover{filter:brightness(1.25)}.as-sort-now-btn{border-color:#22d3ee;background:#164e63;color:#cffafe}.as-override-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.as-override-actions button{padding:7px 13px;border:2px solid;border-radius:7px;font-weight:bold;cursor:pointer;box-shadow:0 2px 7px #0008;transition:filter .15s,transform .15s}.as-override-actions button:hover{filter:brightness(1.25);transform:translateY(-1px)}.as-keep-btn{color:#bbf7d0;background:#14532d;border-color:#4ade80!important}.as-sell-btn{color:#fecaca;background:#7f1d1d;border-color:#f87171!important}#as-item{width:min(100%,390px);margin-bottom:7px}
     </style><div class="as-box"><div class="as-head"><span>自動販賣規則</span><button onclick="closeAutoSellRules()">Close</button></div>
-      <div class="as-sec"><label class="as-row"><input id="as-on" type="checkbox" ${player.autoSellOn!==false?'checked':''}> 啟用自動販賣＋自動排列</label><label class="as-row"><input id="as-global" type="checkbox" ${player.autoSellGlobal?'checked':''}> 套用全部存檔（8 個角色共用此設定）</label><div class="as-row as-btnrow"><span>物品取得／符合規則後，等待</span><input id="as-delay" type="number" min="10" max="86400" value="${r.delaySec}"><span>秒才販賣</span><button type="button" class="as-sell-now-btn" onclick="sellAutoSellItemsNow()">立即賣出廢品</button><button type="button" class="as-sell-now-btn as-sort-now-btn" onclick="sortInventoryNow()">立即一鍵排列</button></div><div class="as-help">等待期間可取消廢品標記（取消後該件不再被規則自動標記，直到重新儲存規則）或鎖定物品；「立即賣出廢品」套用目前規則並跳過等待秒數；「立即一鍵排列」立刻重排背包。停用開關並儲存後，規則產生的廢品標記會清除、獲得物品的自動排列也會停止；勾選「套用全部存檔」會在各角色下次載入時共用此設定。</div></div>
+      <div class="as-sec"><label class="as-row"><input id="as-on" type="checkbox" ${player.autoSellOn!==false?'checked':''}> 啟用自動販賣</label><label class="as-row"><input id="as-global" type="checkbox" ${player.autoSellGlobal?'checked':''}> 套用全部存檔（8 個角色共用此設定）</label><div class="as-row as-btnrow"><span>物品取得／符合規則後，等待</span><input id="as-delay" type="number" min="10" max="86400" value="${r.delaySec}"><span>秒才販賣</span><button type="button" class="as-sell-now-btn" onclick="sellAutoSellItemsNow()">立即賣出廢品</button><button type="button" class="as-sell-now-btn as-sort-now-btn" onclick="sortInventoryNow()">依目前方式整理</button></div><div class="as-help">等待期間可取消廢品標記或鎖定物品；「立即賣出廢品」會跳過等待秒數。背包整理方式與自動整理開關請在背包左側的整理按鈕設定，與自動販賣互不影響。</div></div>
       <div class="as-sec"><div class="as-title">裝備條件</div>${equipRows}<label class="as-row"><input id="as-pb" type="checkbox" ${r.protectBless?'checked':''}> 保護祝福裝備</label><label class="as-row"><input id="as-pa" type="checkbox" ${r.protectAnc?'checked':''}> 保護古代裝備</label><label class="as-row"><input id="as-pt" type="checkbox" ${r.protectAttr?'checked':''}> 保護屬性裝備</label><label class="as-row"><input id="as-ps" type="checkbox" ${r.protectSet?'checked':''}> 保護套裝詞綴裝備</label><label class="as-row"><input id="as-pl" type="checkbox" ${r.protectLegend?'checked':''}> 保護傳說裝備</label><label class="as-row"><input id="as-pold" type="checkbox" ${r.protectOldSeries?'checked':''}> 保護解封後的「古老的」系列裝備</label><div class="as-help">解除封印完成後立即保護古老的劍、巨劍、弩槍、鱗甲、皮盔甲、長袍及金屬盔甲，避免成品在取得瞬間被規則標為廢品。</div><label class="as-row"><input id="as-pcraft" type="checkbox" ${r.protectCraftEquip?'checked':''}> 保護製作素材裝備；保留可製作 <input id="as-craftsets" type="number" min="1" max="99" value="${r.craftSets}"> 次的數量</label><div class="as-help">系統會掃描全部製作配方，例如配方需要「暗殺軍王之痕 ×1」，保留 1 次就至少留 1 件，多餘數量才依武器規則處理。</div></div>
       <div class="as-sec"><div class="as-title">材料與一般物品</div>${miscRows}<div class="as-help">任務物品、不可販賣物品與系統保護物品不會被處理。</div></div>
       <div class="as-sec"><div class="as-title">個別例外（全遊戲物品）</div><div class="as-ex-tools"><input id="as-item-search" type="search" placeholder="輸入物品名稱搜尋" oninput="refreshAutoSellItemOptions()"><select id="as-item-type" onchange="refreshAutoSellItemOptions()"><option value="all">全部分類</option>${exceptionTypeRows}</select><select id="as-item-scope" onchange="refreshAutoSellItemOptions()"><option value="all">全部物品</option><option value="held">目前持有</option></select></div><div class="as-override-actions"><select id="as-item">${itemRows}</select><button class="as-keep-btn" onclick="setAutoSellOverride('keep')">永遠保留</button><button class="as-sell-btn" onclick="setAutoSellOverride('sell')">永遠販賣</button></div><div class="as-help">例外依物品本體全局套用，包含未取得物品及其所有強化、祝福、屬性與套裝版本。</div><div id="as-overrides">${rules}</div></div>

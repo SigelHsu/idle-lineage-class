@@ -103,16 +103,17 @@ function miscCollectionBonus(p, d) {
     }
 }
 
-// ---- 經典/傳統模式無法獲得的卷軸 → 預設「圖鑑已開通」(計入收集·讓卷軸類仍可完成) ----
-//   經典(classicMode)：賦予祝福+解除詛咒+祝福的卷軸無法獲得（克里斯特/碧恩 隱藏）；經典+傳統：再加所有強化卷軸(含詛咒的·僅經典+傳統任何來源都不產生施法卷軸·見 js/08:2)。
-const MISC_SCROLL_BLESS_UNCURSE = ['new_item_bless_wpn', 'new_item_bless_arm', 'new_item_bless_acc', 'new_item_uncurse', 'scroll_weapon_b', 'scroll_armor_b'];
-const MISC_SCROLL_ENHANCE = ['scroll_weapon', 'scroll_armor', 'scroll_acc', 'scroll_weapon_c', 'scroll_armor_c'];
+// ---- 無法獲得的卷軸 → 預設「圖鑑已開通」(計入收集·讓卷軸類仍可完成) ----
+//   🔥 v3.0.77：克里斯特移除＋碧恩改「賦予屬性」→ 賦予祝福卷軸 3 種「所有模式」皆無來源→全模式自動開通
+//   （new_item_uncurse 既有持有者仍可用·無新來源亦開通；祝福的施法卷軸 scroll_*_b 仍可由伊賽馬利兌換→只在經典開通維持原邏輯）。
+//   🏛️v3.0.83 傳統模式已取消：經典+傳統的強化卷軸自動開通分支移除（施法卷軸已恢復全模式可取得）。
+const MISC_SCROLL_BLESS_UNCURSE = ['new_item_bless_wpn', 'new_item_bless_arm', 'new_item_bless_acc', 'new_item_uncurse'];
+const MISC_SCROLL_BLESSED = ['scroll_weapon_b', 'scroll_armor_b'];
 function _miscModeAutoComplete() {
     if (!player) return;
     if (!player.miscDex) player.miscDex = {};
-    var marks = [];
-    if (player.classicMode) marks = marks.concat(MISC_SCROLL_BLESS_UNCURSE);                       // 經典：祝福/解除詛咒卷軸
-    if (player.classicMode && player.traditionalMode) marks = marks.concat(MISC_SCROLL_ENHANCE);   // 經典+傳統：所有強化卷軸
+    var marks = [].concat(MISC_SCROLL_BLESS_UNCURSE);                                              // 全模式：賦予祝福/解除詛咒卷軸（來源已移除）
+    if (player.classicMode) marks = marks.concat(MISC_SCROLL_BLESSED);                             // 經典：祝福的施法卷軸（經典不掉施法卷軸→無從兌換）
     var changed = false;
     marks.forEach(function (id) { if (DB.items[id] && MISC_ITEM_CAT[id] && !player.miscDex[id]) { player.miscDex[id] = true; changed = true; } });
     if (changed && typeof saveMiscDex === 'function') saveMiscDex();
@@ -144,7 +145,7 @@ function ensureMiscDex() {
     // 🏛️ v3.0.61 倉庫庫存也補登錄（唯讀當前模式倉庫桶·同 ensureEquipBook）：收集冊上線前入倉的道具從未經 gainItem 登錄→讀檔時一併點亮
     try { if (typeof loadWarehouse === 'function') { var _w = loadWarehouse(); if (_w && Array.isArray(_w.items)) _w.items.forEach(reg); } } catch (e) {}
     if (changed && typeof saveMiscDex === 'function') saveMiscDex();
-    _miscModeAutoComplete();   // 🔒 經典/傳統：無法獲得的卷軸預設已收集
+    _miscModeAutoComplete();   // 🔒 經典：無法獲得的卷軸預設已收集
 }
 
 // ===== 🧰 道具收集冊 全螢幕書頁 UI =====

@@ -856,13 +856,11 @@ function getPhysicalDmg(diceStr, target, wpn, arrowData, forceHeavy, forceHit, f
     // 固定傷害（屬性/特效，於最低1之後加上）
     let fixed = 0;
 
-    // 0. 屬性詞綴：固定傷害 +1/+3/+5（剋制改用最終 ×1.4/×0.6 倍率，見下方 _outDmg）
+    // 0. 屬性詞綴（v3.0.77 五階制）：額外傷害/魔法點數已改走 recompute（d.extraDmg/d.extraMp·見 js/02），此處只取屬性供剋制倍率（下方 _outDmg ×1.4/×0.6）
     let _attrInst = (wpnInst && wpnInst.attr) ? wpnInst : player.eq.wpn;   // ⚔️ 指定揮擊武器（副手＝offwpn）自身有屬性詞綴則用其屬性，否則沿用主武器（純加成、不減損既有行為）
     let _wAff = getAttrAffix(_attrInst && _attrInst.attr);
-    if (_wAff) {
-        fixed += _wAff.fix;
-    }
-    
+
+
     // 先判定武器/箭矢本身是否帶「對不死/狼人」加成 (unBonus)
     let hasUnBonus = false;
     // 檢查箭矢 (例如銀箭、米索莉箭)
@@ -1375,7 +1373,7 @@ function qiguPlayerAttack(target, wpn) {
     let ignoreMr = (player.mastery === 'i_qigu' && wpn.qigu);   // 🔮 奇古獸精通：裝備奇古獸時無視魔抗
     let dmg = Math.max(1, Math.floor(raw * (ignoreMr ? 1 : mrMult(effMr))));
     let ele = 'none';
-    if (player.eq.wpn && player.eq.wpn.attr && ATTR_AFFIX[player.eq.wpn.attr]) { ele = ATTR_AFFIX[player.eq.wpn.attr].ele; }
+    { let _qa = player.eq.wpn && getAttrAffix(player.eq.wpn.attr); if (_qa) ele = _qa.ele; }   // 🔥 getAttrAffix：相容舊12代碼
     dmg = Math.max(1, Math.floor(dmg * elementCounterMult(ele, target.e)));   // ⚔️ 屬性剋制 ×1.4(剋)/×0.6(被剋)（取代舊 +6）
     dmg = Math.max(1, Math.floor(dmg * wpnEnFinalMult(player.eq.wpn)));   // 武器強化 +11~+20 最終倍率
     dmg = Math.max(1, Math.floor(dmg * rlFuryMult()));   // 🔮 紅獅5/5＋😡狂怒5/5

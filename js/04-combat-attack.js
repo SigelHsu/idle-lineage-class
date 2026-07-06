@@ -1456,7 +1456,7 @@ function pledgeBonusDrop(mob) {
         // 🔧 詞綴改走新制（同 gainItem/rollAffixesNew）：只可能獲得「祝福的」1%；屬性/遠古不再隨機掉落（改由象牙塔『碧恩』取得）
         let _af = rollAffixesNew();
         let attr = _af.attr, bless = _af.bless, anc = _af.anc;
-        let en = traditionalActive() ? rollTraditionalEnhance(d0) : rollPledgeDropEnhance(d0.safe || 0);   // 依物品安定值決定強化等級（🏛️ 傳統模式改用傳統權重表）
+        let en = rollPledgeDropEnhance(d0.safe || 0);   // 依物品安定值決定強化等級（🏛️v3.0.83 傳統權重表分流已移除）
         let _jProbe = { id: id, en: en, bless: bless, anc: anc, attr: attr, seteff: false };   // 🔧 廢品記憶：血盟/攻城掉寶比照 gainItem，依完整簽章（含強化/祝福/詞綴）自動標記
         player.inv.push({ id: id, uid: uid(), cnt: 1, en: en, bless: bless, anc: anc, attr: attr, seteff: false, lock: false, junk: !!(player.junkPrefs && player.junkPrefs[itemSig(_jProbe)]) });
         renderTabs();

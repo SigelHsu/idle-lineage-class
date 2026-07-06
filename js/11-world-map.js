@@ -823,7 +823,6 @@ function renderIsmaelExchange(el) {
                 <div class="text-sm text-slate-200 leading-relaxed">100 張 <span class="text-sky-300">對盔甲施法的卷軸</span> → 1 張 <span class="text-amber-300 font-bold">祝福的 對盔甲施法的卷軸</span><br><span class="text-xs text-slate-400">持有：${sa} 張（無次數限制）</span></div>
                 <button class="btn bg-blue-700 hover:bg-blue-600 border-blue-500 py-2 px-4 font-bold shrink-0" onclick="ismaelExchange('armor')">兌換</button>
             </div>
-            ${traditionalActive() ? '' : `
             <div class="flex items-center justify-between gap-2 bg-slate-800/60 border border-slate-600 rounded p-3">
                 <div class="text-sm text-slate-200 leading-relaxed">100 張 <span class="text-sky-300">對武器施法的卷軸</span> → 1 張 <span class="c-cursed">詛咒的 對武器施法的卷軸</span><br><span class="text-xs text-slate-400">持有：${sw} 張（無次數限制）</span></div>
                 <button class="btn bg-purple-800 hover:bg-purple-700 border-purple-500 py-2 px-4 font-bold shrink-0" onclick="ismaelMakeCursed('weapon')">兌換</button>
@@ -831,7 +830,7 @@ function renderIsmaelExchange(el) {
             <div class="flex items-center justify-between gap-2 bg-slate-800/60 border border-slate-600 rounded p-3">
                 <div class="text-sm text-slate-200 leading-relaxed">100 張 <span class="text-sky-300">對盔甲施法的卷軸</span> → 1 張 <span class="c-cursed">詛咒的 對盔甲施法的卷軸</span><br><span class="text-xs text-slate-400">持有：${sa} 張（無次數限制）</span></div>
                 <button class="btn bg-purple-800 hover:bg-purple-700 border-purple-500 py-2 px-4 font-bold shrink-0" onclick="ismaelMakeCursed('armor')">兌換</button>
-            </div>`}
+            </div>
             <div class="flex items-center justify-between gap-2 bg-slate-800/60 border border-slate-600 rounded p-3">
                 <div class="text-sm text-slate-200 leading-relaxed">3 張 <span class="c-cursed">詛咒的 對武器施法的卷軸</span> → 1 張 <span class="text-amber-300 font-bold">祝福的 對武器施法的卷軸</span><br><span class="text-xs text-slate-400">持有：${swc} 張（無次數限制）</span></div>
                 <button class="btn bg-blue-700 hover:bg-blue-600 border-blue-500 py-2 px-4 font-bold shrink-0" onclick="ismaelCursedExchange('weapon')">兌換</button>
@@ -890,149 +889,100 @@ function ismaelCursedExchange(kind) {
     updateUI(); saveGame();
     let el = document.getElementById('interaction-content'); if (el) renderIsmaelExchange(el);
 }
-// ===== 克里斯特：施法卷軸 + 金幣 → 賦予祝福卷軸（🆕 可選兌換數量，共用試煉兌換的 trial-qty 數量列；數量取「輸入值」與「可負擔上限」較小者） =====
-function kristaExchange(kind) {
-    let GOLD = 1000000;
-    let want = (typeof trialQtyVal === 'function') ? trialQtyVal() : 1;   // 🔢 共用數量選擇器（trial-qty·−/＋/全部）
-    if (kind === 'uncurse') {
-        let haveW = questCountId('scroll_weapon_b'), haveA = questCountId('scroll_armor_b');   // 🗄️ 含倉庫（背包＋倉庫合併計數）
-        let maxAff = Math.min(haveW, haveA, Math.floor((player.gold || 0) / GOLD));
-        if (maxAff < 1) {
-            if ((player.gold || 0) < GOLD) logSys(`<span class="text-red-400">金幣不足（需 ${GOLD.toLocaleString()}）。</span>`);
-            else logSys(`<span class="text-red-400">需要 1 張 祝福的 對武器施法的卷軸 與 1 張 祝福的 對盔甲施法的卷軸。</span>`);
-            return;
-        }
-        let n = Math.min(want, maxAff);
-        player.gold -= GOLD * n;
-        questConsumeId('scroll_weapon_b', n);   // 🗄️ 背包優先，不足扣共用倉庫（whConsumeId 內部自存倉庫）
-        questConsumeId('scroll_armor_b', n);
-        gainItem('new_item_uncurse', n, true, true);
-        renderTabs(); updateUI(); saveGame();
-        logSys(`花費 ${(GOLD * n).toLocaleString()} 金幣 ＋ ${n} 張 祝福的 對武器施法的卷軸 ＋ ${n} 張 祝福的 對盔甲施法的卷軸，換得 ${n} 張 <span class="text-cyan-200 font-bold">解除詛咒的卷軸</span>。`);
-        let _eu = document.getElementById('interaction-content'); if (_eu) renderKristaExchange(_eu);
-        return;
-    }
-    let cfg = {
-        wpn: { scroll: 'scroll_weapon', need: 100, out: 'new_item_bless_wpn', nm: '對武器施法的卷軸', outNm: '賦予武器祝福卷軸' },
-        arm: { scroll: 'scroll_armor',  need: 100, out: 'new_item_bless_arm', nm: '對盔甲施法的卷軸', outNm: '賦予盔甲祝福卷軸' },
-        acc: { scroll: 'scroll_acc',    need: 5,   out: 'new_item_bless_acc', nm: '對飾品施法的卷軸', outNm: '賦予飾品祝福卷軸' },
-    }[kind];
-    if (!cfg) return;
-    let have = questCountId(cfg.scroll);   // 🗄️ 含倉庫
-    let maxAff = Math.min(Math.floor(have / cfg.need), Math.floor((player.gold || 0) / GOLD));
-    if (maxAff < 1) {
-        if ((player.gold || 0) < GOLD) logSys(`<span class="text-red-400">金幣不足（需 ${GOLD.toLocaleString()}）。</span>`);
-        else logSys(`<span class="text-red-400">${cfg.nm} 不足 ${cfg.need} 張（目前 ${have} 張）。</span>`);
-        return;
-    }
-    let n = Math.min(want, maxAff);
-    player.gold -= GOLD * n;
-    questConsumeId(cfg.scroll, cfg.need * n);   // 🗄️ 背包優先，不足扣共用倉庫（whConsumeId 內部自存倉庫）
-    gainItem(cfg.out, n, true, true);
-    renderTabs(); updateUI(); saveGame();
-    logSys(`花費 ${(GOLD * n).toLocaleString()} 金幣與 ${cfg.need * n} 張 ${cfg.nm}，換得 ${n} 張 <span class="text-purple-300 font-bold">${cfg.outNm}</span>。`);
-    let _e = document.getElementById('interaction-content'); if (_e) renderKristaExchange(_e);
-}
-function renderKristaExchange(el) {
-    let row = (kind, scroll, need, nm, outNm) => `
-        <div class="flex items-center justify-between gap-2 bg-slate-800/60 border border-slate-600 rounded p-3">
-            <div class="text-sm text-slate-200 leading-relaxed">100 萬金幣 ＋ ${need} 張 <span class="text-sky-300">${nm}</span> → 1 張 <span class="text-purple-300 font-bold">${outNm}</span><br><span class="text-xs text-slate-400">持有（含倉庫）：${questCountId(scroll)} 張</span></div>
-            <button class="btn bg-purple-800 hover:bg-purple-700 border-purple-500 py-2 px-4 font-bold shrink-0" onclick="kristaExchange('${kind}')">兌換</button>
-        </div>`;
-    el.innerHTML = `
-        <div class="flex flex-col gap-3 p-1">
-            <div class="text-slate-300 text-sm leading-relaxed">克里斯特：把施法卷軸與金幣交給我，我能煉成『賦予祝福卷軸』。</div>
-            <div class="text-sm">你的金幣：<span class="text-yellow-400 font-bold">${(player.gold||0).toLocaleString()}</span></div>
-            ${(typeof trialQtyBar === 'function') ? trialQtyBar() : ''}
-            <div class="text-xs text-slate-400 -mt-2">兌換數量會自動以「可負擔上限（卷軸／金幣）」為準，各項共用上方數量。</div>
-            ${row('wpn','scroll_weapon',100,'對武器施法的卷軸','賦予武器祝福卷軸')}
-            ${row('arm','scroll_armor',100,'對盔甲施法的卷軸','賦予盔甲祝福卷軸')}
-            ${row('acc','scroll_acc',5,'對飾品施法的卷軸','賦予飾品祝福卷軸')}
-            <div class="flex items-center justify-between gap-2 bg-slate-800/60 border border-slate-600 rounded p-3">
-                <div class="text-sm text-slate-200 leading-relaxed">100 萬金幣 ＋ 1 張 <span class="text-yellow-300">祝福的 對武器施法的卷軸</span> ＋ 1 張 <span class="text-yellow-300">祝福的 對盔甲施法的卷軸</span> → 1 張 <span class="text-cyan-200 font-bold">解除詛咒的卷軸</span><br><span class="text-xs text-slate-400">持有（含倉庫）：${questCountId('scroll_weapon_b')} / ${questCountId('scroll_armor_b')} 張</span></div>
-                <button class="btn bg-purple-800 hover:bg-purple-700 border-purple-500 py-2 px-4 font-bold shrink-0" onclick="kristaExchange('uncurse')">兌換</button>
-            </div>
-        </div>`;
-}
-// ===== 碧恩：用賦予祝福卷軸為裝備隨機改變一個詞綴（屬性/遠古系/祝福，平均抽一） =====
-function doBianBless(slotKey) {
+// ===== 🔥 碧恩：屬性強化卷軸「賦予屬性」（v3.0.77 屬性強化系統改版·取代舊「祝福裝備」功能；克里斯特已移除） =====
+//   規則：只能用在「裝備中武器／副手武器(戰士限定)」；每次使用皆為獨立事件，成功率 7%；
+//   無屬性成功→1階、同屬性成功→+1階（最高5階）、不同屬性成功→變成該屬性1階；
+//   衝第4階需武器+10以上、第5階需+11以上（不符不消耗卷軸）；失敗僅消耗卷軸，武器不會消失。
+//   🎲 純機率 Math.random（與武器強化同政策·可 save/load 重抽）。經典/一般/傳統模式皆適用。
+const ATTR_SCROLLS = {
+    fire:  { id: 'scroll_attr_fire',  n: '火之武器強化卷軸', btn: 'bg-red-900 border-red-500 text-red-200 hover:bg-red-800' },
+    water: { id: 'scroll_attr_water', n: '水之武器強化卷軸', btn: 'bg-blue-900 border-blue-500 text-blue-200 hover:bg-blue-800' },
+    wind:  { id: 'scroll_attr_wind',  n: '風之武器強化卷軸', btn: 'bg-green-900 border-green-500 text-green-200 hover:bg-green-800' },
+    earth: { id: 'scroll_attr_earth', n: '地之武器強化卷軸', btn: 'bg-amber-900 border-amber-600 text-amber-200 hover:bg-amber-800' },
+};
+function doBianAttr(slotKey, ele) {
     let item = player.eq[slotKey];
-    if (!item) { logSys('該欄位沒有裝備。'); return; }
-    if (item.bless === 'cursed') { logSys('<span class="text-red-400 font-bold">被詛咒的裝備無法施加祝福，請先解除詛咒。</span>'); return; }   // 🔧 詛咒裝備不可祝福
-    let isAcc = (slotKey === 'ring1' || slotKey === 'ring2' || slotKey === 'ring3' || slotKey === 'ring4' || slotKey === 'amulet' || slotKey === 'belt');
-    let scrollId = (slotKey === 'wpn' || slotKey === 'offwpn') ? 'new_item_bless_wpn' : (isAcc ? 'new_item_bless_acc' : 'new_item_bless_arm');   // ⚔️ 副手武器(offwpn)同主武器，使用「賦予武器祝福卷軸」
-    let scrollNm = { 'new_item_bless_wpn':'賦予武器祝福卷軸', 'new_item_bless_arm':'賦予盔甲祝福卷軸', 'new_item_bless_acc':'賦予飾品祝福卷軸' }[scrollId];
-    let sc = player.inv.find(i => i.id === scrollId);
-    if (!sc || sc.cnt < 1) { logSys(`<span class="text-red-400">缺少 ${scrollNm}。</span>`); return; }
+    if (!item) { logSys('該欄位沒有裝備武器。'); return; }
+    let d = DB.items[item.id];
+    if (!d || d.type !== 'wpn') { logSys('只能對武器賦予屬性。'); return; }
+    let cfg = ATTR_SCROLLS[ele]; if (!cfg) return;
+    let sc = player.inv.find(i => i.id === cfg.id);
+    if (!sc || sc.cnt < 1) { logSys(`<span class="text-red-400">缺少 ${cfg.n}。</span>`); return; }
+    let cur = getAttrAffix(item.attr);
+    let same = !!(cur && cur.ele === ele);
+    let nextTier = same ? cur.tier + 1 : 1;   // 同屬性→下一階；無屬性/不同屬性→該屬性1階
+    if (same && cur.tier >= 5) { logSys('<span class="text-amber-300">此武器已達該屬性最高階（第5階），無法再提升。</span>'); return; }   // 不消耗
+    let en = Number(item.en) || 0;
+    if (nextTier === 4 && en < 10) { logSys('<span class="text-amber-300">武器需 +10 以上才能衝屬性第四階。</span>'); return; }   // 不消耗
+    if (nextTier === 5 && en < 11) { logSys('<span class="text-amber-300">武器需 +11 以上才能衝屬性第五階。</span>'); return; }   // 不消耗
     sc.cnt--; if (sc.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== sc.uid);
-    let pick = Math.floor(lootRng('bianpick') * 3);   // 🎲 committed RNG（防 SL 重抽碧恩賦予結果）
-    let msg = '';
-    if (pick === 2) {
-        let rolled = (lootRng('bianbless') < 0.5) ? true : 'cursed';   // 祝福的 / 詛咒的 各半
-        let curB = item.bless || false;
-        let curN = (curB === true) ? 'blessed' : (curB || false);
-        let rolN = (rolled === true) ? 'blessed' : rolled;
-        if (!curB) { item.bless = rolled; msg = `附加了 <span class="${blessColorClass(rolled)}">${blessName(rolled)}</span>`; }
-        else if (curN === rolN) { let oc = blessColorClass(curB), on = blessName(curB); item.bless = false; msg = `<span class="${oc}">${on}</span> 消失了`; }
-        else { let oc = blessColorClass(curB), on = blessName(curB); item.bless = rolled; msg = `<span class="${oc}">${on}</span> 被 <span class="${blessColorClass(rolled)}">${blessName(rolled)}</span> 取代`; }
-    } else if (pick === 1) {
-        let variants = [true, 'eternal', 'immortal', 'primordial'];
-        let rolled = variants[Math.floor(Math.random() * 4)];
-        let curN = (item.anc === true) ? 'ancient' : (item.anc || false);
-        let rolN = (rolled === true) ? 'ancient' : rolled;
-        if (!item.anc) { item.anc = rolled; msg = `附加了 <span class="${ancColorClass(rolled)}">${ancName(rolled)}</span>`; }
-        else if (curN === rolN) { let old = ancName(item.anc), oc = ancColorClass(item.anc); item.anc = false; msg = `<span class="${oc}">${old}</span> 消失了`; }
-        else { let old = ancName(item.anc), oc = ancColorClass(item.anc); item.anc = rolled; msg = `<span class="${oc}">${old}</span> 被 <span class="${ancColorClass(rolled)}">${ancName(rolled)}</span> 取代`; }
+    if (Math.random() < 0.07) {   // 🎲 7% 獨立事件（純機率·可 save/load 重抽·同強化政策）
+        item.attr = ATTR_ELE_PREFIX[ele] + nextTier;
+        let aff = getAttrAffix(item.attr);
+        logSys(`<span class="text-yellow-300 font-bold">賦予屬性成功！</span>碧恩將 <span class="c-attr-${attrCanon(item.attr)}">${aff.n}</span> 之力銘刻於武器 → ${getItemFullName(item)}（屬性第${aff.tier}階：額外傷害+${aff.dmg}、額外魔法點數+${aff.mp}）。`);
     } else {
-        let rolled = rollAttrAffix();
-        if (!getAttrAffix(item.attr)) { item.attr = rolled; msg = `附加了屬性詞綴`; }
-        else if (item.attr === rolled) { item.attr = false; msg = `屬性詞綴 消失了`; }
-        else { item.attr = rolled; msg = `屬性詞綴被取代`; }
+        logSys(`<span class="text-slate-400">碧恩：元素之力潰散了……賦予屬性失敗（僅消耗 1 張 ${cfg.n}，武器安然無恙）。</span>`);
     }
-    if (DB.items[item.id] && DB.items[item.id].grantSkills) renderSkillSelects();
     calcStats(); updateUI(); renderTabs(true); saveGame();
-    logSys(`碧恩為你的裝備施加祝福 → ${getItemFullName(item)}（${msg}）。`);
-    let _e = document.getElementById('interaction-content'); if (_e) renderBianBless(_e);
+    let _e = document.getElementById('interaction-content'); if (_e) renderBianAttr(_e);
 }
+// 解除詛咒（保留原功能）：優先消耗 解除詛咒的卷軸；沒有卷軸時可付 100 萬金幣（克里斯特已移除→金幣後備，避免詛咒裝備無解）
 function doBianUncurse(slotKey) {
     let item = player.eq[slotKey];
     if (!item) { logSys('該欄位沒有裝備。'); return; }
     if (item.bless !== 'cursed') { logSys('該裝備沒有詛咒。'); return; }
     let sc = player.inv.find(i => i.id === 'new_item_uncurse');
-    if (!sc || sc.cnt < 1) { logSys(`<span class="text-red-400">缺少 解除詛咒的卷軸。</span>`); return; }
-    sc.cnt--; if (sc.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== sc.uid);
+    if (sc && sc.cnt >= 1) {
+        sc.cnt--; if (sc.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== sc.uid);
+    } else if ((player.gold || 0) >= 1000000) {
+        player.gold -= 1000000;
+        logSys('花費 1,000,000 金幣請碧恩淨化詛咒。');
+    } else {
+        logSys(`<span class="text-red-400">缺少 解除詛咒的卷軸（或 1,000,000 金幣）。</span>`); return;
+    }
     item.bless = false;   // 移除詛咒：變成沒有祝福也沒有詛咒（不影響屬性 / 遠古系）
     calcStats(); updateUI(); renderTabs(true); saveGame();
     logSys(`碧恩為你的裝備解除了詛咒 → ${getItemFullName(item)}。`);
-    let _e = document.getElementById('interaction-content'); if (_e) renderBianBless(_e);
+    let _e = document.getElementById('interaction-content'); if (_e) renderBianAttr(_e);
 }
-function renderBianBless(el) {
-    let slots = [{k:'wpn',n:'武器'},{k:'shield',n:'副手'},{k:'helm',n:'頭盔'},{k:'armor',n:'盔甲'},{k:'tshirt',n:'T恤'},{k:'cloak',n:'斗篷'},{k:'gloves',n:'手套'},{k:'boots',n:'長靴'},{k:'amulet',n:'項鍊'},{k:'ring1',n:'戒指'},{k:'ring2',n:'戒指'},{k:'ring3',n:'戒指'},{k:'ring4',n:'戒指'},{k:'belt',n:'腰帶'}];   // 🦴 寵物裝備不支援祝福，故不列入
-    if (player.eq && player.eq.offwpn) slots.splice(1, 0, {k:'offwpn',n:'副手武器'});   // ⚔️ 迅猛雙斧副手武器：裝備時才顯示，插在主武器後（用「賦予武器祝福卷軸」祝福）
-    let cnt = id => pledgeCountItem(id);
+function renderBianAttr(el) {
+    // 只列出 裝備中武器 與 副手武器（戰士雙持時才有 offwpn）
+    let slots = [{ k: 'wpn', n: '武器' }];
+    if (player.eq && player.eq.offwpn) slots.push({ k: 'offwpn', n: '副手武器' });
+    let cnt = id => { let it = player.inv.find(i => i.id === id); return it ? it.cnt : 0; };
     let rows = slots.map(sl => {
         let it = player.eq[sl.k];
         let name = it ? getItemFullName(it) : '<span class="text-slate-500">（未裝備）</span>';
-        let _cursed = !!(it && it.bless === 'cursed');
-        let _uncurse = _cursed ? `<button class="btn py-1 px-2 text-sm font-bold shrink-0 bg-cyan-800 border-cyan-500 text-cyan-100" onclick="doBianUncurse('${sl.k}')">解除詛咒</button>` : '';
-        // 🔧 詛咒裝備：祝福按鈕變灰禁用
-        let _blessBtn = (it && !_cursed)
-            ? `<button class="btn py-1 px-2 text-sm font-bold w-24 text-center bg-purple-800 border-purple-500 text-purple-100" onclick="doBianBless('${sl.k}')">祝福${sl.n}</button>`
-            : `<button class="btn py-1 px-2 text-sm font-bold w-24 text-center bg-slate-700 border-slate-600 text-slate-400 cursor-not-allowed" disabled title="${_cursed ? '被詛咒的裝備需先解除詛咒' : ''}">${_cursed ? '🔒 詛咒中' : '祝福'+sl.n}</button>`;
-        return `<div class="flex items-center justify-between gap-2 bg-slate-800/60 border border-slate-600 rounded p-2 text-sm">
-            <span class="truncate"><b class="text-amber-300">${sl.n}</b>：${name}</span>
-            <div class="flex items-center gap-1 shrink-0">${_uncurse}${_blessBtn}</div>
+        let cur = it && getAttrAffix(it.attr);
+        let curTxt = cur ? `<span class="c-attr-${attrCanon(it.attr)}">${cur.n}（第${cur.tier}階）</span>` : '<span class="text-slate-500">無屬性</span>';
+        let btns = it ? Object.keys(ATTR_SCROLLS).map(e2 => {
+            let c = ATTR_SCROLLS[e2], have = cnt(c.id);
+            return have > 0
+                ? `<button class="btn py-1 px-2 text-xs font-bold shrink-0 ${c.btn}" onclick="doBianAttr('${sl.k}','${e2}')">${c.n.slice(0, 2)}強化 (${have})</button>`
+                : `<button class="btn py-1 px-2 text-xs font-bold shrink-0 bg-slate-700 border-slate-600 text-slate-500 cursor-not-allowed" disabled title="缺少 ${c.n}">${c.n.slice(0, 2)}強化 (0)</button>`;
+        }).join('') : '';
+        return `<div class="flex flex-col gap-1 bg-slate-800/60 border border-slate-600 rounded p-2 text-sm">
+            <span class="truncate"><b class="text-amber-300">${sl.n}</b>：${name}｜${curTxt}</span>
+            <div class="flex items-center gap-1 flex-wrap">${btns}</div>
+        </div>`;
+    }).join('');
+    // 🔒 被詛咒的「已裝備」裝備仍可在此解除詛咒（任何部位·詛咒裝備無法卸下的唯一解）
+    let cursedRows = Object.keys(player.eq).filter(k => player.eq[k] && player.eq[k].bless === 'cursed').map(k => {
+        return `<div class="flex items-center justify-between gap-2 bg-slate-800/60 border border-red-900 rounded p-2 text-sm">
+            <span class="truncate">${getItemFullName(player.eq[k])}</span>
+            <button class="btn py-1 px-2 text-sm font-bold shrink-0 bg-cyan-800 border-cyan-500 text-cyan-100" onclick="doBianUncurse('${k}')">解除詛咒</button>
         </div>`;
     }).join('');
     el.innerHTML = `
         <div class="flex flex-col gap-2 p-1">
-            <div class="text-slate-300 text-sm leading-relaxed">碧恩：我能為你的裝備灌注力量。每次祝福會在「屬性 / 遠古系 / 祝福」三者中平均抽一個詞綴，隨機<b>附加、取代或消除</b>（只影響該詞綴）。</div>
-            <div class="text-xs text-slate-400">武器用 賦予武器祝福卷軸(持有 ${cnt('new_item_bless_wpn')})；防具用 賦予盔甲祝福卷軸(持有 ${cnt('new_item_bless_arm')})；飾品用 賦予飾品祝福卷軸(持有 ${cnt('new_item_bless_acc')})。含詛咒的裝備可用 解除詛咒的卷軸(持有 ${cnt('new_item_uncurse')}) 移除詛咒。</div>
+            <div class="text-slate-300 text-sm leading-relaxed">碧恩：我能將四大元素之力銘刻於你手中的武器。每次賦予皆為獨立事件，<b>成功率 7%</b>；失敗僅消耗卷軸，武器不會消失。</div>
+            <div class="text-xs text-slate-400">無屬性成功→第1階；同屬性成功→提升1階（最高5階）；<b>不同屬性成功→變成該屬性第1階</b>。衝第4階需武器+10以上、第5階需+11以上。第1~5階：額外傷害/額外魔法點數 +1/+3/+5/+7/+9，一般攻擊轉為該屬性。</div>
+            <div class="text-xs text-slate-400">持有卷軸：<span class="c-attr-fr3">火 ${cnt('scroll_attr_fire')}</span>｜<span class="c-attr-wa3">水 ${cnt('scroll_attr_water')}</span>｜<span class="c-attr-wi3">風 ${cnt('scroll_attr_wind')}</span>｜<span class="c-attr-ea3">地 ${cnt('scroll_attr_earth')}</span></div>
             ${rows}
+            ${cursedRows ? `<div class="text-xs text-slate-400 mt-1">被詛咒的裝備（優先消耗 解除詛咒的卷軸，持有 ${cnt('new_item_uncurse')}；無卷軸時花費 100 萬金幣）：</div>${cursedRows}` : ''}
         </div>`;
 }
 function ismaelBuyAcc() {
-    if (tradNoScrolls()) { alert('🏛️ 經典＋傳統模式無法購買施法卷軸。'); return; }   // 🏛️ 縱深防護：僅經典+傳統封鎖（伊賽馬利在該模式已隱藏，不可達）；一般+傳統可購買，與可見性閘 tradNoScrolls 及 gainItem 一致
     if (!ismaelAccAvailable()) { alert('本次購買額度已用完，攻城獲勝後可再購買 1 張。'); return; }
     if (player.gold < 1000000) { alert(`金幣不足（需 1,000,000，目前 ${player.gold.toLocaleString()}）。`); return; }
     player.gold -= 1000000;
@@ -1115,6 +1065,7 @@ function changeMap(force) {
     if (!mapState.current.startsWith('town_')) player.lastBattleMap = mapState.current;   // 🔧 記住最後所在的戰鬥地圖，供村莊「出發」按鈕一鍵返回
     { let _c = mapRegionOf(mapState.current); if(_c) { if(!player.lastMapByCat) player.lastMapByCat = {}; player.lastMapByCat[_c] = mapState.current; } }   // 記住各「地區」分類最後到過的地圖（與下拉同鍵）
     mapState.mobs = [null, null, null, null, null];
+    if (typeof _vfxClearAll === 'function') _vfxClearAll();   // 🎚️ v3.0.73 換地圖/回城：清掉上一張地圖尚在播放的死亡殘影等狩獵特效，避免蓋到村莊/新地圖介面
     state._kbRespawnAt = null;    // 🔧 離開/進入任何地圖即取消軍王之室未完成的復活倒數（避免殘留狀態）
     state._kbVictory = false;     // 🏛️ 進入新地圖一併清除未結算的全滅旗標（避免雙BOSS祭壇殘留誤觸發）
     mapState.forceBoss = false;   // 🔧 傳送戒指的必出BOSS僅在施放傳送的當下有效：換地圖即失效，需再次手動施放傳送術
@@ -1376,8 +1327,7 @@ function renderTownNPCs(townId) {
             if (npc.id === 'npc_tros' && player.bloodPledge !== 'tros') return;
         }
         if (npc.darkOnly && player.cls !== 'dark') return;   // 🔧 黑暗妖精限定試煉：其他職業看不到
-        if (npc.classicHide && player.classicMode) return;   // 🔥 經典模式：隱藏克里斯特/碧恩/漢（無法賦予祝福與精通）
-        if (npc.traditionalHide && tradNoScrolls()) return;   // 🏛️ 僅經典+傳統：隱藏肯特城兌換 NPC（伊賽馬利）；一般+傳統照常可兌換（卷軸有用·供賦予祝福/飾品卷軸）
+        if (npc.classicHide && player.classicMode) return;   // 🔥 經典模式：隱藏 漢（無精通）；v3.0.77 起碧恩不再 classicHide（賦予屬性經典也開放）、克里斯特已移除
         let el = document.createElement('div');
         el.className = 'bg-slate-800 border border-slate-600 rounded-lg p-3 hover:bg-slate-700 transition-colors cursor-pointer flex flex-col justify-between';
         
@@ -1453,8 +1403,7 @@ function renderPrideEntrance(container) {
 function interactNPC(npcId, townId) {
     let npc = DB.towns[townId].npcs.find(n => n.id === npcId);
     if(!npc) return;
-    if (npc.classicHide && player.classicMode) return;   // 🔥 經典模式：克里斯特/碧恩/漢 不可互動（縱深防護，正常情況卡片已不渲染）
-    if (npc.traditionalHide && tradNoScrolls()) return;   // 🏛️ 僅經典+傳統：肯特城兌換 NPC（伊賽馬利）不可互動（縱深防護）；一般+傳統照常
+    if (npc.classicHide && player.classicMode) return;   // 🔥 經典模式：漢 不可互動（縱深防護，正常情況卡片已不渲染；v3.0.77 碧恩經典可用）
     _activePanel = null;   // 開啟新面板：先清除自動刷新標記，由對應 render 視需要重新設定
 
     // 🔧 v2.6.77 倉庫 NPC：浮動倉庫直接覆蓋在村莊 NPC 清單上，不切入舊式 NPC 互動畫面
@@ -1528,10 +1477,8 @@ function interactNPC(npcId, townId) {
         renderPledgeNPC(contentDiv, 'esti');
     } else if (npc.id === 'npc_tros') {
         renderPledgeNPC(contentDiv, 'tros');
-    } else if (npc.id === 'npc_krista') {
-        renderKristaExchange(contentDiv);
     } else if (npc.id === 'npc_bian') {
-        renderBianBless(contentDiv);
+        renderBianAttr(contentDiv);   // 🔥 v3.0.77 碧恩改「賦予屬性」（克里斯特已移除）
     } else if (npc.id === 'npc_ismael') {
         renderIsmaelExchange(contentDiv);
     } else if (npc.id === 'npc_sherine') {

@@ -290,7 +290,7 @@ function allyQiguAttack(ally, t, wpn) {
     let ignoreMr = (ally.mastery === 'i_qigu' && wpn.qigu);
     let dmg = Math.max(1, Math.floor(raw * (ignoreMr ? 1 : mrMult(effMr))));
     let ele = 'none';
-    if (ally.eq.wpn && ally.eq.wpn.attr && ATTR_AFFIX[ally.eq.wpn.attr]) { ele = ATTR_AFFIX[ally.eq.wpn.attr].ele; }
+    { let _qa = ally.eq.wpn && getAttrAffix(ally.eq.wpn.attr); if (_qa) ele = _qa.ele; }   // 🔥 getAttrAffix：相容舊12代碼
     dmg = Math.max(1, Math.floor(dmg * wpnEnFinalMult(ally.eq.wpn)));
     dmg = Math.max(1, Math.floor(dmg * allyRlFuryMult(ally)));   // 🔴😡 v2.6.18 紅獅5×狂怒5造傷（奇古獸·原僅紅獅字面）
     dmg = Math.max(1, Math.floor(dmg * fragileMult(t) * illuLvMult(ally)));   // 🔮 幻術士(傭兵)等級加成 ×(1+等級/50)
@@ -318,6 +318,7 @@ function allyQiguAttack(ally, t, wpn) {
 function allyAttackOnce(ally) {
     if (!ally || !ally.d) return;
     let t = getTarget(); if (!t || t.curHp <= 0) return;
+    if (typeof _allySpriteTrigger === 'function') _allySpriteTrigger(ally, 'attack');   // 🤝 v3.0.70 隊員戰場 sprite：攻擊動作
     let d = ally.d;
     // 🔮 幻術士傭兵 奇古獸攻擊（公式同玩家，用傭兵自身衍生值；裝奇古獸或魔劍精通）
     if (ally.cls === 'illusion') {
@@ -471,6 +472,7 @@ function allyDualWieldOffhandAttack(ally, t) {
 }
 // 法師協力：依其選定攻擊魔法施放（手動重現 castSkill 魔法傷害公式：單體/全體、魔攻係數、法師倍率、魔暴、MR減免、剋屬性固定加值）
 function allyCastMagic(ally, sk) {
+    if (typeof _allySpriteTrigger === 'function') _allySpriteTrigger(ally, 'skill', sk && sk.n);   // 🤝 v3.0.70 隊員戰場 sprite：施法動作
     let d = ally.d || {};
     let targets = (sk.target === 'all') ? mapState.mobs.filter(m => m && m.curHp > 0) : [getTarget()].filter(m => m && m.curHp > 0);
     if (!targets.length) return;
@@ -566,6 +568,7 @@ function allyCastMagic(ally, sk) {
 function allyCastNonDamage(ally, sk) {
     if (!sk || sk.type !== 'atk' || sk.dmgDice || sk.multiDmg || sk.dmgType === 'physical') return false;   // 僅處理「無傷害骰的魔法狀態/即死技」
     if (!sk.status && !sk.instakill) return false;
+    if (typeof _allySpriteTrigger === 'function') _allySpriteTrigger(ally, 'skill', sk.n);   // 🤝 v3.0.70 隊員戰場 sprite：施法動作
     let d = ally.d || {};
     let targets = (sk.target === 'all') ? mapState.mobs.filter(m => m && m.curHp > 0) : [getTarget()].filter(m => m && m.curHp > 0);
     if (!targets.length) return false;
@@ -603,6 +606,7 @@ function allyCastNonDamage(ally, sk) {
 function allyCastPhysicalSkill(ally, sk) {
     if (!sk || sk.type !== 'atk' || sk.dmgType !== 'physical') return false;
     let t = getTarget(); if (!t || t.curHp <= 0) return false;
+    if (typeof _allySpriteTrigger === 'function') _allySpriteTrigger(ally, 'skill', sk.n);   // 🤝 v3.0.70 隊員戰場 sprite：施法動作
     let d = ally.d || {};
     let wpn = (ally.eq && ally.eq.wpn) ? DB.items[ally.eq.wpn.id] : null;
     if (sk.reqWpn === 'w2h'    && !(wpn && wpn.w2h && !wpn.isBow)) return false;   // 需雙手武器（🛡️ v2.6.69 審計#4：且非弓·與玩家路徑一致）
@@ -2159,8 +2163,8 @@ function toggleAlly(slotN) {
         }
         let sum = slotSummary(slotN);
         if (!sum) { logSys(`<span class="text-red-400">存檔 ${slotN} 沒有可用的角色。</span>`); }
-        else if (modeSuffix(!!sum.classic, !!sum.traditional) !== modeSuffix(!!player.classicMode, !!player.traditionalMode)) {   // 🎮🏛️ 一般／經典／傳統／經典＋傳統 不可跨模式組合招募
-            logSys(`<span class="text-red-400">只能招募與本角色「相同模式組合（一般／經典／傳統／經典＋傳統）」的存檔傭兵。</span>`);
+        else if (!!sum.classic !== !!player.classicMode) {   // 🎮 一般／經典 不可跨模式招募（🏛️v3.0.83 傳統已取消·舊傳統存檔依 classicMode 歸類）
+            logSys(`<span class="text-red-400">只能招募與本角色「相同模式（一般／經典）」的存檔傭兵。</span>`);
         }
         else {
             let cost = (sum.lv || 1) * 10000;
@@ -2181,10 +2185,9 @@ function renderAllyNPC(div) {
         let active = isAllyActive(n);
         if (!sum) return `<div class="w-full text-left py-2 px-3 text-sm bg-slate-900/60 border border-slate-700 rounded opacity-60">存檔 ${n}：<span class="text-slate-500">（空）</span></div>`;
         let _classic = !!sum.classic;                                  // 🎮 經典模式存檔
-        let _trad = !!sum.traditional;                                 // 🏛️ 傳統模式存檔
-        let _modeMatch = (modeSuffix(_classic, _trad) === modeSuffix(!!player.classicMode, !!player.traditionalMode));   // 🎮🏛️ 只能招募與自己同模式組合（一般/經典/傳統/經典＋傳統）的存檔
-        let _tag = (_classic && _trad) ? '<span style="color:#fbbf24;font-weight:bold;">⚔經典</span> <span style="color:#c4b5fd;font-weight:bold;">🏛️傳統</span> ' : (_trad ? '<span style="color:#c4b5fd;font-weight:bold;">🏛️傳統</span> ' : (_classic ? '<span style="color:#fbbf24;font-weight:bold;">⚔經典</span> ' : ''));
-        let _nameStyle = (_classic && _trad) ? 'style="color:#2dd4bf;"' : (_trad ? 'style="color:#c4b5fd;"' : (_classic ? 'style="color:#fbbf24;"' : 'class="text-amber-300"'));   // 經典＋傳統＝青綠
+        let _modeMatch = (_classic === !!player.classicMode);          // 🎮 只能招募與自己同模式（一般/經典）的存檔（🏛️v3.0.83 傳統已取消）
+        let _tag = _classic ? '<span style="color:#fbbf24;font-weight:bold;">⚔經典</span> ' : '';
+        let _nameStyle = _classic ? 'style="color:#fbbf24;"' : 'class="text-amber-300"';
         let _btn = active
             ? `<button onclick="rehireAlly('${n}')" class="btn py-1 px-4 text-sm font-bold bg-sky-900 border-sky-700 text-sky-200" title="結算累積經驗（記入待領帳本，該角色下次載入或回村時領取）並以最新存檔重建戰力快照">重新招募　${mercRehireCost(sum.lv || 1).toLocaleString()}金</button>`
             : (_modeMatch

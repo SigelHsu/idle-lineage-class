@@ -161,6 +161,10 @@
         #player-morph-sprite { position: absolute; bottom: 4px; height: 1px; z-index: 2; pointer-events: none; overflow: visible; }
         #player-morph-sprite img { position: absolute; left: 0; bottom: 0; image-rendering: crisp-edges; image-rendering: pixelated; }
         #player-morph-sprite .pm-shadow { mix-blend-mode: multiply; }
+        /* 🤝 v3.0.70 隊員戰場 sprite（隊員1~3·結構同 #player-morph-sprite·bottom/z-index 由 JS 依 aggro 權重排前後） */
+        .party-sprite { position: absolute; bottom: 4px; height: 1px; z-index: 2; pointer-events: none; overflow: visible; }
+        .party-sprite img { position: absolute; left: 0; bottom: 0; image-rendering: crisp-edges; image-rendering: pixelated; }
+        .party-sprite .pm-shadow { mix-blend-mode: multiply; }
         #player-morph-sprite .pm-weapon { mix-blend-mode: screen; }
         /* 🌑 v2.7.17 真實影子 sprite 圖層：絕對定位、底部置中、與本體同 native 尺寸(同世界錨定畫布)→像素級疊合。DOM 順序影子在前→本體(在後)自然疊於其上；影子沿用上方 .mob-anim img 的 native/pixelated 規則。 */
         #battle-view .mob-img-inner.mob-anim .mob-anim-shadow { position: absolute !important; left: 50%; bottom: 0; transform: translateX(-50%); pointer-events: none; mix-blend-mode: multiply; }   /* 🌑 v2.7.43 影子灰階當「濃淡遮罩」multiply(白→透明/黑→濃/灰→淡)：修自帶光源怪(不死鳥/伊弗利特)淺灰影子顯示成一塊灰·改成淡影子·一般近黑怪→濃影子 */
@@ -221,11 +225,37 @@
         .c-immortal   { color: #10b981; text-shadow: 0 0 5px rgba(16,185,129,.65); }  /* 不朽：翡翠綠（與風屬性三綠區隔） */
         .c-primordial { color: #0ea5e9; text-shadow: 0 0 5px rgba(14,165,233,.65); }  /* 太初：天藍（與水屬性三藍區隔） */
         /* 屬性詞綴 12 色：元素分色（火紅/水藍/風綠/地琥珀），階級越高越鮮明，靈系發光 */
-        .c-attr-fire1  { color: #fca5a5; } .c-attr-fire3  { color: #ef4444; } .c-attr-fire5  { color: #dc2626; }
-        .c-attr-water1 { color: #93c5fd; } .c-attr-water3 { color: #3b82f6; } .c-attr-water5 { color: #2563eb; }
-        .c-attr-wind1  { color: #86efac; } .c-attr-wind3  { color: #22c55e; } .c-attr-wind5  { color: #16a34a; }
-        .c-attr-earth1 { color: #fcd34d; } .c-attr-earth3 { color: #f59e0b; } .c-attr-earth5 { color: #d97706; }
+        /* 🔥 v3.0.77 屬性詞綴五階漸變同色系（紅/藍/綠/褐·淺→深）：詞綴文字顏色 */
+        .c-attr-fr1 { color: #fecaca; } .c-attr-fr2 { color: #fca5a5; } .c-attr-fr3 { color: #f87171; } .c-attr-fr4 { color: #ef4444; } .c-attr-fr5 { color: #dc2626; }
+        .c-attr-wa1 { color: #bfdbfe; } .c-attr-wa2 { color: #93c5fd; } .c-attr-wa3 { color: #60a5fa; } .c-attr-wa4 { color: #3b82f6; } .c-attr-wa5 { color: #2563eb; }
+        .c-attr-wi1 { color: #bbf7d0; } .c-attr-wi2 { color: #86efac; } .c-attr-wi3 { color: #4ade80; } .c-attr-wi4 { color: #22c55e; } .c-attr-wi5 { color: #16a34a; }
+        .c-attr-ea1 { color: #e7cfa9; } .c-attr-ea2 { color: #d6b285; } .c-attr-ea3 { color: #c19563; } .c-attr-ea4 { color: #a97b44; } .c-attr-ea5 { color: #8f6330; }
         .c-attr-glow { text-shadow: 0 0 6px currentColor, 0 0 10px currentColor; }
+        /* 🔥 武器圖示屬性光芒（同色系·階級越高越亮；第5階呼吸光） */
+        .attr-glow-fr1 { filter: drop-shadow(0 0 3px rgba(252,165,165,0.7)); }
+        .attr-glow-fr2 { filter: drop-shadow(0 0 4px rgba(248,113,113,0.8)); }
+        .attr-glow-fr3 { filter: drop-shadow(0 0 6px rgba(239,68,68,0.9)); }
+        .attr-glow-fr4 { filter: drop-shadow(0 0 7px rgba(220,38,38,1)) drop-shadow(0 0 14px rgba(220,38,38,0.55)); }
+        @keyframes attrGlowFire { 0%,100% { filter: drop-shadow(0 0 5px rgba(220,38,38,0.8)); } 50% { filter: drop-shadow(0 0 10px rgba(239,68,68,1)) drop-shadow(0 0 20px rgba(220,38,38,0.7)); } }
+        .attr-glow-fr5 { animation: attrGlowFire 2s infinite ease-in-out; }
+        .attr-glow-wa1 { filter: drop-shadow(0 0 3px rgba(147,197,253,0.7)); }
+        .attr-glow-wa2 { filter: drop-shadow(0 0 4px rgba(96,165,250,0.8)); }
+        .attr-glow-wa3 { filter: drop-shadow(0 0 6px rgba(59,130,246,0.9)); }
+        .attr-glow-wa4 { filter: drop-shadow(0 0 7px rgba(37,99,235,1)) drop-shadow(0 0 14px rgba(37,99,235,0.55)); }
+        @keyframes attrGlowWater { 0%,100% { filter: drop-shadow(0 0 5px rgba(37,99,235,0.8)); } 50% { filter: drop-shadow(0 0 10px rgba(59,130,246,1)) drop-shadow(0 0 20px rgba(37,99,235,0.7)); } }
+        .attr-glow-wa5 { animation: attrGlowWater 2s infinite ease-in-out; }
+        .attr-glow-wi1 { filter: drop-shadow(0 0 3px rgba(134,239,172,0.7)); }
+        .attr-glow-wi2 { filter: drop-shadow(0 0 4px rgba(74,222,128,0.8)); }
+        .attr-glow-wi3 { filter: drop-shadow(0 0 6px rgba(34,197,94,0.9)); }
+        .attr-glow-wi4 { filter: drop-shadow(0 0 7px rgba(22,163,74,1)) drop-shadow(0 0 14px rgba(22,163,74,0.55)); }
+        @keyframes attrGlowWind { 0%,100% { filter: drop-shadow(0 0 5px rgba(22,163,74,0.8)); } 50% { filter: drop-shadow(0 0 10px rgba(34,197,94,1)) drop-shadow(0 0 20px rgba(22,163,74,0.7)); } }
+        .attr-glow-wi5 { animation: attrGlowWind 2s infinite ease-in-out; }
+        .attr-glow-ea1 { filter: drop-shadow(0 0 3px rgba(214,178,133,0.7)); }
+        .attr-glow-ea2 { filter: drop-shadow(0 0 4px rgba(193,149,99,0.8)); }
+        .attr-glow-ea3 { filter: drop-shadow(0 0 6px rgba(169,123,68,0.9)); }
+        .attr-glow-ea4 { filter: drop-shadow(0 0 7px rgba(143,99,48,1)) drop-shadow(0 0 14px rgba(143,99,48,0.55)); }
+        @keyframes attrGlowEarth { 0%,100% { filter: drop-shadow(0 0 5px rgba(143,99,48,0.8)); } 50% { filter: drop-shadow(0 0 10px rgba(169,123,68,1)) drop-shadow(0 0 20px rgba(143,99,48,0.7)); } }
+        .attr-glow-ea5 { animation: attrGlowEarth 2s infinite ease-in-out; }
         .log-entry { margin-bottom: 6px; line-height: 1.5; font-size: 1.05rem; }
         /* 🎯 三大戰鬥訊息分類：左色條＋淡底，一眼分辨「玩家一般攻擊(藍)／玩家技能(紫)／敵人傷害(紅)」；文字色仍保留爆擊/重擊等資訊 */
         .log-cat-attack { border-left: 3px solid #3b82f6; padding-left: 8px; background: rgba(59,130,246,0.07);  border-radius: 0 4px 4px 0; }   /* 玩家一般攻擊 */
@@ -347,7 +377,7 @@
         .tri-glow { animation: triGlow 2.4s infinite linear; }
 
         /* ===== ✨ 戰鬥特效層 VFX（純視覺，不影響任何遊戲數值/邏輯） ===== */
-        #vfx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 45; overflow: hidden; }
+        #vfx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 35; overflow: hidden; }   /* 🎚️ v3.0.73 掛在 #app-stage 內(見 js/09 _vfxLayer)：z-index 35＝高於戰鬥內容(怪/站位/狀態列 z≤30)、低於所有開啟式 UI(收集冊45/收藏46/物品modal50/浮動裝備70/浮動倉庫72)→死亡殘影等狩獵動畫不再蓋到這些介面·無 UI 時仍正常疊在背景/怪之上 */
         .vfx-dmg { position: absolute; transform: translate(-50%,-50%); font-weight: 900; font-family: 'Arial Black','Segoe UI',system-ui,sans-serif; white-space: nowrap; letter-spacing: .5px; will-change: transform,opacity; text-shadow: 0 1px 2px rgba(0,0,0,.95), 0 0 7px rgba(0,0,0,.55); animation: vfxFloat .85s ease-out forwards; }
         .vfx-dmg.vfx-crit { animation: vfxCrit 1.05s cubic-bezier(.18,.85,.25,1) forwards; -webkit-text-stroke: 1px rgba(0,0,0,.45); }
         @keyframes vfxFloat {
@@ -440,58 +470,43 @@
 
 /* ===== 🎨 v3.0.40 1.8 風格物品清單（裝備／武器／防具／道具·移植自參考版 idle-lineage-class-main-test） ===== */
 .classic-inventory-tab { padding:0 !important; overflow:hidden !important; min-height:0; background:#0b0d12; }
-.classic-inventory-tab:not(.hidden) { display:flex !important; flex-direction:column; }
+.classic-inventory-tab:not(.hidden) { display:flex !important; flex-direction:column; align-items:center; }
 .classic-list-toolbar { flex:0 0 auto; margin:0 !important; padding:6px 8px !important; top:0 !important; background:#111827 !important; border-bottom:1px solid #6b5426; z-index:20; }
-.classic-inventory-viewport { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; box-sizing:border-box; padding:3.4% 14.5% 8.2% 5.8%; background:#111 url('../assets/ui/inventory-1.8.png') center/100% 100% no-repeat; scrollbar-width:thin; scrollbar-color:#d6a638 #17191d; }
-.classic-inventory-viewport::-webkit-scrollbar { width:12px; }
-.classic-inventory-viewport::-webkit-scrollbar-track { background:rgba(13,15,18,.75); border-left:1px solid #76591d; }
-.classic-inventory-viewport::-webkit-scrollbar-thumb { background:linear-gradient(90deg,#69480e,#f1cd59 45%,#8d6519); border:1px solid #f7df86; border-radius:8px; box-shadow:0 0 4px #000; }
-.classic-inventory-viewport > .list-item { box-sizing:border-box; display:flex !important; align-items:center; width:100%; height:12.5%; min-height:58px; margin:0 !important; padding:3px 5px !important; border:0 !important; border-radius:5px !important; background:transparent !important; box-shadow:none !important; overflow:hidden; }
-.classic-inventory-viewport > .list-item:hover { background:rgba(180,139,58,.15) !important; filter:brightness(1.14); }
-.classic-item-main { display:grid; grid-template-columns:18% minmax(0,1fr); align-items:center; width:100%; height:100%; gap:4%; }
+.classic-list-toolbar { width:100%; }
+.classic-inventory-shell { position:relative; flex:0 0 auto; width:100%; max-width:100%; aspect-ratio:223/336; overflow:hidden; background:url('../assets/ui/inventory-grid-532.png') center/100% 100% no-repeat; }
+.classic-inventory-viewport { position:absolute; z-index:2; left:20.18%; top:6.25%; width:65.47%; height:85.714286%; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); grid-auto-rows:12.5%; align-content:start; overflow-y:auto; overflow-x:hidden; box-sizing:border-box; background:#07080a; scrollbar-width:none; overscroll-behavior:contain; }
+.classic-inventory-viewport::-webkit-scrollbar { width:0; height:0; }
+.classic-inventory-viewport > .list-item { position:relative; box-sizing:border-box; display:flex !important; align-items:center; justify-content:center; width:100%; height:100%; min-width:0; min-height:0; margin:0 !important; padding:2px !important; border:1px solid #55451f !important; border-radius:0 !important; background:#090a0d !important; box-shadow:inset 0 0 6px #000 !important; overflow:hidden; }
+.classic-inventory-viewport > .list-item:hover { border-color:#e0bd61 !important; filter:brightness(1.18); }
+.classic-inventory-viewport > .classic-grid-empty { box-sizing:border-box; width:100%; height:100%; min-width:0; min-height:0; border:1px solid #453919; background:#08090b; box-shadow:inset 0 0 6px #000; pointer-events:none; }
+.classic-item-main { position:relative; display:flex; align-items:center; justify-content:center; width:100%; height:100%; }
 .classic-icon-box { display:flex; align-items:center; justify-content:center; width:100%; height:100%; min-width:0; }
-.classic-icon-box img,.classic-item-main .classic-icon-box img { width:78% !important; height:78% !important; max-width:48px; max-height:48px; margin:0 !important; object-fit:contain; }
+.classic-icon-box img,.classic-item-main .classic-icon-box img { width:88% !important; height:88% !important; max-width:none; max-height:none; margin:0 !important; object-fit:contain; }
 .classic-name-box { display:flex; align-items:center; gap:5px; min-width:0; overflow:hidden; color:#e5e7eb; text-shadow:0 1px 2px #000; white-space:nowrap; }
 .classic-name-box > span:not(.classic-slot-name):first-of-type { overflow:hidden; text-overflow:ellipsis; }
 .classic-slot-name { color:#9ca3af; font-size:11px; flex:0 0 auto; }
 .classic-item-flags { display:inline-flex; gap:2px; flex:0 0 auto; font-size:10px; }
-.classic-inventory-viewport > .list-item > .classic-icon-box { flex:0 0 18%; margin-right:4%; }
-.classic-inventory-viewport > .list-item > .classic-name-box { flex:1 1 auto; }
-.classic-inventory-viewport input[type="checkbox"] { flex:0 0 auto; margin-right:3px; }
-.classic-inventory-viewport > .list-item > div { width:100%; min-width:0; }
+.classic-inventory-viewport > .list-item > .classic-icon-box { flex:1 1 auto; margin:0; }
+.classic-inventory-viewport > .list-item .classic-name-box { display:none; }
+.classic-inventory-viewport input[type="checkbox"] { position:absolute; z-index:5; right:1px; top:1px; width:12px; height:12px; margin:0; }
+.classic-inventory-viewport > .list-item > div { position:relative; width:100%; height:100%; min-width:0; }
+.classic-item-lock-badge { position:absolute; z-index:6; right:1px; top:1px; display:flex; align-items:center; justify-content:center; width:34%; height:34%; max-width:16px; max-height:16px; color:#f8d36a; font-size:clamp(7px,.65vw,11px); line-height:1; filter:drop-shadow(0 1px 2px #000); pointer-events:none; }
+.classic-item-junk .classic-icon-box img { opacity:.48 !important; filter:grayscale(1) brightness(.62) !important; }
+.classic-item-junk-label { position:absolute; z-index:6; left:1px; right:1px; bottom:1px; color:#ff5b5b; background:rgba(25,0,0,.70); font-size:clamp(6px,.5vw,8px); font-weight:800; line-height:1.1; text-align:center; text-shadow:0 1px 2px #000; pointer-events:none; }
+.classic-inventory-scroll { position:absolute; z-index:4; right:4.1%; width:7%; height:6.2%; padding:0; border:0; border-radius:50%; background:transparent; opacity:.01; }
+.classic-inventory-scroll:hover { opacity:.18; background:#fff3b0; }
+.classic-inventory-scroll-up { top:9.1%; }
+.classic-inventory-scroll-down { bottom:5.4%; }
+.classic-sort-wrap { position:absolute; z-index:8; left:3.4%; top:24%; width:13%; height:9%; }
+.classic-sort-button { width:100%; height:100%; padding:0; border:1px solid #8c6a27; border-radius:4px; color:#f5d77c; background:linear-gradient(#352817,#17120c); font-size:clamp(12px,1.2vw,18px); line-height:1; box-shadow:0 1px 4px #000; cursor:pointer; }
+.classic-sort-button:hover { border-color:#e3bd55; filter:brightness(1.18); }
+.classic-sort-menu { display:none; position:absolute; left:115%; top:-55%; width:150px; padding:6px; border:1px solid #aa7b2f; border-radius:6px; background:rgba(10,13,21,.97); box-shadow:0 5px 18px #000; color:#eee; font-size:13px; }
+.classic-sort-menu.open { display:flex; flex-direction:column; gap:4px; }
+.classic-sort-menu button { padding:5px 8px; border:1px solid #4d5360; border-radius:4px; color:#e8e8e8; background:#1a2230; text-align:left; cursor:pointer; }
+.classic-sort-menu button:hover,.classic-sort-menu button.active { color:#ffe49a; border-color:#b88a35; background:#3b2d17; }
+.classic-sort-menu label { display:flex; align-items:center; gap:5px; margin-top:2px; padding-top:5px; border-top:1px solid #3d4655; white-space:nowrap; cursor:pointer; }
 
-/* ===== 🎨 v3.0.55 1.8 原版風格技能魔法視窗（移植參考版）＋底部 S.power(魔法傷害)/M.resist(MR) 數值 ===== */
-#tab-skill { padding:0 !important; overflow:auto !important; align-items:center; justify-content:flex-start; background:#08090d; }
-.classic-skill-window {
-    position:relative; flex:0 0 auto; width:min(100%,510px); aspect-ratio:1023/1537;
-    margin:0 auto; overflow:hidden; user-select:none;
-    background:url('../assets/ui/skill-window-1.8.png') center/100% 100% no-repeat;
-}
-.classic-skill-heading { position:absolute; z-index:4; left:23.4%; top:2.2%; width:61.8%; height:2.6%; display:flex; align-items:center; justify-content:center; color:#f3df9d; font-weight:700; font-size:clamp(9px,1vw,14px); text-shadow:0 1px 3px #000,0 0 4px #000; }
-.classic-skill-grid-scroll { position:absolute; z-index:3; left:23.5%; top:5.35%; width:62.2%; height:81.65%; overflow-y:auto; overflow-x:hidden; scrollbar-width:none; overscroll-behavior:contain; }
-.classic-skill-grid-scroll::-webkit-scrollbar { width:0; height:0; }
-.classic-skill-grid { position:relative; width:100%; min-height:100%; display:grid; grid-template-columns:repeat(4,1fr); grid-auto-flow:row; align-content:start; }
-.classic-skill-cell { position:relative; display:flex; align-items:center; justify-content:center; padding:1.5%; aspect-ratio:1.015/1; border:0; border-radius:0; background:transparent; color:#fff; min-width:0; min-height:0; }
-button.classic-skill-cell { cursor:pointer; }
-.classic-skill-cell img { display:block; width:97%; height:97%; object-fit:contain; pointer-events:none; filter:drop-shadow(0 1px 2px #000); }
-.classic-skill-cell:hover:not(.classic-skill-empty) { background:rgba(231,190,89,.13); box-shadow:inset 0 0 8px rgba(255,214,102,.55); }
-.classic-skill-unlearned img { opacity:.30; filter:grayscale(1) brightness(.75); }
-.classic-skill-unavailable img { opacity:.42; filter:grayscale(.8) brightness(.7); }
-.classic-skill-lock { position:absolute; right:8%; bottom:5%; color:#796f61; font-size:clamp(6px,.7vw,10px); text-shadow:0 1px 2px #000; }
-.classic-skill-tier-strip { position:absolute; z-index:7; left:17.55%; top:5.2%; width:4.2%; height:82.1%; background-position:center; background-size:100% 100%; background-repeat:no-repeat; }
-.classic-skill-tier-hit { position:absolute; left:-110%; width:320%; height:10%; border:0; padding:0; background:transparent; }
-.classic-skill-tier-hit:not(.disabled) { cursor:pointer; }
-.classic-skill-tier-hit.disabled { cursor:not-allowed; opacity:.35; }
-.classic-skill-tier-hit.tier-1{top:0}.classic-skill-tier-hit.tier-2{top:10%}.classic-skill-tier-hit.tier-3{top:20%}.classic-skill-tier-hit.tier-4{top:30%}.classic-skill-tier-hit.tier-5{top:40%}
-.classic-skill-tier-hit.tier-6{top:50%}.classic-skill-tier-hit.tier-7{top:60%}.classic-skill-tier-hit.tier-8{top:70%}.classic-skill-tier-hit.tier-9{top:80%}.classic-skill-tier-hit.tier-10{top:90%}
-.classic-skill-mode { position:absolute; z-index:6; left:2.1%; top:28%; width:13.8%; display:flex; flex-direction:column; gap:6px; }
-.classic-skill-mode button { border:1px solid #6c5529; border-radius:3px; padding:3px 1px; background:rgba(10,10,13,.82); color:#a99d83; font-size:clamp(7px,.78vw,11px); font-weight:700; text-shadow:0 1px 2px #000; }
-.classic-skill-mode button:hover,.classic-skill-mode button.active { color:#ffe29a; border-color:#d8a94b; background:rgba(90,57,16,.82); box-shadow:0 0 6px rgba(238,183,73,.55); }
-.classic-skill-stat { position:absolute; z-index:5; display:flex; align-items:center; justify-content:center; color:#e4ecff; font-weight:700; font-size:clamp(8px,1vw,15px); text-shadow:0 1px 2px #000,0 0 4px #000; pointer-events:none; letter-spacing:.02em; }
-.classic-skill-stat-sp { left:33.7%; top:91.4%; width:12.9%; height:3.9%; }
-.classic-skill-stat-mr { left:70.7%; top:90.4%; width:13.5%; height:4.6%; }
-
-/* ===== 🎨 v3.0.40 登入首頁：310 固定底圖＋273～300 左下逐幀動畫（移植自參考版） ===== */
+/* ===== 登入首頁：310 固定底圖＋273～300 左下逐幀動畫 ===== */
 #creation-screen { position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; overflow:auto; padding:0; background:#050505; }
 #creation-screen.hidden { display:none !important; }
 #login-art-stage { position:relative; width:min(100vw,calc(100vh * 4 / 3)); aspect-ratio:4 / 3; flex:0 0 auto; overflow:hidden; background:#050505; box-shadow:0 0 45px #000; }
@@ -505,8 +520,79 @@ button.classic-skill-cell { cursor:pointer; }
 #main-menu > button { width:100% !important; padding:clamp(5px,.72vw,11px) 4px !important; font-size:clamp(9px,1.03vw,16px) !important; line-height:1.1; border-color:#b68a39; background:linear-gradient(180deg,rgba(35,55,83,.94),rgba(10,22,42,.96)); color:#f8e7bb; text-shadow:0 1px 2px #000; box-shadow:inset 0 0 9px rgba(116,165,219,.35),0 2px 5px #000; }
 #main-menu > button:hover { filter:brightness(1.18); }
 #main-menu > p { width:150% !important; margin:1% 0 0 -25% !important; font-size:clamp(9px,.78vw,14px) !important; line-height:1.42; color:#eee2c7; text-shadow:0 1px 3px #000,0 0 3px #000; }
-#login-meta-layer { position:absolute; z-index:3; left:5.8%; top:41.5%; width:25.4%; color:#d8c8a2; text-shadow:0 1px 3px #000; }   /* 🔧 v3.0.41 用戶：版權文字縮小+寬度縮短不超框（width 28.7%→25.4%·left 內縮置中於左框） */
+#login-meta-layer { position:absolute; z-index:3; left:5.8%; top:41.5%; width:25.4%; color:#d8c8a2; text-shadow:0 1px 3px #000; }   /* 🔧 v3.0.41 用戶：版權文字縮小+寬度縮短不超框 */
 #login-version { margin-bottom:3%; font-size:clamp(12px,1.05vw,18px) !important; font-weight:700; color:#f2d77f; }
 #login-disclaimer { max-width:none !important; padding:0 !important; margin:0 !important; font-size:clamp(8px,.6vw,11px) !important; line-height:1.45; color:#eee2c7; }
+
+/* ===== 🎨 v3.0.55 1.8 原版風格技能魔法視窗（移植參考版）＋底部 S.power(魔法傷害)/M.resist(MR) 數值 ===== */
+#tab-skill { padding:0 !important; overflow:auto !important; align-items:center; justify-content:flex-start; background:#08090d; }
+.classic-skill-window {
+    position:relative; flex:0 0 auto; width:min(100%,510px); aspect-ratio:1023/1537;
+    margin:0 auto; overflow:hidden; user-select:none;
+    background:url('../assets/ui/skill-window-1.8.png') center/100% 100% no-repeat;
+}
+.classic-skill-heading {
+    position:absolute; z-index:4; left:23.4%; top:2.2%; width:61.8%; height:2.6%;
+    display:flex; align-items:center; justify-content:center; color:#f3df9d;
+    font-weight:700; font-size:clamp(9px,1vw,14px); text-shadow:0 1px 3px #000,0 0 4px #000;
+}
+.classic-skill-grid-scroll {
+    position:absolute; z-index:3; left:23.26%; top:5.79%; width:62.37%; height:81.20%;
+    overflow-y:auto; overflow-x:hidden; background:#06070a; scrollbar-width:none; overscroll-behavior:contain;
+}
+.classic-skill-grid-scroll::-webkit-scrollbar { width:0; height:0; }
+.classic-skill-grid {
+    position:relative; width:100%; height:100%; min-height:100%; display:grid; grid-template-columns:repeat(4,1fr);
+    grid-auto-rows:12.5%; grid-auto-flow:row; align-content:start;
+}
+.classic-skill-cell {
+    position:relative; box-sizing:border-box; display:flex; align-items:center; justify-content:center;
+    width:100%; height:100%; min-width:0; min-height:0; padding:2%;
+    border:1px solid #5c4923; border-radius:0;
+    background:#08090c; color:#fff; box-shadow:inset 0 0 7px #000;
+}
+button.classic-skill-cell { cursor:pointer; }
+.classic-skill-cell img {
+    display:block; width:97%; height:97%; object-fit:contain; pointer-events:none;
+    filter:drop-shadow(0 1px 2px #000);
+}
+.classic-skill-cell:hover:not(.classic-skill-empty) { border-color:#e0bd61; background:#111015; box-shadow:inset 0 0 8px rgba(255,214,102,.42); }
+.classic-skill-unlearned img { opacity:.30; filter:grayscale(1) brightness(.75); }
+.classic-skill-unavailable img { opacity:.42; filter:grayscale(.8) brightness(.7); }
+.classic-skill-lock { position:absolute; right:8%; bottom:5%; color:#796f61; font-size:clamp(6px,.7vw,10px); text-shadow:0 1px 2px #000; }
+.classic-skill-tier-strip {
+    position:absolute; z-index:7; left:17.55%; top:5.2%; width:4.2%; height:82.1%;
+    background-position:center; background-size:100% 100%; background-repeat:no-repeat;
+}
+.classic-skill-tier-hit { position:absolute; left:-110%; width:320%; height:10%; border:0; padding:0; background:transparent; }
+.classic-skill-tier-hit:not(.disabled) { cursor:pointer; }
+.classic-skill-tier-hit:not(.disabled):hover { background:transparent; box-shadow:none; }
+.classic-skill-tier-hit.disabled { cursor:not-allowed; opacity:.35; }
+.classic-skill-tier-hit.tier-1{top:0}.classic-skill-tier-hit.tier-2{top:10%}.classic-skill-tier-hit.tier-3{top:20%}.classic-skill-tier-hit.tier-4{top:30%}.classic-skill-tier-hit.tier-5{top:40%}
+.classic-skill-tier-hit.tier-6{top:50%}.classic-skill-tier-hit.tier-7{top:60%}.classic-skill-tier-hit.tier-8{top:70%}.classic-skill-tier-hit.tier-9{top:80%}.classic-skill-tier-hit.tier-10{top:90%}
+.classic-skill-mode {
+    position:absolute; z-index:6; left:2.1%; top:28%; width:13.8%; display:flex; flex-direction:column; gap:6px;
+}
+.classic-skill-mode button {
+    border:1px solid #6c5529; border-radius:3px; padding:3px 1px; background:rgba(10,10,13,.82);
+    color:#a99d83; font-size:clamp(7px,.78vw,11px); font-weight:700; text-shadow:0 1px 2px #000;
+}
+.classic-skill-mode button:hover,.classic-skill-mode button.active { color:#ffe29a; border-color:#d8a94b; background:rgba(90,57,16,.82); box-shadow:0 0 6px rgba(238,183,73,.55); }
+.classic-skill-scroll { position:absolute; z-index:8; right:3.8%; width:6.2%; height:5.2%; padding:0; border:0; border-radius:50%; background:transparent; opacity:.01; }
+.classic-skill-scroll:hover { opacity:.18; background:#fff3b0; }
+.classic-skill-scroll-up { top:4.4%; }
+.classic-skill-scroll-down { bottom:5.8%; }
+.classic-skill-pager {
+    position:absolute; z-index:6; right:3.8%; bottom:3.2%; display:flex; align-items:center; gap:4px;
+    color:#ead89d; font-size:clamp(7px,.7vw,10px); text-shadow:0 1px 2px #000;
+}
+.classic-skill-pager button { color:#e7c46b; border:0; background:transparent; padding:1px 3px; }
+.classic-skill-pager button:disabled { color:#5e584d; cursor:default; }
+
+.classic-skill-stat { position:absolute; z-index:5; display:flex; align-items:center; justify-content:center; color:#e4ecff; font-weight:700; font-size:clamp(8px,1vw,15px); text-shadow:0 1px 2px #000,0 0 4px #000; pointer-events:none; letter-spacing:.02em; }
+.classic-skill-stat-sp { left:33.7%; top:91.4%; width:12.9%; height:3.9%; }
+.classic-skill-stat-mr { left:70.7%; top:90.4%; width:13.5%; height:4.6%; }
+
+/* 📵 v3.0.74 移植參考版 UI 時移除其手機 media query（@media pointer:coarse）：本專案為「桌機專用」設計（見記憶 desktop-only-layout·手機改 viewport-meta 等比縮小），不再引入手機響應式版面。 */
 #slot-select-panel:not(.hidden) { position:absolute; z-index:20; left:50%; top:50%; transform:translate(-50%,-50%); width:min(760px,92vw); max-height:92vh; overflow:auto; margin:0 !important; padding:22px; border:2px solid #b89243; border-radius:14px; background:rgba(15,23,42,.96); box-shadow:0 20px 70px #000; }
 #creation-panel:not(.hidden) { position:absolute; z-index:20; left:50%; top:50%; transform:translate(-50%,-50%); width:min(1000px,96vw); max-height:96vh; overflow:auto; padding:20px; border:2px solid #b89243; border-radius:14px; background:rgba(15,23,42,.96); box-shadow:0 20px 70px #000; }
