@@ -765,8 +765,8 @@ const TRIAL_Q = {
     elf15:      { cls:'elf',      lv:15, npc:'歐斯',         reqs:[['new_item_199',1],['new_item_200',1],['new_item_201',1],['new_item_202',1]], rewards:['arm_50','arm_51'] },
     elf30:      { cls:'elf',      lv:30, npc:'迷幻森林之母', reqs:[['new_item_213',1]], rewards:['bk_elf_summon','arm_85'] },
     elf45:      { cls:'elf',      lv:45, npc:'馬沙',         reqs:[['item_blueflute',1],['item_ancientkey',1]], rewards:['arm_102','bk_elf_summon2'] },   // 🔧 v3.1.23 修：原 acc_guardian/bk_elf_wisdom 從未定義→整個馬沙介面崩潰。還原參考版正確獎勵＝保護者手套(arm_102)＋精靈水晶(召喚強力屬性精靈)(bk_elf_summon2)
-    dark15:     { cls:'dark',     lv:15, npc:'倫得',         reqs:[['item_death_oath',1]], rewards:['arm_shadowglove'] },
-    dark30:     { cls:'dark',     lv:30, npc:'康',           reqs:[['item_orc_elder_head',1]], rewards:['arm_shadowmask'] },
+    dark15:     { cls:'dark',     lv:30, npc:'倫得',         reqs:[['item_death_oath',1]], rewards:['arm_shadowglove'] },   // 🔁 v3.1.39 需求等級與 dark30 交換（15→30·NPC倫得/獎勵暗影手套/需求死亡誓約不變）
+    dark30:     { cls:'dark',     lv:15, npc:'康',           reqs:[['item_orc_elder_head',1]], rewards:['arm_shadowmask'] },   // 🔁 v3.1.39 需求等級與 dark15 交換（30→15·NPC康/獎勵暗影面具/需求妖魔長老之首不變）
     dark45:     { cls:'dark',     lv:45, npc:'布魯迪卡',     reqs:[['item_yeti_head',1]], rewards:['arm_shadowboots'] },
     illusion15: { cls:'illusion', lv:15, npc:'希蓮恩',       reqs:[['item_ant_fruit',1],['item_ant_branch',1],['item_ant_bark',1]], rewards:['wpn_illu_wand','mem_cube_burn'] },
     illusion30: { cls:'illusion', lv:30, npc:'希蓮恩',       reqs:[['item_elmore_heart',1]], rewards:['shd_illu_book','mem_cube_shock'] },
