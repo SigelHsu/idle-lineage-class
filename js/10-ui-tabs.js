@@ -255,6 +255,7 @@ player.inv.forEach(i => {
     // ===== 視覺狀態判定 =====
     let statusTag = '';
     let itemBg = 'bg-slate-800'; // 預設背景
+    let dimIcon = false; // 🔅 無法裝備（職業/負重不符）時，圖示黯淡化
 
     if (d.type === 'skillbk') {
         let sk = DB.skills[d.sk];
@@ -277,6 +278,7 @@ player.inv.forEach(i => {
     if (!canEquip) {
         statusTag = '<span class="text-red-500 text-[10px] font-bold">[無法裝備]</span>';
         itemBg = 'bg-red-950/40'; // 職業/技能不符，顯示暗紅色底
+        dimIcon = true; // 🔅 圖示黯淡化
     }
 }
 
@@ -291,7 +293,8 @@ player.inv.forEach(i => {
     // 判斷如果背包裡的物品是祝福的，套用螢光特效
     let imgUrl = getIconUrl(d);
     let glowClass = getGlowClass(i, d);
-    let imgHtml = `<img src="${imgUrl}" onerror="this.style.opacity='0';" class="w-6 h-6 object-contain pointer-events-none ${glowClass}">`;
+    let _dimStyle = dimIcon ? ' style="opacity:0.3;filter:grayscale(0.6);"' : '';   // 🔅 無法裝備→圖示黯淡＋去彩度
+    let imgHtml = `<img src="${imgUrl}" onerror="this.style.opacity='0';" class="w-6 h-6 object-contain pointer-events-none ${glowClass}"${_dimStyle}>`;
     
     // 內容組合 (加入了 statusTag)
     let _rowInner = `<div class="classic-item-main"><div class="classic-icon-box">${imgHtml}</div><div class="classic-name-box"><span class="${getItemColor(i)} font-bold">${getItemFullName(i)}</span><span class="classic-item-flags">${statusTag}</span></div>${i.lock ? '<span class="classic-item-lock-badge" aria-hidden="true">🔒</span>' : ''}${(i.junk && !i.lock) ? '<span class="classic-item-junk-label">廢品</span>' : ''}</div>`;   // 方格狀態：上鎖右上角；廢品灰階＋底部紅字
