@@ -788,7 +788,18 @@ function selectClass(c) {
         warrior: "戰士是在無數戰場中成長的鬥士，\n他們沒有華麗的魔法，\n也不依靠血統或神秘力量，\n只憑強健的身體、沉重的武器\n以及永不退縮的意志生存。\n\n戰士能夠使用斧頭與鈍器，\n並以連續而沉重的攻擊壓迫敵人。\n他們在近距離戰鬥中擁有\n非常可靠的耐久力與破壞力，\n即使被包圍也能站在最前方\n為同伴開出前進的道路。\n\n想以戰士的身份冒險，\n就必須相信自己的雙手，\n並在每一次揮擊中證明力量。"
     };
     document.getElementById('class-desc').innerText = classDescMap[curCreate.cls] || "";
-    
+    // 🖋️ v3.2.5 排版自動適配：先重設回 CSS 預設（15px/行高1.5），若文案超出框高（overflow:hidden 會無聲裁切）則
+    //    ①字級 0.5px 步進縮小（地板 11px）→ ②仍超出再微收行高（1.5 → 最低 1.2·仍優於舊版 1.1）。
+    //    行高/字距為相對單位會等比縮放；面板隱藏時 clientHeight=0 → 跳過（開啟創角時 selectClassBase 會再跑一次）。
+    (function () {
+        let _de = document.getElementById('class-desc'); if (!_de || !_de.clientHeight) return;
+        _de.style.fontSize = ''; _de.style.lineHeight = '';
+        let _fs = parseFloat(getComputedStyle(_de).fontSize) || 15;
+        while (_fs > 11 && _de.scrollHeight > _de.clientHeight + 1) { _fs -= 0.5; _de.style.fontSize = _fs + 'px'; }
+        let _lh = 1.5;
+        while (_lh > 1.2 && _de.scrollHeight > _de.clientHeight + 1) { _lh -= 0.05; _de.style.lineHeight = _lh.toFixed(2); }
+    })();
+
     curCreate.str = 0; curCreate.dex = 0; curCreate.con = 0; curCreate.int = 0; curCreate.wis = 0; curCreate.cha = 0;
     updateCreateUI();
     if(typeof _bgmTick === 'function') _bgmTick();
