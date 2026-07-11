@@ -1,7 +1,8 @@
 function playerAttack() {
     let target = getTarget();
     if(!target) return;
-    player._faceTgt = target;   // 🧭 v3.2.12 職業三方向：記錄本次攻擊目標（供 _class3Facing 選左前/前方/右前·近戰/魔法/弓皆適用）
+    player._faceTgtUid = target.uid;   // 🧭 只記錄可序列化 UID；不可保存怪物物件，否則與 mob→player 面向參照形成循環而使存檔失敗
+    delete player._faceTgt;
     if (typeof _playerMorphTrigger === 'function') { try { _playerMorphTrigger('attack'); } catch (e) {} }   // 🧝 v3.0.46 玩家變身 sprite：攻擊動作（含被迴避＝有揮擊）
     // 🔮 幻術士 奇古獸攻擊：裝備奇古獸(必中魔法)或魔劍精通(任意非弓武器套用奇古獸公式) → 走奇古獸路徑，繞過物理命中/迴避
     if (player.cls === 'illusion') {
@@ -745,7 +746,8 @@ function enemyPhysicalAttack(mob, idx, stunChance = 0, atkDmg = null, atkDb = nu
     if(inAbsBarrier()) return;   // 🛡️ 絕對屏障：不受任何傷害（敵方一般/連擊攻擊完全無效，亦不觸發反擊）
     if(!mob || mob.curHp <= 0) return;   // 🔧 攻擊者已死亡（如連擊中被反擊/居合反殺）：死怪不得繼續攻擊
     if (typeof _mobAnimTrigger === 'function') _mobAnimTrigger(mob, 'attack');   // 🎞️ 序列幀：攻擊動作（有 attack_*.png 幀才會播·登場/技能鎖定播放中會被忽略·見 js/09）
-    mob._faceTgt = player;   // 🧭 v3.2.11 八方向怪：記錄面向目標＝主玩家（供 _mob8FaceDir 選向）
+    mob._facePartyKey = 'P';   // 🧭 只記錄隊伍位置鍵；避免 mob→player 與 player→mob 形成循環參照
+    delete mob._faceTgt;
 
     // 🗼 沉睡：必定被命中、無法迴避，受擊後立即清醒
     let _asleep = !!(player.statuses && player.statuses.sleep > 0);
@@ -1023,7 +1025,8 @@ function teamIlluAura(forWho) {
 function enemyAttackAlly(mob, ally) {
     if (!mob || mob.curHp <= 0 || !ally || ally._downed || (ally.curHp || 0) <= 0) return;
     if (typeof _mobAnimTrigger === 'function') _mobAnimTrigger(mob, 'attack');   // 🎞️ 序列幀：攻擊動作（打傭兵也播·鏡像 enemyPhysicalAttack·鎖定播放中會被忽略）
-    mob._faceTgt = ally;   // 🧭 v3.2.11 八方向怪：記錄面向目標＝該傭兵（供 _mob8FaceDir 選向）
+    mob._facePartyKey = 'A:' + String(ally._slot || '');   // 🧭 可序列化隊員鍵；不保存傭兵物件參照
+    delete mob._faceTgt;
     let d = ally.d || {};
     // 迴避（基礎 ER；🆕 v2.6.13 #5b 補：泰坦子彈殘血ER+50／迴避精通累積ER＋迴避後必中必爆／暗影3迴避回2%HP。比照玩家 enemyPhysicalAttack）
     {

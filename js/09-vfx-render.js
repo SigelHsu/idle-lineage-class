@@ -1354,7 +1354,7 @@ function _mobAnimTrigger(m, k) {
 // ===== 🧭 v3.2.11 八方向怪物：依攻擊目標選面向 =====
 //   名單內的怪：assets/anim/<名>/d0..d7/ 各一組動作(idle/attack/hurt/death)+影子(_s)；d0..d7 全部共畫布(--multi)→換方向不跳大小/位置。
 //   方向羅盤：dir 從左上 NW 順時針每 45°（0=NW 1=N 2=NE 3=E 4=SE 5=S 6=SW 7=W）·對應 spr 檔號 動作×8+方向。
-//   面向＝怪 sprite 中心 → 目標 sprite 中心 的螢幕向量選最近方向；目標由 js/04 攻擊掛點寫 m._faceTgt(player/ally)，未定→退玩家 sprite→退預設 dir6(朝隊伍)。
+//   面向＝怪 sprite 中心 → 目標 sprite 中心 的螢幕向量選最近方向；目標由 js/04 寫 m._facePartyKey(P/A:slot)，未定→退玩家 sprite→退預設 dir6。
 //   惰性載入：只載實際用到的方向(固定側視戰場僅下半球數個方向會被選到)；未載好先退上次成功方向/預設 d6。
 const MOB_ANIM_8DIR = new Set(['杜賓狗']);   // 🐕 v3.2.11 杜賓狗（8 方向試點）
 let _mob8Cache = {};   // '<名>#<dir>' → {idle,attack,hurt,death, shadow:{...}} | 'probing' | null
@@ -1388,7 +1388,12 @@ function _mob8Probe(name, dir) {
     acts.forEach(a => { probeSeq(out, a, a + '_', a === 'hurt' ? 1 : 2); probeSeq(out.shadow, a, a + '_s_', 1); });
 }
 function _mob8TargetRect(m) {
-    let who = m._faceTgt;
+    let key = m && m._facePartyKey;
+    let who = key === 'P' ? player : null;
+    if(!who && typeof key === 'string' && key.indexOf('A:') === 0) {
+        let slot = key.slice(2);
+        who = (player.allies || []).find(a => a && String(a._slot || '') === slot) || null;
+    }
     if (who && typeof _partyMemberRect === 'function') { let r = _partyMemberRect(who); if (r) return r; }   // 攻擊掛點記錄的目標(player/ally)
     if (typeof _pmCasterRect === 'function') { let r = _pmCasterRect(); if (r) return r; }                    // 退：主玩家 sprite
     return null;
@@ -1532,12 +1537,12 @@ const CLASS_ANIM_SETS = {
 //   名單內 avatar：每個 sprite（主玩家＋各隊員）依「自己 sprite→攻擊目標格」的螢幕水平向量選朝向；名單外 avatar 維持原「依角色分兩組」靜態行為。
 //   ⚠️ 名單內 avatar 的三個資料夾必須共畫布（一次 --multi 轉三方向）→ 換向只換幀不重建 DOM、尺寸/left 不跳。
 const CLASS_ANIM_3DIR = new Set(['男騎士', '女騎士', '男妖精', '女妖精', '王子', '公主', '男法師', '女法師', '男黑暗妖精', '女黑暗妖精', '男龍騎士', '女龍騎士', '男幻術士', '女幻術士', '男戰士', '女戰士']);   // 🏹 v3.2.13 全 16 職業（三方向 R/F/L 皆已共畫布部署）
-// 依 who 目前攻擊目標（who._faceTgt·js/04/js/06 攻擊掛點寫入）相對於 who sprite el 的水平位置，回傳 'L'|'F'|'R'（並記錄 who._face3 供無目標時延續）
+// 依 who 目前攻擊目標 UID（who._faceTgtUid·js/04/js/06 寫入）相對於 who sprite el 的水平位置，回傳 'L'|'F'|'R'。
 function _class3Facing(who, el) {
     try {
-        let tgt = who && who._faceTgt;
-        if (!tgt || tgt.uid == null || (tgt.dead)) return (who && who._face3) || 'R';
-        let tr = (typeof _vfxSlotRect === 'function') ? _vfxSlotRect(tgt.uid) : null;   // 目標怪格 rect（怪已死/離場→null）
+        let tgtUid = who && who._faceTgtUid;
+        if (tgtUid == null) return (who && who._face3) || 'R';
+        let tr = (typeof _vfxSlotRect === 'function') ? _vfxSlotRect(tgtUid) : null;   // 目標怪格 rect（怪已死/離場→null）
         if (!tr || !tr.width) return (who && who._face3) || 'R';
         let er = (el && el.getBoundingClientRect) ? el.getBoundingClientRect() : null;
         if (!er || !er.width) return (who && who._face3) || 'R';

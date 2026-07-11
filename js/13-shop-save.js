@@ -1000,10 +1000,37 @@ function updateClassPotionRows() {
 //    loadGame 途中（config 還原在尾端）觸發的 saveGame（如進村領取傭兵經驗）若照舊以「當下 DOM」重建 player.config，
 //    會把靜態預設 UI 寫進存檔、永久洗掉玩家全部自動化設定。未就緒時保留既有 player.config 原樣入檔。
 let _uiConfigReady = false;
+let _saveFailureNotified = false;
+function normalizeFacingRefsForSave() {
+    if(!player) return;
+    if(player._faceTgt) {
+        if(player._faceTgt.uid != null) player._faceTgtUid = player._faceTgt.uid;
+        delete player._faceTgt;
+    }
+    (player.allies || []).forEach(a => {
+        if(a && a._faceTgt) {
+            if(a._faceTgt.uid != null) a._faceTgtUid = a._faceTgt.uid;
+            delete a._faceTgt;
+        }
+    });
+    ((mapState && mapState.mobs) || []).forEach(m => {
+        if(!m || !m._faceTgt) return;
+        if(m._faceTgt === player) m._facePartyKey = 'P';
+        else if(m._faceTgt._slot != null) m._facePartyKey = 'A:' + String(m._faceTgt._slot);
+        delete m._faceTgt;
+    });
+}
+function saveStateJson() {
+    normalizeFacingRefsForSave();
+    // Facing references are normalized above. Avoid a replacer callback for every field in
+    // the save, which becomes noticeably expensive for large inventories and companion data.
+    return JSON.stringify({ v: SAVE_VERSION, p: player, ms: mapState, ticks: state.ticks });
+}
 function saveGame() {
     // 死亡狀態不寫檔：避免把 player.dead=true 存進去，導致下次讀檔卡在死亡狀態而不出怪。
     // 死亡期間沒有可保存的進度，保留上一份「存活」存檔即可。
-    if (player && player.dead) return;
+    if (player && player.dead) return false;
+    try {
     if (typeof sanitizeState === 'function') sanitizeState();   // 🛡️ 寫檔前合理性夾擠：把 runtime(Console)改出的不可能數值夾回合法範圍，連同簽章一起固化、不讓作弊值被存檔/匯出
     // 收集目前的自動化設定 UI 狀態（🛡️ 僅在 UI 已同步時重建；否則沿用記憶體中既有 config）
     if (_uiConfigReady) {
@@ -1044,8 +1071,18 @@ function saveGame() {
     });
     }   // ← _uiConfigReady 閘（審計#1）
 
-    _lzSet('lineage_idle_save_' + currentSlot, _saveWrap(JSON.stringify({ v: SAVE_VERSION, p: player, ms: mapState, ticks: state.ticks })));   // 🔧 架構#6：寫入存檔版本（🛡️ 加完整性簽章後 💾 LZString 壓縮）   // 🔧 一併保存 tick 計數：召喚物/迷魅的 endTick 為絕對 tick，不存會在重載後失準（迷魅重新計時 1 小時）
+    if(!_lzSet('lineage_idle_save_' + currentSlot, _saveWrap(saveStateJson()))) throw new Error('persistent storage write failed');   // 🔧 寫入成功才回報；並由 saveStateJson 排除戰鬥面向暫存參照
     logSys(`遊戲進度已儲存。`);
+    _saveFailureNotified = false;
+    return true;
+    } catch(e) {
+        try { console.error('[saveGame] failed', e); } catch(_e) {}
+        if(!_saveFailureNotified && typeof logSys === 'function') {
+            _saveFailureNotified = true;
+            logSys('<span class="text-red-400 font-bold">⚠ 遊戲進度儲存失敗。為保護物品，倉庫存取將暫停；請重新整理後再試。</span>');
+        }
+        return false;
+    }
 }
 
 // 合併同一性物品堆疊（相容舊存檔：修復前被拆分的相同卷軸/物品會重新合併）。
@@ -1079,6 +1116,7 @@ function loadGame() {
     if (s) {
         let d; try { d = JSON.parse(s); } catch(e){ alert('此存檔位的資料已毀損，無法載入。若先前有匯入過，可在載入畫面點「復原備份」還原。'); return; }   // 🛡️ 與其他讀檔點一致：毀損時乾淨報錯而非拋例外卡死
         player = d.p; mapState = d.ms;
+        normalizeFacingRefsForSave();   // 舊存檔若含 v3.2.12 面向物件副本，載入時立即轉為 UID／隊員鍵並移除物件參照
         if (typeof applyGlobalAutoSellSettings === 'function') applyGlobalAutoSellSettings();   // 🔧 v2.6.91 功能5：載入角色時套用全域自動販賣設定（8 角色共用時覆蓋本檔規則）
         if (!player.enSeed) player.enSeed = 'es' + _seedHash((player.name || '') + '|' + (player.cls || '') + '|lz').toString(36);   // 🎲 舊存檔無強化種子：由角色名+職業決定論衍生（重匯入同一份舊檔也得相同種子→不能靠重匯入重洗強化）
         if (typeof sanitizeState === 'function') sanitizeState();   // 🛡️ 讀檔後合理性夾擠（抓改過/竄改的存檔：等級>100、強化值超上限、負金幣等）

@@ -103,6 +103,36 @@ try { if (_FS && typeof document !== 'undefined' && document.documentElement) do
 function _lsGet(k) { try { return _FS ? _FS.get(k) : localStorage.getItem(k); } catch (e) { return null; } }
 function _lsSet(k, v) { try { if (_FS) return _FS.set(k, v); localStorage.setItem(k, v); return true; } catch (e) { return false; } }
 function _lsRemove(k) { try { if (_FS) { _FS.remove(k); return; } localStorage.removeItem(k); } catch (e) {} }
+
+// Web saves are written immediately, then compressed in a Worker so LZString cannot block
+// rendering or combat. A per-key revision prevents an older Worker result replacing a newer save.
+var _lzWorker = null, _lzWorkerSeq = 0, _lzWorkerRev = Object.create(null);
+function _getLzWorker() {
+  if (_lzWorker || typeof Worker === 'undefined' || typeof Blob === 'undefined' || typeof URL === 'undefined') return _lzWorker;
+  try {
+    var source = [
+      'var f=String.fromCharCode,LZString={};',
+      'LZString._compress=' + LZString._compress.toString() + ';',
+      'LZString.compressToUTF16=' + LZString.compressToUTF16.toString() + ';',
+      'self.onmessage=function(e){var d=e.data;try{self.postMessage({id:d.id,key:d.key,rev:d.rev,packed:"LZ1:"+LZString.compressToUTF16(d.value)});}catch(err){self.postMessage({id:d.id,key:d.key,rev:d.rev,error:true});}};'
+    ].join('\n');
+    _lzWorker = new Worker(URL.createObjectURL(new Blob([source], { type: 'text/javascript' })));
+    _lzWorker.onmessage = function(e) {
+      var d = e.data || {};
+      if (d.error || _lzWorkerRev[d.key] !== d.rev) return;
+      // Revision matching is enough: every successful write increments this key before queueing.
+      _lsSet(d.key, d.packed);
+    };
+    _lzWorker.onerror = function() { try { _lzWorker.terminate(); } catch (e) {} _lzWorker = null; };
+  } catch (e) { _lzWorker = null; }
+  return _lzWorker;
+}
+function _queueLzCompression(key, value, rev) {
+  if (_FS) return;
+  var worker = _getLzWorker();
+  if (!worker) return;
+  try { worker.postMessage({ id: ++_lzWorkerSeq, key: key, rev: rev, value: value }); } catch (e) {}
+}
 // 一次性遷移：打包版首次啟用檔案存檔時，把舊版存在 Chromium localStorage(userdata/Local Storage)的所有資料複製進檔案存檔，避免玩家存檔「消失」。
 (function _migrateToFileStore() {
   try {
@@ -115,6 +145,16 @@ function _lsRemove(k) { try { if (_FS) { _FS.remove(k); return; } localStorage.r
 })();
 // 壓縮寫入：把 JSON 字串以 'LZ1:'+UTF16 壓縮存入；壓縮或寫入失敗(多半 localStorage 配額)時退回明文（再不行才警告）
 function _lzSet(key, jsonStr) {
+  // Electron uses real files and is not constrained by localStorage quotas. Writing the
+  // signed JSON directly avoids blocking the game loop while LZString compresses a large save.
+  // _lzGet already accepts both LZ1-compressed and plain values, so old saves remain compatible.
+  if (_FS) return _lsSet(key, jsonStr);
+  // Web: make the save durable first and move compression off the main thread. This keeps both
+  // manual and timed saves responsive. If raw data exceeds the quota, retain the synchronous
+  // compressed fallback below so an already-large save can still be written safely.
+  var rev = (_lzWorkerRev[key] || 0) + 1;
+  _lzWorkerRev[key] = rev; // Invalidate every older result before either write path starts.
+  if (_lsSet(key, jsonStr)) { _queueLzCompression(key, jsonStr, rev); return true; }
   var packed = null;
   try { packed = 'LZ1:' + LZString.compressToUTF16(jsonStr); } catch (e) { packed = null; }
   if (packed != null && _lsSet(key, packed)) return true;

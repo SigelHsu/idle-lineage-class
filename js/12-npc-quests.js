@@ -274,9 +274,28 @@ if (typeof window !== 'undefined' && window.addEventListener) window.addEventLis
 function _whStackFind(arr, it){ return ((it.en||0)===0 && !it.lock) ? arr.find(x => !x.lock && (x.en||0)===0 && sameItemSig(x, it)) : null; }   // 🔧 架構#3：統一簽章比對
 // 物品完整簽章：名字(id)+強化值(en)+詞綴(祝福/遠古/屬性)；一鍵存入用來比對「完全相同」
 function whSig(it){ return itemSig(it); }   // 🔧 架構#3：委派給單一事實來源 itemSig
+// 倉庫與角色是兩個獨立儲存桶。每次轉移先保存角色，再保存倉庫；任一步失敗就還原記憶體中的背包/金幣，
+// 避免角色存檔失敗但倉庫成功寫入後，重新整理造成物品複製。
+function whTxnSnapshot(){ return { inv: JSON.parse(JSON.stringify(player.inv || [])), gold: player.gold || 0 }; }
+function whTxnRestore(s){ if(!s) return; player.inv = s.inv; player.gold = s.gold; }
+function whTxnCommit(w, snap){
+    if(typeof saveGame !== 'function' || !saveGame()) {
+        whTxnRestore(snap);
+        if(typeof logSys === 'function') logSys('<span class="text-red-400 font-bold">倉庫操作取消：角色進度無法安全儲存，物品與金幣已還原。</span>');
+        return false;
+    }
+    if(!saveWarehouse(w)) {
+        whTxnRestore(snap);
+        let restored = (typeof saveGame === 'function') && saveGame();
+        if(typeof logSys === 'function') logSys('<span class="text-red-400 font-bold">倉庫操作失敗：倉庫無法寫入，角色物品已' + (restored ? '還原' : '在記憶體中還原，請勿繼續操作並重新整理') + '。</span>');
+        return false;
+    }
+    return true;
+}
 // 一鍵存入：背包中「與倉庫現有物品 詞綴+名字+強化值 完全相同」者自動存入（鎖定物品保護、不可存物品略過）
 function whOneClickDeposit(){
     let w = loadWarehouse();
+    let _txn = whTxnSnapshot();
     let whSigs = new Set(w.items.map(whSig));   // 倉庫現有物品簽章集合
     let deposited = 0, full = false;
     for(let it of player.inv.slice()){          // 用副本走訪，過程會改動 player.inv
@@ -292,7 +311,8 @@ function whOneClickDeposit(){
         if(stack){ stack.cnt += cur.cnt; } else { w.items.push(cur); whSigs.add(whSig(cur)); }
         deposited++;
     }
-    saveWarehouse(w); saveGame(); renderTabs(true); updateUI();
+    if(!whTxnCommit(w, _txn)){ renderTabs(true); updateUI(); renderWarehouseNPC(document.getElementById('interaction-content')); return; }
+    renderTabs(true); updateUI();
     renderWarehouseNPC(document.getElementById('interaction-content'));
     if(deposited > 0) logSys(`<span class="text-cyan-300 font-bold">一鍵存入：已存入 ${deposited} 項與倉庫現有物品相同的物品${full ? '（倉庫已滿，部分未存入）' : ''}。</span>`);
     else logSys(full ? `<span class="text-red-400">倉庫已滿，無法存入。</span>` : `背包中沒有與倉庫現有物品完全相同的可存入物品。`);
@@ -308,6 +328,7 @@ function sortWarehouse(){
 }
 function whDeposit(uidv, qty){
     let w = loadWarehouse();
+    let _txn = whTxnSnapshot();
     let idx = player.inv.findIndex(i => i.uid === uidv);
     if(idx < 0) return;
     let it = player.inv[idx];
@@ -327,11 +348,13 @@ function whDeposit(uidv, qty){
         it.cnt = total - qty;
         if(stack) stack.cnt += qty; else w.items.push({ ...it, uid: uid(), cnt: qty });
     }
-    saveWarehouse(w); saveGame(); renderTabs(true); updateUI();
+    if(!whTxnCommit(w, _txn)){ renderTabs(true); updateUI(); renderWarehouseNPC(document.getElementById('interaction-content')); return; }
+    renderTabs(true); updateUI();
     renderWarehouseNPC(document.getElementById('interaction-content'));
 }
 function whWithdraw(uidv, qty){
     let w = loadWarehouse();
+    let _txn = whTxnSnapshot();
     let idx = w.items.findIndex(i => i.uid === uidv);
     if(idx < 0) return;
     let it = w.items[idx];
@@ -350,22 +373,23 @@ function whWithdraw(uidv, qty){
         let stack = _whStackFind(player.inv, moved);
         if(stack) stack.cnt += qty; else player.inv.push(moved);
     }
-    // 🗡️🧰 v3.0.61 收集冊：「提領＝獲得」也登錄圖鑑（原本只在 gainItem 登錄→倉庫提領不點亮；傳統模式裝備自帶強化、常整批進出倉庫最易踩到）
+    if(!whTxnCommit(w, _txn)){ renderTabs(true); updateUI(); renderWarehouseNPC(document.getElementById('interaction-content')); return; }
+    // 🗡️🧰 收集冊：只有角色與倉庫都成功寫入後才登錄，避免失敗交易留下未實際取得的圖鑑進度。
     if (typeof registerEquipObtained === 'function') registerEquipObtained(it.id);
     if (typeof registerMiscObtained === 'function') registerMiscObtained(it.id);
-    if (typeof registerRelicObtained === 'function') registerRelicObtained(it.id);   // 🏺 提領＝獲得：遺物也登錄
-    // 🔧 先存玩家存檔（已收到物品）再存倉庫（已移除物品）：萬一第二次寫入失敗（如 localStorage 容量爆），
-    //    結果是「物品重複」而非「庫存消失卻沒領到」，避免領取時遺失物品。
-    saveGame(); saveWarehouse(w); renderTabs(true); updateUI();
+    if (typeof registerRelicObtained === 'function') registerRelicObtained(it.id);
+    renderTabs(true); updateUI();
     renderWarehouseNPC(document.getElementById('interaction-content'));
 }
 function whGold(dir){
     let amt = parseInt(document.getElementById('wh-gold-amt').value) || 0;
     if(amt <= 0) return;
     let w = loadWarehouse();
+    let _txn = whTxnSnapshot();
     if(dir === 'in'){ amt = Math.min(amt, player.gold); player.gold -= amt; w.gold = (w.gold||0) + amt; }
     else { amt = Math.min(amt, w.gold||0); w.gold -= amt; player.gold += amt; }
-    saveWarehouse(w); saveGame(); updateUI();
+    if(!whTxnCommit(w, _txn)){ updateUI(); renderWarehouseNPC(document.getElementById('interaction-content')); return; }
+    updateUI();
     renderWarehouseNPC(document.getElementById('interaction-content'));
 }
 function renderWarehouseNPC(div){
