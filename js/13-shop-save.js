@@ -1122,6 +1122,38 @@ function consolidateInventory() {
     player.inv = out;
 }
 
+// 🧹 v3.2.62 清除「已停用的舊版物品」：功能被移除後連 DB.items 定義都刪掉的孤兒物品（如舊版進化果實/肉/哨子）
+//   ——渲染時被 `if(!DB.items[id])` 守衛跳過（看不到卻仍佔背包格＋脹存檔）、無價格無法販售、無 eff/type 無法使用。
+//   載入時自動從「背包＋共用倉庫」移除並彙總一則訊息。⚠️保留舊項圈 ID（由 petMigrateLegacy 轉為寵物·勿當孤兒刪）。
+//   倉庫僅在「讀取成功」時寫回（沿用 saveWarehouse 的 _whLoadOk 防護·不覆蓋救得回的位元組）。
+function purgeOrphanItems() {
+    try {
+        if (!player || typeof DB === 'undefined' || !DB.items) return 0;
+        let _keepCollar = (typeof _PET_LEGACY_COLLARS !== 'undefined') ? _PET_LEGACY_COLLARS : {};
+        let isOrphan = (id) => id != null && !DB.items[id] && !_keepCollar[id];
+        let removed = 0;
+        if (Array.isArray(player.inv)) {
+            let before = player.inv.length;
+            player.inv = player.inv.filter(i => i && !isOrphan(i.id));
+            removed += before - player.inv.length;
+        }
+        try {
+            if (typeof loadWarehouse === 'function' && typeof saveWarehouse === 'function') {
+                let wh = loadWarehouse();
+                if (typeof _whLoadOk === 'undefined' || _whLoadOk !== false) {
+                    let items = (wh && wh.items) || [];
+                    let kept = items.filter(it => it && !isOrphan(it.id));
+                    if (kept.length !== items.length) { wh.items = kept; saveWarehouse(wh); removed += items.length - kept.length; }
+                }
+            }
+        } catch (e) { console.warn('purgeOrphanItems warehouse', e); }
+        if (removed > 0 && typeof logSys === 'function') {
+            logSys(`<span class="text-slate-400">🧹 已自動清除 ${removed} 個已停用的舊版物品（功能已移除·無法使用或販售）。</span>`);
+        }
+        return removed;
+    } catch (e) { console.warn('purgeOrphanItems', e); return 0; }
+}
+
 function loadGame() {
     _uiConfigReady = false;   // 🛡️ 審計#1：載入期間 DOM 仍是上一個畫面/預設值，禁止 saveGame 以它重建 config
     let _u = _saveUnwrap(_lzGet('lineage_idle_save_' + currentSlot));   // 🛡️ 解存檔簽章（舊明文存檔 signed:false 照常載入）
@@ -1178,6 +1210,7 @@ function loadGame() {
         if(player.allies === undefined || !Array.isArray(player.allies)) player.allies = [];   // 協力角色（其他存檔位）
         // 🐾 v3.2.17 夥伴系統 v2：舊項圈/肉/哨子/舊進化果實/舊 petStorage 一次性轉換與清除（項圈→新寵物入共用保管）
         try { if (typeof petMigrateLegacy === 'function') petMigrateLegacy(); } catch (e) { console.warn('petMigrateLegacy', e); }
+        try { purgeOrphanItems(); } catch (e) { console.warn('purgeOrphanItems', e); }   // 🧹 v3.2.62 清除已停用舊物品（DB 無定義的孤兒·背包+倉庫·排除待轉換的舊項圈）
         // 相容舊存檔：返生術改為被動技能，清除先前施放殘留的無作用 buff；初始化復活卷軸冷卻
         if(player.buffs) player.buffs.sk_resurrection = 0;
         if(player.buffs && player.buffs.haste >= 999999) player.buffs.haste = 0;   // 修復舊版伊娃之盾殘留的永久加速（改由 _equipHaste 旗標處理）

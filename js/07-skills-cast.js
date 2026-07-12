@@ -432,14 +432,14 @@ function castSkillInner(skId) {
             ? Math.max(1, Math.floor((rollDice(sk.healDice[0], sk.healDice[1]) + (sk.healBase || 0)) * _spCoefHeal))   // (XdY + healBase) × 魔法傷害公式
             : Math.max(1, (sk.valBase || 0) + roll(sk.valDice[0], sk.valDice[1]) + player.d.magicDmg);
         heal = waterVitalHeal(heal);   // 🔧 水之元氣：下次恢復魔法治癒加倍
-        // 🤝 v3.0.94 隊長治癒也幫隊員：目標＝隊伍(玩家＋未倒地傭兵)中 HP% 最低者（原僅治癒玩家自己；鏡像傭兵 allyTryHeal 的選人規則）
-        let _hTgt = player, _hPct = (player.mhp > 0) ? (player.hp / player.mhp) : 1;
-        (player.allies || []).forEach(a => { if (a && !a._downed && (a.curHp || 0) > 0 && (a.mhp || 0) > 0) { let _p2 = a.curHp / a.mhp; if (_p2 < _hPct) { _hPct = _p2; _hTgt = a; } } });
-        _lastHealFxTarget = _hTgt;   // 🩹 記錄受益者→castSkill 把治癒特效疊在其身上
-        if (_hTgt === player) player.hp = Math.min(player.mhp, player.hp + heal);
-        else _hTgt.curHp = Math.min(_hTgt.mhp, (_hTgt.curHp || 0) + heal);
+        // 🤝 v3.0.94→v3.2.67 隊長治癒也幫隊員/寵物/召喚物：目標＝隊伍(玩家＋未倒地傭兵＋出戰寵物＋召喚物)中 HP% 最低者（鏡像傭兵 allyTryHeal 的選人規則）
+        let _cands = (typeof healBeneficiaries === 'function') ? healBeneficiaries() : [player];
+        let _hTgt = player, _hPct = Infinity;
+        _cands.forEach(c => { let _mx = (typeof _supMhp === 'function') ? _supMhp(c) : (c.mhp || 1); if (_mx > 0) { let _p2 = ((typeof _supHp === 'function') ? _supHp(c) : (c === player ? player.hp : c.curHp) || 0) / _mx; if (_p2 < _hPct) { _hPct = _p2; _hTgt = c; } } });
+        _lastHealFxTarget = _hTgt;   // 🩹 記錄受益者→castSkill 把治癒特效疊在其身上（寵物/召喚物 _partyMemberRect 回 null→退預設錨點）
+        if (typeof _supHeal === 'function') _supHeal(_hTgt, heal); else if (_hTgt === player) player.hp = Math.min(player.mhp, player.hp + heal); else _hTgt.curHp = Math.min(_hTgt.mhp, (_hTgt.curHp || 0) + heal);
         player.cds.healSk = getAutoCastInterval();
-        logCombat(`施放 ${sk.n}，恢復了${_hTgt === player ? '' : (' 協力·' + _hTgt._allyName)} ${heal} 點 HP。${sk.msg || ''}`, 'heal');
+        logCombat(`施放 ${sk.n}，恢復了${_hTgt === player ? '' : (' ' + ((typeof _supName === 'function') ? _supName(_hTgt) : ('協力·' + _hTgt._allyName)))} ${heal} 點 HP。${sk.msg || ''}`, 'heal');
         return true;
     }
     
@@ -946,9 +946,13 @@ function autoCastSpells() {
     let healSk = document.getElementById('sel-heal-skill').value;
     let healThr = parseInt(document.getElementById('set-mp-heal').value) || 0;
     // 治癒魔法改為「HP <= X%」觸發（與恢復生命藥水相同機制）；MP 是否足夠由 castSkill 內部判斷
-    // 🤝 v3.0.94 隊長治癒也幫隊員：觸發條件改看「隊伍(玩家＋未倒地傭兵)最低 HP%」——隊員低於門檻也會施放（castSkill 治癒分支自會選 HP% 最低者施放）
+    // 🤝 v3.0.94→v3.2.68 隊長治癒也幫隊員/寵物/召喚物：觸發條件改看「全受益池(玩家＋傭兵＋出戰寵物＋召喚物)最低 HP%」——任何成員低於門檻即施放（castSkill 治癒分支自會選 HP% 最低者；原只掃玩家＋傭兵→寵物/召喚受傷不會觸發玩家自動治癒＝與傭兵 allyTryHeal 行為不一致）
     let _teamLowPct = hpPct;
-    (player.allies || []).forEach(a => { if (a && !a._downed && (a.curHp || 0) > 0 && (a.mhp || 0) > 0) { let _p2 = (a.curHp / a.mhp) * 100; if (_p2 < _teamLowPct) _teamLowPct = _p2; } });
+    if (typeof healBeneficiaries === 'function') {
+        healBeneficiaries().forEach(m => { if (m === player) return; let _mx = _supMhp(m); if (_mx > 0) { let _p2 = (_supHp(m) / _mx) * 100; if (_p2 < _teamLowPct) _teamLowPct = _p2; } });
+    } else {
+        (player.allies || []).forEach(a => { if (a && !a._downed && (a.curHp || 0) > 0 && (a.mhp || 0) > 0) { let _p2 = (a.curHp / a.mhp) * 100; if (_p2 < _teamLowPct) _teamLowPct = _p2; } });
+    }
     if(healSk && _teamLowPct <= healThr) castSkill(healSk);
 }
 

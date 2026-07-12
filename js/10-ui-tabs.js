@@ -962,7 +962,7 @@ function openModal(item, isEq, slot) {
             act += `<button class="col-span-2 w-full btn border-red-700 bg-red-900 hover:bg-red-800 text-red-200 py-3 text-lg font-bold" onclick="unequipItem('${slot}')">卸除</button>`;
         }
     } else {
-        if(d.type === 'pot' || d.type === 'skillbk' || (d.type === 'misc' && d.eff && !d.noUse)) {   // 🔧 misc 且有效果(萬能藥/回憶蠟燭/靈魂之球等)亦顯示使用按鈕；noUse 除外
+        if(d.type === 'pot' || d.type === 'skillbk' || ((d.type === 'misc' || d.type === 'etc') && d.eff && !d.noUse)) {   // 🔧 misc/etc 且有效果(萬能藥/回憶蠟燭/靈魂之球/🥚頑皮幼龍蛋等)亦顯示使用按鈕；noUse 除外
             act += `<button class="col-span-2 w-full btn border-green-700 bg-emerald-800 hover:bg-emerald-700 text-green-100 py-3 text-lg font-bold" onclick="useItem('${item.uid}')">使用</button>`;
         }
         if(d.type === 'scroll') {
@@ -1485,7 +1485,7 @@ const legacyInvSortCmp = (function () {
     let isUsable = (i, d) => {
         if (d.type === 'pot') return true;
         if (d.type === 'scroll') return i.id !== 'scroll_revive';   // 復活卷軸無法從道具欄使用
-        if (d.type === 'misc') return !!d.eff;                       // 有效果(回憶蠟燭等)才可使用
+        if (d.type === 'misc' || d.type === 'etc') return !!d.eff;   // 有效果(回憶蠟燭/🥚頑皮幼龍蛋等)才可使用
         if (d.type === 'skillbk') {
             let sk = DB.skills[d.sk]; if (!sk) return false;
             let cls = skillReqLv(sk, d.sk);   // 🏅 集中化：含魔導精通特例

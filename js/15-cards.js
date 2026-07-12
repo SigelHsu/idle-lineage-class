@@ -587,12 +587,13 @@ function _codexMobThumbHtml(nm, mi, silh) {
     let hasW2 = (typeof MOB_ANIM_WEAPON_FX2 !== 'undefined') && MOB_ANIM_WEAPON_FX2.has(nm);
     if (!hasS && !hasW && !hasW2) return single;   // 純本體動畫怪→單張
     let enc = encodeURIComponent(nm);
+    let _dp = (typeof MOB_ANIM_8DIR !== 'undefined' && MOB_ANIM_8DIR.has(nm)) ? 'd6/' : '';   // 🧭 v3.2.64 八方向怪：影子/武器層亦在 d6 子夾（面對玩家向·同本體 mi.src）
     let st = 'position:absolute;top:0;left:0;width:64px;height:64px;object-fit:contain;';
     let L = '';
-    if (hasS) L += `<img src="assets/anim/${enc}/idle_s_0.png" style="${st}mix-blend-mode:multiply" alt="" aria-hidden="true" onerror="this.style.display='none'">`;
+    if (hasS) L += `<img src="assets/anim/${enc}/${_dp}idle_s_0.png" style="${st}mix-blend-mode:multiply" alt="" aria-hidden="true" onerror="this.style.display='none'">`;
     L += `<img src="${mi.src}" data-fb="${fb}" alt="${nm}" style="${st}" onerror="_mobImgErr(this)">`;
-    if (hasW) L += `<img src="assets/anim/${enc}/idle_w_0.png" style="${st}mix-blend-mode:screen" alt="" aria-hidden="true" onerror="this.style.display='none'">`;
-    if (hasW2) L += `<img src="assets/anim/${enc}/idle_w2_0.png" style="${st}mix-blend-mode:screen" alt="" aria-hidden="true" onerror="this.style.display='none'">`;
+    if (hasW) L += `<img src="assets/anim/${enc}/${_dp}idle_w_0.png" style="${st}mix-blend-mode:screen" alt="" aria-hidden="true" onerror="this.style.display='none'">`;
+    if (hasW2) L += `<img src="assets/anim/${enc}/${_dp}idle_w2_0.png" style="${st}mix-blend-mode:screen" alt="" aria-hidden="true" onerror="this.style.display='none'">`;
     return `<div style="position:relative;width:64px;height:64px">${L}</div>`;
 }
 

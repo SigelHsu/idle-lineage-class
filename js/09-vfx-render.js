@@ -109,9 +109,12 @@ function _preloadDeathFx(name, n) {
 // ⚡ 在目標怪身上疊播一輪法術特效。skn=技能顯示名（須在 SPELL_FX 註冊·未註冊者靜默略過）。
 //    v2.7.16：立即渲染（不再等 first.load）＋ _spellFxActive[技能名|uid] 去重（修「一次顯示兩個／忽多忽少」）。
 //    v2.7.18：支援 shadowPrefix→特效自身影子層（疊在特效下·同畫布同步·如地裂術地面裂痕）；targetVc→地面型錨點下移。
+// 🚀 v3.2.65 一次性戰鬥特效總閘：關特效(__vfxOff) 或 背景補跑期間(state.ff) 皆略過生成——避免切分頁/縮小回來時，
+//   累積的 tick 在回到前景瞬間「爆量播放」戰鬥動畫（箭矢/法術特效/擊殺粒子等一次性 VFX 是同步/延遲排程於 tick 內觸發，故須在入口擋）。
+function _vfxMute() { return !!(window.__vfxOff || (typeof state !== 'undefined' && state.ff)); }
 function playSpellFx(skn, mob) {
     try {
-        if (window.__vfxOff || !mob) return;
+        if (_vfxMute() || !mob) return;
         let cfg = SPELL_FX[skn]; if (!cfg) return;
         // 🔮 v2.7.44 屬性變體(cfg.byEle)：依「目標怪屬性 mob.e」選對應幀組(如能量感測 火/水/地/風)·目標無對應屬性(none等)→靜默不播
         if (cfg.byEle) { let _v = cfg.byEle[mob.e]; if (!_v) return; cfg = Object.assign({}, cfg, _v); }
@@ -298,7 +301,7 @@ const SELF_FX = {
 let _selfFxActive = {};   // 技能名 → true：同增益同時只保留一個
 function playSelfFx(skn, anchorRect) {   // 🩹 v3.0.95 第2參 anchorRect（選用）：顯式錨點 rect（傭兵治癒疊在被治癒者 sprite 身上）·未傳→原邏輯（玩家 sprite→戰鬥區中央）
     try {
-        if (window.__vfxOff) return;
+        if (_vfxMute()) return;
         let cfg = SELF_FX[skn]; if (!cfg) return;
         if (_selfFxActive[skn]) return;
         let bv = document.getElementById('battle-view');
@@ -625,7 +628,9 @@ function _mobImgAnchor(imgEl) {
 // 擊殺粒子爆裂：在 killMob 標記死亡後、重繪前呼叫（此時格子 DOM 仍在）
 function vfxKill(mob) {
     try {
-        if (!mob) return;   // 🎚️ v3.0.1 關閉特效時「保留死亡動畫」：不再整個 return，改為只擋「傷害數字/頭目閃光」等純裝飾（見下），死亡序列殘影(death_*.png)＋死亡特效層(death_effect)照播＝怪物死亡畫面不消失
+        if (!mob) return;
+        if (typeof state !== 'undefined' && state.ff) return;   // 🚀 v3.2.65 背景補跑期間不播擊殺/死亡特效（避免回前景爆量）
+        // 🎚️ v3.0.1 關閉特效時「保留死亡動畫」：不再整個 return，改為只擋「傷害數字/頭目閃光」等純裝飾（見下），死亡序列殘影(death_*.png)＋死亡特效層(death_effect)照播＝怪物死亡畫面不消失
         let ml = document.getElementById('mob-list');
         let slot = ml && ml.querySelector('.mob-target[data-uid="' + mob.uid + '"]');
         if (!slot) return;
@@ -731,7 +736,7 @@ function vfxKill(mob) {
 // 升級慶祝：金色擴散圓環 + 上升文字 + 戰場金光 + 金色火花
 function vfxLevelUp() {
     try {
-        if (window.__vfxOff) return;
+        if (_vfxMute()) return;
         let bv = document.getElementById('battle-view');
         let r = bv ? bv.getBoundingClientRect() : null;
         if (!r || r.width === 0) { let hb = document.getElementById('bar-hp'); r = hb ? hb.getBoundingClientRect() : null; }
@@ -851,7 +856,8 @@ let _arrowFxCache = {};       // dir(0-7) → Image（預載·避免首發閃爍
 //   delayMs：連射每箭錯開發射，免得整束箭疊在同一條線上
 function playArrowFx(who, target, delayMs) {
     try {
-        if (window.__vfxOff || !who || !target) return;
+        if (_vfxMute() || !who || !target) return;   // 🚀 v3.2.65 補跑期間不生成箭矢（避免回前景爆量）
+        if (who !== player) return;   // 🏹 v3.2.65 傭兵/隊員 sprite 位置動態難可靠對位（發射點常錯位）→僅玩家射出可見箭矢，傭兵不播（傷害判定不受影響）
         let wpn = (who.eq && who.eq.wpn) ? DB.items[who.eq.wpn.id] : null;
         if (!wpn || !wpn.isBow) return;   // 非弓（含空手/近戰）→ 不射箭
         let fire = () => {
@@ -886,7 +892,7 @@ function playArrowFx(who, target, delayMs) {
 // 稀有掉落（潘朵拉權重=1）：金色名稱上升 + 金色星芒火花，定位於剛擊殺的怪物格
 function vfxRareDrop(name) {
     try {
-        if (window.__vfxOff) return;
+        if (_vfxMute()) return;
         let rect = _vfxLastKillRect;
         if (!rect || rect.width === 0) { let bv = document.getElementById('battle-view'); let br = bv && bv.getBoundingClientRect(); if (br && br.width > 0) rect = { left: br.left, top: br.top, width: br.width, height: br.height }; }
         if (!rect) return;
@@ -912,7 +918,7 @@ function vfxRareDrop(name) {
 // 玩家受到較大一擊：戰場輕微震動 + HP 條紅閃
 function vfxPlayerHit(dmg) {
     try {
-        if (window.__vfxOff) return;
+        if (_vfxMute()) return;
         let frac = (player && player.mhp) ? dmg / player.mhp : 0;
         if (frac < 0.10) return;   // 只在 ≥10% 最大HP 的一擊才震，避免每下都晃
         let bv = document.getElementById('battle-view');
@@ -924,7 +930,7 @@ function vfxPlayerHit(dmg) {
 // 🗡️ 怪物施法震動（死亡騎士施法時整個戰場輕微震動·cosmetic-only·吃 __vfxOff·重用 vfx-shake 動畫）
 function vfxCastShake() {
     try {
-        if (window.__vfxOff) return;
+        if (_vfxMute()) return;
         let bv = document.getElementById('battle-view');
         if (bv) { bv.classList.remove('vfx-shake'); void bv.offsetWidth; bv.classList.add('vfx-shake'); bv.addEventListener('animationend', () => bv.classList.remove('vfx-shake'), { once: true }); }
     } catch (e) {}
@@ -974,7 +980,7 @@ if (typeof castSkill === 'function' && !castSkill._vfxWrapped) {
         let sk = DB.skills[skId];
         let _pele = (sk && sk.ele && sk.ele !== 'none' && !sk.weaponDmg && !sk.throwAxe) ? sk.ele : (sk ? _VFX_PROJECTILE_SKILLS[skId] : null);   // 屬性攻擊魔法 ＋ 白名單投射技能(光箭/究極光裂/心靈破壞/三重矢/戰斧投擲)
         if (_pele && sk && typeof SPELL_FX !== 'undefined' && SPELL_FX[sk.n]) _pele = null;   // 🎯 v3.1.29 有「動態圖投射物」(proj·光箭/冰箭/火箭)→免 CSS 投射；v3.1.31 放寬（用戶：究極光裂術有動態動畫也不用）＝技能只要有註冊任何 SPELL_FX 動態特效（含目標身上型 h/w）就不播 CSS 投射·只有「完全沒有動態特效」的技能保留 CSS 投射視覺
-        let proj = !window.__vfxOff && !!_pele;
+        let proj = !_vfxMute() && !!_pele;   // 🚀 v3.2.65 補跑期間(state.ff)不生成 CSS 投射物（避免回前景爆量）
         let before = null;
         if (proj) { before = mapState.mobs.map(m => (m && !m._dead) ? { uid: m.uid, hp: m.curHp, rect: _vfxSlotRect(m.uid) } : null); }
         let r = _vfxOrigCastSkill(skId);
@@ -1266,6 +1272,10 @@ function mobStillImg(name, staticUrl, preferSpawn) {
     let base = staticUrl || `assets/icons/monsters/${name}.png`;
     if (!MOB_ANIM_NAMES.has(name)) return { src: base, fb: [] };
     let dir = _animDir(name);   // 🔗 v3.0.7 共用怪→幀 URL 走目標資料夾
+    // 🧭 v3.2.64 八方向怪：idle 幀在 d<N> 子資料夾（根目錄無 idle_0）→圖鑑/靜態縮圖取「面對玩家」的方向（d6=SW·同戰場預設向/寵物縮圖）；退 d5(S 正面)→base
+    if (typeof MOB_ANIM_8DIR !== 'undefined' && MOB_ANIM_8DIR.has(name)) {
+        return { src: `assets/anim/${dir}/d6/idle_0.png`, fb: [`assets/anim/${dir}/d5/idle_0.png`, base] };
+    }
     let list = [];
     if (preferSpawn) {
         let _c = (typeof _mobAnimCache !== 'undefined') ? _mobAnimCache[name] : undefined;

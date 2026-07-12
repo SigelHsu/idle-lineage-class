@@ -334,11 +334,12 @@ function summonV2Tick() {
 }
 function summonV2AttackOnce(s, d, t) {
     const _sgb = (typeof summonGearBonus === 'function') ? summonGearBonus(player) : { dmg: 0, hit: 0 };   // 🏺 喚獸師的訓練鞭等
-    const hv = stretchHitValue(d.hit + _sgb.hit - t.lv + mobEffAC(t));
+    const _ia = (typeof teamIlluAura === 'function') ? teamIlluAura(s) : null;   // 🩹 v3.2.67 幻覺攻擊光環（化身+10傷／歐吉+4傷+4命）全隊生效→注入召喚物普攻（s 非提供者·排除無效果=取全隊）
+    const hv = stretchHitValue(d.hit + _sgb.hit + (_ia ? _ia.eh : 0) - t.lv + mobEffAC(t));
     const r = roll(1, 20);
     s._animAct = { k: 'attack', t: Date.now() }; s._faceMobUid = t.uid;
     if (!((r === 20) || (r !== 1 && hv >= r))) { logCombat(`<span class="text-purple-300">${s.form}</span> 的攻擊未命中。`, 'miss'); return; }
-    let dmg = ((r === 20 ? d.dice : roll(1, d.dice)) + d.flat + _sgb.dmg) * d.dmgMult;
+    let dmg = ((r === 20 ? d.dice : roll(1, d.dice)) + d.flat + _sgb.dmg) * d.dmgMult + (_ia ? _ia.ed : 0);
     dmg = Math.max(1, Math.floor(dmg) - (t.dr || 0));
     markBossPhysicalHit(t);
     t.curHp -= dmg; t.justHit = 'normal'; mobWake(t);
@@ -382,9 +383,10 @@ function spiritAttackOnce(s, t) {
     const spec = _spiritSpec(s.skId, s.ele, !!s._king);   // 🧝 v3.2.26 四屬性獨立參數（dice/scale/攻速依屬性·王含 AOE）
     const cha = (player.d && player.d.cha) || 0;
     const _sgb = (typeof summonGearBonus === 'function') ? summonGearBonus(player) : { dmg: 0, hit: 0 };
+    const _ia = (typeof teamIlluAura === 'function') ? teamIlluAura(s) : null;   // 🩹 v3.2.67 幻覺攻擊光環全隊生效→注入屬性精靈命中(eh)；⚠️v3.2.68 稽核修：md 不再入 flat——summonDamageMult 已吃 player.d.magicDmg(含巫妖光環)·再加＝雙重計算
     const smLike = { skId: s.skId, hitLvOff: spec.hitLvOff || 0, dmgMult: spec.dmgMult || 1 };
     s._animAct = { k: 'attack', t: Date.now() }; s._faceMobUid = t.uid;
-    const hv = summonHitValue(smLike, player, t, _sgb.hit);
+    const hv = summonHitValue(smLike, player, t, _sgb.hit + (_ia ? _ia.eh : 0));
     const r = roll(1, 20);
     if (!((r === 20) || (r !== 1 && hv >= r))) { logCombat(`<span class="text-purple-300">${s.form}</span> 的攻擊未命中。`, 'miss'); return; }
     const flat = Math.floor(cha * (player.lv || 1) / (spec.scale || 20));
@@ -419,7 +421,7 @@ function enemyAttackSummon(mob, s) {
     const st = mob.st || newMobStatus();
     if (st.terror > 0 && Math.random() < 0.90) return;
     const mobHitBonus = (mob.hit || 0) - (st.blindVal || 0) - (st.weaken > 0 ? 2 : 0) - (st.disease > 0 ? 4 : 0) + tamerAuraHit(mob);
-    const hv = stretchHitValue(mob.lv + mobHitBonus - s.lv + d.ac);
+    const hv = stretchHitValue(mob.lv + mobHitBonus - s.lv + (d.ac - (typeof teamAcBonus === 'function' ? teamAcBonus(s) : 0)));   // 🩹 v3.2.67 大地祝福/高崙 全隊 AC 減免也惠及召喚物（比照寵物）
     const r = roll(1, 20);
     let hit = false, heavy = false;
     if (r === 20) { hit = true; heavy = true; } else if (r !== 1 && hv >= r) hit = true;
@@ -429,6 +431,7 @@ function enemyAttackSummon(mob, s) {
     if (mob._sherine) dmg = Math.floor(dmg * (mob._sherineMad ? 3 : 2));
     if (mob._grace) dmg = Math.floor(dmg * 1.5);
     dmg = Math.max(1, Math.floor(dmg * riftDamageMult()) - d.dr);
+    dmg = Math.max(1, Math.floor(dmg * (typeof teamDmgReduceMult === 'function' ? teamDmgReduceMult() : 1)));   // 🩹 v3.2.67 鋼鐵防護/化身 全隊受傷減免也惠及召喚物（比照寵物）
     s.hp -= dmg;
     s._animAct = { k: 'hurt', t: Date.now() };
     logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 攻擊 <span class="text-purple-300">${s.form}</span>，造成 ${dmg} 點傷害。`, 'enemy-attack', 'enemy');
