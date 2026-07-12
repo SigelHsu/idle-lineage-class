@@ -1520,12 +1520,17 @@ button.classic-skill-cell { cursor:pointer; }
 }
 
 /* 🏘️ v3.2.83 城鎮 NPC 地圖：與狩獵框同尺寸(800×450 16:9)·NPC 動態站位(散佈景深)·hover 顯示名字·點擊開功能 */
-#town-view { position: relative; flex: 0 0 auto; height: auto; padding: 1rem; }   /* 🏘️ v3.2.86 城鎮框依內容(800×450)自適·不再 flex-1/h-full 撐滿面板·padding 對齊狩獵框 #battle-view(p-4)→版面與狩獵區完全一致 */
+#town-view {
+    position: relative; flex: 0 0 auto; width: 800px; max-width: 100%; aspect-ratio: 16 / 9;
+    height: auto; padding: 0 !important; gap: 0 !important; align-self: center; overflow: hidden;
+}   /* 🏘️ 安全區外框本身即為800×450；舊版「內圖800×450＋外層padding 32px」會變成832×482並在底部露出多餘框架 */
 #town-npc-map {
-    position: relative; width: 800px; aspect-ratio: 16 / 9; align-self: center; flex: 0 0 auto;
-    max-width: 100%; overflow: hidden; z-index: 1;   /* 🏘️ v3.2.88 建立堆疊環境·把動態 NPC sprite 關在地圖層內(z 低於浮動視窗) */
-    background: #1e293b center / cover no-repeat;   /* 🏘️ v3.2.84 移除框架(border/圓角/內陰影)·只保留新區域大小 */
+    position: relative; width: 100%; height: 100%; aspect-ratio: auto; align-self: center; flex: 0 0 auto;
+    max-width: 100%; overflow: hidden; z-index: 1; border-radius: 0.5rem;   /* 🏘️ 建立堆疊環境·把動態 NPC sprite 關在地圖層內(z 低於浮動視窗) */
+    background: #1e293b center / cover no-repeat;
 }
+#town-view > #town-npc-container.hidden,
+#town-view > #town-interaction-container.hidden { display: none !important; }
 .town-npc {
     position: absolute; cursor: pointer; transform: translate(-50%, -100%);
     transition: filter .12s ease, transform .12s ease; line-height: 0;
