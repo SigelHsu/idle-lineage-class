@@ -1090,6 +1090,11 @@ function saveGame() {
     // 死亡狀態不寫檔：避免把 player.dead=true 存進去，導致下次讀檔卡在死亡狀態而不出怪。
     // 死亡期間沒有可保存的進度，保留上一份「存活」存檔即可。
     if (player && player.dead) return false;
+    // 🛡️ v3.3.14 防「空殼玩家覆蓋既有存檔」資料遺失：標題／載入畫面的 player 是 cls:null 的空殼（尚未載入/創建角色）。
+    //    5 分鐘自動存檔計時器（startGameTimers）在「返回主選單」後不會被清除、beforeunload／寵物名冊 dirty 也可能觸發 saveGame，
+    //    這些背景觸發會把空殼 player 寫進 currentSlot（預設 1）→ 毀掉該格真正的角色（顯示為 null／Lv.1／預設王族／資料不完整）。
+    //    無 cls＝不是進行中的遊戲角色 → 一律拒寫，確保空殼永遠不覆蓋既有存檔。（真正的角色必有職業；創角於選職業後才 saveGame，不受影響。）
+    if (!player || !player.cls) return false;
     try {
     if (typeof sanitizeState === 'function') sanitizeState();   // 🛡️ 寫檔前合理性夾擠：把 runtime(Console)改出的不可能數值夾回合法範圍，連同簽章一起固化、不讓作弊值被存檔/匯出
     // 收集目前的自動化設定 UI 狀態（🛡️ 僅在 UI 已同步時重建；否則沿用記憶體中既有 config）
