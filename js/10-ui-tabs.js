@@ -863,6 +863,8 @@ function buildItemDescHTML(item) {
             let _skillNames = Object.keys(d.skillDmgMult).map(skId => (DB.skills[skId] && DB.skills[skId].n) || skId);
             if (_skillNames.length) _eff.push('強化' + _skillNames.join('、') + '的傷害');
         }
+        if (d.autoCastMpMult && d.autoCastMpMult > 1) _eff.push('自動施放傷害魔法時魔力消耗增加');
+        if (d.autoCastDmgMult && d.autoCastDmgMult > 1) _eff.push('自動施放傷害魔法時威力提升');
         if (d.silencedBonusDmg)      _eff.push('攻擊沉默中的目標時傷害提高');
         if (d.poisonedBonusDmg)      _eff.push('攻擊中毒的目標時傷害提高');
         if (d.slowedBonusDmg)        _eff.push('攻擊緩速中的目標時傷害提高');
