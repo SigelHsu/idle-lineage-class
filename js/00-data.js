@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.3.16';
+const GAME_VERSION = 'v3.3.19';
 // ===== 💾 存檔壓縮（LZString compressToUTF16/decompressFromUTF16·MIT, Pieroxy）：localStorage 內部以 UTF-16 壓縮，省 ~89%，繞過 5MB 上限 =====
 //  ⚠️ 只壓 localStorage（存檔位/倉庫/共用桶/_bak）；匯出檔維持明文 JSON（可攜·importSave 用 JSON.parse 驗證）。_lzGet 相容舊明文存檔（無 'LZ1:' 前綴→原樣回傳）。
 var LZString = (function () {
@@ -621,7 +621,7 @@ const DB = {
         "relic_seawater_shirt":     { n: "浸泡海水的內衣",   type: "arm", slot: "tshirt", relic: true, noEnhance: true, ac: 6, resWind: -10, resFire: 10, mpR: 3, dr: 1, req: "all", p: 10000, gachaWeight: 0, d: "【遺物】海賊骷髏浸透海水的內衣，濕冷卻能澆熄烈焰。" },
         "relic_fighter_axe":        { n: "鬥士的老舊戰斧",   type: "wpn", w2h: true, relic: true, noEnhance: true, dmgS: 18, dmgL: 18, hit: 9, dmgBonus: 9, eff: "crush", hardWear: 100, req: "royal,knight,elf,illusion,dragon,warrior", p: 10000, gachaWeight: 0, d: "【遺物】骷髏鬥士的老舊戰斧，一劈便將堅甲硬皮盡數崩碎。" },
         "relic_hermitcrab_shell":   { n: "寄居蟹的巨大背殼", type: "arm", slot: "shield", relic: true, noEnhance: true, ac: 10, dr: 15, moveSpeedPct: -50, req: "knight", p: 10000, gachaWeight: 0, d: "【遺物】奎斯坦修的巨大背殼，堅如磐石卻沉重拖累身形。" },
-        "relic_bombflower_core":    { n: "爆彈花蕊",         type: "arm", slot: "helm", relic: true, noEnhance: true, ac: 6, resFire: 20, hurtExplode: 100, req: "all", p: 10000, gachaWeight: 0, d: "【遺物】爆彈花不穩定的花蕊，受創時炸裂波及四周。" },
+        "relic_bombflower_core":    { n: "爆彈花蕊",         type: "arm", slot: "helm", relic: true, noEnhance: true, ac: 6, resFire: 20, hurtExplode: 100, req: "all", p: 10000, gachaWeight: 0, d: "【遺物】爆彈花不穩定的花蕊，受創時炸裂波及四周；爆裂反噬屬於火屬性魔法傷害，可由魔防與火屬性抗性減輕。" },
         "relic_scarab_shin":        { n: "古代聖甲蟲脛甲",   type: "arm", slot: "shin", relic: true, noEnhance: true, ac: 4, resEarth: 10, req: "all", p: 10000, gachaWeight: 0, d: "【遺物】底比斯聖甲蟲的甲殼脛甲，親和大地之力。" },
         "relic_darkelf_grindblade": { n: "黑暗殘兵的研磨利刃", type: "wpn", relic: true, noEnhance: true, ignHardSkin: true, dmgS: 10, dmgL: 12, hit: 15, dmgBonus: 14, req: "royal,knight,elf,dark,dragon", p: 10000, gachaWeight: 0, d: "【遺物】黑暗妖精殘兵研磨至極的單手武士刀，刃鋒薄透卻能破甲穿骨。" },
         "relic_darkelf_shootglove": { n: "黑暗殘兵輔助射擊手套", type: "arm", slot: "gloves", relic: true, noEnhance: true, ac: 5, rangedDmg: 2, rangedHit: 2, req: "knight,elf,dark,illusion,dragon,warrior", p: 10000, gachaWeight: 0, d: "【遺物】黑暗妖精殘兵操弩的皮手套，穩住扣弦瞄準的每一次呼吸。" },

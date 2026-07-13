@@ -748,7 +748,10 @@ function bombFlowerExplode(who) {
         if (t.curHp <= 0) { let ri = mapState.mobs.findIndex(m => m && m.uid === uid); if (ri !== -1) killMob(ri); }
         hitAny = true;
     });
-    let self = Math.max(1, Math.floor(base * coef));   // 對自己（自傷·不經 MR/剋制/dr）
+    // 反噬屬於火屬性魔法傷害：玩家與傭兵皆套用自身 MR、火屬性抗性；不套用對敵剋制與物理 DR。
+    let selfMrFactor = mrMult(_w.d.mr || 0);
+    let selfFireFactor = Math.max(0, Math.min(1, 1 - effResistPct(_w.d.resFire || 0) / 100));
+    let self = Math.max(1, Math.floor(base * coef * selfMrFactor * selfFireFactor));
     if (_w === player) { player.hp -= self; logCombat(`<span class="font-bold" style="color:#fca5a5;">【爆彈花蕊】</span>爆裂反噬，你受到 ${self} 點火屬性魔法傷害。`, 'player'); }
     else { _w.curHp -= self; logCombat(`<span class="font-bold" style="color:#fca5a5;">【爆彈花蕊】</span>爆裂反噬，協力·${_w._allyName} 受到 ${self} 點火屬性魔法傷害。`, 'enemy'); }   // 🩹 v3.1.76 傭兵自傷扣 curHp（倒地由呼叫端既有檢查結算）
     if (hitAny && !state.ff) renderMobs();

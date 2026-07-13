@@ -1630,7 +1630,7 @@ function closeNpcInteraction() {
 // sprite 目錄表：key(通常＝gfx) → { g:資料夾, f:幀數, mul?:高度倍率, tint?:CSS filter }
 const NPC_SPR = {
     '1045': { g: '1045', f: 8 }, '51': { g: '51', f: 4 }, '237': { g: '237', f: 6 }, '261': { g: '261', f: 4 },
-    '902': { g: '902', f: 6 }, '866': { g: '866', f: 6 }, '847': { g: '847', f: 6, mul: 1.35 }, '1762': { g: '1762', f: 8, mul: 1.1 },
+    '902': { g: '902', f: 6 }, '866': { g: '866', f: 6 }, '847': { g: '847', f: 6, mul: 1.35 }, '1762': { g: '1762', f: 8, mul: 1.1, w: 8 },   // 🔥 w:8＝火焰武器層 idle_w(宙斯之熔岩高崙燃燒特效)
     '1788': { g: '1788', f: 6 }, '2524': { g: '2524', f: 8 }, '118': { g: '118', f: 4 }, '31': { g: '31', f: 4, mul: 0.8 }, '31b': { g: '31b', f: 3, mul: 0.8 },
     '457': { g: '457', f: 6 }, '54': { g: '54', f: 3 }, '460': { g: '460', f: 6 }, '875': { g: '875', f: 12 },
     '98': { g: '98', f: 6 }, '949': { g: '949', f: 6 }, '100': { g: '100', f: 6 }, '854': { g: '854', f: 16, mul: 0.72 },
@@ -1715,6 +1715,14 @@ function _npcFrames(key) {
     let cat = NPC_SPR[key], arr = [];
     if (cat) for (let i = 0; i < cat.f; i++) { let im = new Image(); im.src = 'assets/npc/' + cat.g + '/idle_' + i + '.png'; arr.push(im); }
     _npcFrameCache[key] = arr;
+    return arr;
+}
+let _npcWeaponFrameCache = {};
+function _npcWeaponFrames(key) {   // 🔥 火焰/武器疊層幀(idle_w_N)：僅 NPC_SPR 有 w 的（如宙斯之熔岩高崙）·與本體同幀數同步
+    if (_npcWeaponFrameCache[key]) return _npcWeaponFrameCache[key];
+    let cat = NPC_SPR[key], arr = [];
+    if (cat && cat.w) for (let i = 0; i < cat.w; i++) { let im = new Image(); im.src = 'assets/npc/' + cat.g + '/idle_w_' + i + '.png'; arr.push(im); }
+    _npcWeaponFrameCache[key] = arr;
     return arr;
 }
 
@@ -1839,15 +1847,17 @@ function renderTownNPCMap(townId) {
         el.style.left = p.x + '%'; el.style.top = p.y + '%'; el.style.zIndex = Math.round(p.y * 10);
         el.innerHTML =
             '<div class="tn-label"><span class="tn-name">' + npc.n + '</span><span class="tn-title">' + npc.title + '</span></div>' +
-            '<img class="tn-shadow" src="assets/npc/' + cat.g + '/idle_s_0.png" alt="" onerror="this.remove()">' +   // 🌑 v3.3.5 真實影子 sprite(body gfx+1·共畫布疊本體對齊)；無影子 npc(老sprite影子烙進本體/告示)→404 remove→本體自帶影子照顯
-            '<img class="tn-body"' + (cat.tint ? (' style="filter:' + cat.tint + '"') : '') + ' src="assets/npc/' + cat.g + '/idle_0.png" alt="">';
+            '<img class="tn-shadow" src="assets/npc/' + cat.g + '/idle_s_0.png" alt="" onload="this.parentElement.classList.add(\'has-tn-shadow\')" onerror="this.remove()">' +   // 🌑 v3.3.5 真實影子 sprite(body gfx+1·共畫布疊本體對齊)；有影子→onload 標記父層隱藏後備橢圓；無影子(職業動畫/老 gfx/告示)→404 remove→改用 CSS 橢圓後備影子(v3.3.18)
+            '<img class="tn-body"' + (cat.tint ? (' style="filter:' + cat.tint + '"') : '') + ' src="assets/npc/' + cat.g + '/idle_0.png" alt="">' +
+            (cat.w ? '<img class="tn-weapon" src="assets/npc/' + cat.g + '/idle_w_0.png" alt="" onerror="this.remove()">' : '');   // 🔥 v3.3.18 火焰/武器疊層(screen 混合·宙斯之熔岩高崙的燃燒特效)
         if (npc._float === 'pride') el.onclick = () => openTownFloatWindow('傲慢之塔', '排名挑戰', renderPrideEntrance);
         else if (npc._float === 'rift') el.onclick = () => openTownFloatWindow('時空裂痕', '進入', renderRiftEntrance);
         else el.onclick = () => interactNPC(npc.id, townId);
         map.appendChild(el);
         let bodyImg = el.querySelector('.tn-body');
         bodyImg.addEventListener('load', _scheduleTownLabelResolve, { once: true });   // 🏷️ 圖片載入拿到真實高度後再排名牌
-        _townNpcSprites.push({ img: bodyImg, frames: _npcFrames(key), phase: (i * 3) % 8, last: -1 });
+        let wImg = cat.w ? el.querySelector('.tn-weapon') : null;   // 🔥 火焰疊層與本體同步推進
+        _townNpcSprites.push({ img: bodyImg, wimg: wImg, wframes: (cat.w ? _npcWeaponFrames(key) : null), frames: _npcFrames(key), phase: (i * 3) % 8, last: -1 });
     });
     // 🏷️ v3.2.92 名牌常駐開關：跟隨戰鬥日誌「狀態」鈕(_showMobStatus)·開→所有 NPC 名字常駐頭頂；關→僅 hover
     map.classList.toggle('show-labels', (typeof _showMobStatus === 'undefined') ? true : !!_showMobStatus);
@@ -1918,7 +1928,11 @@ function _townNpcAnimTick() {
     for (const s of _townNpcSprites) {
         if (!s.frames || !s.frames.length) continue;
         let fi = (Math.floor(t / 125) + s.phase) % s.frames.length;
-        if (fi !== s.last) { s.last = fi; let fr = s.frames[fi]; if (fr && fr.src) s.img.src = fr.src; }
+        if (fi !== s.last) {
+            s.last = fi;
+            let fr = s.frames[fi]; if (fr && fr.src) s.img.src = fr.src;
+            if (s.wimg && s.wframes && s.wframes.length) { let wf = s.wframes[fi % s.wframes.length]; if (wf && wf.src) s.wimg.src = wf.src; }   // 🔥 火焰疊層同幀
+        }
     }
 }
 setInterval(_townNpcAnimTick, 125);   // 8fps 站立循環
