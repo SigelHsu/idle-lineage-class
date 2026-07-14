@@ -1995,8 +1995,38 @@ function allyHpSkillPct(ally) { return (ally && ally._hpSkillPct != null) ? ally
 function allyCastMpPct(ally) { return (ally && ally._castMpPct != null) ? ally._castMpPct : 0; }   // 🆕 v2.6.27 施法MP門檻（MP% 高於此值才施放攻擊技·0=不限；玩家於傭兵技能設定調整）
 // 🔄 傭兵轉換技能(type:'convert')施放：比照玩家 castSkill convert 分支，改用 ally.curHp/ally.mp。魔力奪取(drain)需目標＋換身判定異常命中吸MP；心靈/魂體轉換直接扣HP換MP。
 function allyCastConvert(ally, sk) {
+    // 🙏 v3.4.38 施法動作＋SELF_FX（原本四個施法函式只有這支沒掛·三個轉換技能 心靈轉換/魂體轉換/魔力奪取 在 SELF_FX 皆有註冊）。
+    //    X 軸沿用 _partyMemberRect(ally)（.party-sprite 容器·水平置中）；Y 軸改以實際 pm-body 頂端為基準——
+    //    容器 rect 含影子層且各職業 sprite 高度不一，直接用會讓 overHead 特效忽高忽低。
+    let _playConvertVfx = () => {
+        if (typeof _allySpriteTrigger === 'function') _allySpriteTrigger(ally, 'skill', sk.n);
+        if (typeof playSelfFx !== 'function') return;
+        if (typeof _vfxMute === 'function' && _vfxMute()) return;   // ⚡ 補跑(state.ff)/關特效：先擋掉·否則下方 getBoundingClientRect 會在掛機補跑時逐次強制重排
+        try {
+            let anchor = (typeof _partyMemberRect === 'function') ? _partyMemberRect(ally) : null;
+            let st = (typeof _allySpriteStates !== 'undefined') ? _allySpriteStates[String(ally._slot)] : null;
+            let bd = st && st.imgs && st.imgs.bd;
+            let bodyRect = (bd && bd.isConnected) ? bd.getBoundingClientRect() : null;
+            // 尺寸基準與 playSelfFx 一致：#mob-list 高（怪物站立帶·恆定）→ 取不到才退 #battle-view 高
+            let ml = document.getElementById('mob-list');
+            let mobRect = ml && ml.getBoundingClientRect();
+            let bv = document.getElementById('battle-view');
+            let battleRect = bv && bv.getBoundingClientRect();
+            let refH = (mobRect && mobRect.height > 0) ? mobRect.height : ((battleRect && battleRect.height) || 0);
+            let cfg = (typeof SELF_FX !== 'undefined') ? SELF_FX[sk.n] : null;
+            let fxH = refH * ((cfg && cfg.h) || 0.5);
+            // playSelfFx 對 overHead 會再算 top = anchor.top - fxH×0.55；此處餵 bodyRect.top + fxH×0.35
+            // → 最終 top = bodyRect.top - fxH×0.20（特效有 20% 高度露出 pm-body 上緣）。
+            // ⚠️ bottom 必須一起帶：cfg.overHead 為假時 playSelfFx 走 pr.bottom - fxH，缺欄位會算出 NaN。
+            if (anchor && bodyRect && fxH > 0) {
+                anchor = { left: anchor.left, width: anchor.width, top: bodyRect.top + fxH * 0.35, bottom: bodyRect.bottom };
+            }
+            playSelfFx(sk.n, anchor);
+        } catch (e) {}
+    };
     if (sk.drain) {
         let t = getTarget(); if (!t || t.curHp <= 0) return;   // 魔力奪取：無目標不施放、不耗 HP
+        _playConvertVfx();   // 確認有效目標後才播（無目標時不空放動作/特效）
         ally.curHp = Math.max(1, (ally.curHp || 0) - (sk.hpCost || 0));
         let _sv = player; player = ally; let _hit = false;
         try { _hit = abnormalMagicHit(t); } finally { player = _sv; }
@@ -2004,6 +2034,7 @@ function allyCastConvert(ally, sk) {
         else logCombat(`<span class="text-emerald-300 font-bold">協力·${ally._allyName}</span> 的 ${sk.n} 未能命中。`, 'miss', 'mercenary');
         return;
     }
+    _playConvertVfx();   // 心靈轉換／魂體轉換：無目標需求→直接播
     ally.curHp = Math.max(1, (ally.curHp || 0) - (sk.hpCost || 0));
     ally.mp = Math.min(ally.mmp || 0, (ally.mp || 0) + (sk.mpGain || 0));
     logCombat(`<span class="text-emerald-300 font-bold">協力·${ally._allyName}</span> 施放 ${sk.n}，消耗 ${sk.hpCost} HP，恢復了 ${sk.mpGain} 點 MP。`, 'heal', 'mercenary');
