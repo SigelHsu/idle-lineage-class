@@ -1527,6 +1527,7 @@ function sanctuaryEnter(mapKey, costId) {
     player.lastBattleMap = mapKey;
     mapState.mobs = [null, null, null, null, null];
     mapState.spawnAt = [null, null, null, null, null];
+    mapState._sanctBossSpawned = false;   // 🌑 v3.4.18 重置「首次生成免費」旗標：入場費已付→首隻頭目免費，之後每次復活扣 1 入場道具(js/03 sanctBossRespawnCharge)
     mapState.targetIdx = -1;
     mapState.forceBoss = false;
     state._kbRespawnAt = null; state._kbVictory = false;

@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.4.17';
+const GAME_VERSION = 'v3.4.21';
 // ===== 💾 存檔壓縮（LZString compressToUTF16/decompressFromUTF16·MIT, Pieroxy）：localStorage 內部以 UTF-16 壓縮，省 ~89%，繞過 5MB 上限 =====
 //  ⚠️ 只壓 localStorage（存檔位/倉庫/共用桶/_bak）；匯出檔維持明文 JSON（可攜·importSave 用 JSON.parse 驗證）。_lzGet 相容舊明文存檔（無 'LZ1:' 前綴→原樣回傳）。
 var LZString = (function () {
@@ -954,8 +954,8 @@ const DB = {
         "blt_titan": { n: "泰坦皮帶", type: "acc", slot: "belt", ac: 0, weightCap: 500, req: "all", safe: 0, p: 92000, gachaWeight: 1, d: "傳說中泰坦束於腰間的巨帶，承載著撼動山岳之力。" },
         "blt_giant_ring": { n: "古代巨人戒指", type: "acc", slot: "belt", legend: true, ac: 2, str: 1, req: "all", safe: 0, p: 352000, gachaWeight: 1, d: "雖名為戒指，實為古代巨人腰間的一環，於常人已是一圈鐵帶（部位：腰帶）。" },
         // ===== 🌑 黑暗妖精聖地（依《黑暗妖精聖地.md》·v3.3.33）：任務道具／材料／裝備／真．冥皇套裝 =====
-        "item_dk_book":        { n: "死亡騎士之書", type: "etc", p: 0, c: "text-amber-300", noUse: true, noSell: true, gachaWeight: 0, d: "記載死亡騎士祕儀的古書。交給長老會議廳的 真．冥皇丹特斯，可選擇進入 黑暗妖精聖地 或 受詛咒的黑暗妖精聖地（每次進入消耗 1 本）。" },
-        "item_giltas_seal":    { n: "吉爾塔斯的封印", type: "etc", p: 0, c: "text-red-300", noUse: true, noSell: true, gachaWeight: 0, d: "封印著吉爾塔斯之力的印記。交給 真．冥皇丹特斯 後，會被傳送至 崩壞的長老會議廳（消耗 1 個）。" },
+        "item_dk_book":        { n: "死亡騎士之書", type: "etc", p: 0, c: "text-amber-300", noUse: true, noSell: true, gachaWeight: 0, d: "記載死亡騎士祕儀的古書。交給長老會議廳的 真．冥皇丹特斯，可選擇進入 黑暗妖精聖地 或 受詛咒的黑暗妖精聖地（每次進入消耗 1 本）。在受詛咒的黑暗妖精聖地擊敗吉爾塔斯後，牠每次復活會再消耗 1 本；身上沒有時將被逐出。" },
+        "item_giltas_seal":    { n: "吉爾塔斯的封印", type: "etc", p: 0, c: "text-red-300", noUse: true, noSell: true, gachaWeight: 0, d: "封印著吉爾塔斯之力的印記。交給 真．冥皇丹特斯 後，會被傳送至 崩壞的長老會議廳（消耗 1 個）。在廳中擊敗冥皇丹特斯後，牠每次復活會再消耗 1 個；身上沒有時將被逐出。" },
         "mat_ascetic_classic": { n: "修行者經典", type: "etc", p: 5000, gachaWeight: 0, d: "修行者傳承的典籍，鍛造 真．冥皇 系列防具的材料。" },
         "mat_summonorb_core":  { n: "召喚球之核", type: "etc", p: 10000, gachaWeight: 0, d: "凝聚召喚之力的核心。搭配 4 個召喚球碎片，可請亞提利歐合成 完整的召喚球 或 真．冥皇製作防具秘笈。" },
         "mat_summonorb_shard": { n: "召喚球碎片", type: "etc", p: 2000, gachaWeight: 0, d: "破碎的召喚球殘片，集齊四片可供亞提利歐合成。" },
@@ -2845,7 +2845,7 @@ const DB = {
         "rastabad_cave2": ["de_remnant_bow", "de_remnant_sword", "de_remnant_xbow", "de_remnant_mage", "de_remnant_2h"],
         "rastabad_cave3": ["de_remnant_bow", "de_remnant_sword", "de_remnant_xbow", "de_remnant_mage", "de_remnant_2h", "dark_spirit_caller"],
         "rastabad_gate": ["de_gate_xbow", "de_gate_apprentice", "de_gate_spear", "de_gate_patrol", "de_gate_soldier", "de_gate_general"],
-        "rastabad_beast": ["de_gate_general", "de_train_blacktiger", "de_train_tamer", "de_train_cursetamer", "de_train_hellhound", "de_train_soulknight", "de_train_hellslave", "de_train_summoner", "de_train_gatekeeper"],
+        "rastabad_beast": ["de_gate_general", "de_train_blacktiger", "de_train_tamer", "de_train_cursetamer", "de_train_hellhound", "de_train_soulknight", "de_train_summoner", "de_train_gatekeeper"],   // 🌑 v3.4.21 地獄奴隸(de_train_hellslave)移出：地獄奴隸改為只在黑暗妖精聖地(sanct_hellslave)出沒
         "king_baranka_room": ["de_king_baranka"],
         "law_king_room": ["de_king_laia"],
         "necro_king_room": ["de_king_heruby"],

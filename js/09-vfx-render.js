@@ -546,7 +546,18 @@ function _vfxNumber(x, y, dmg, ele, big) {
     el.style.left = x + 'px'; el.style.top = y + 'px';
     el.style.color = big === 'crit' ? '#ff3b30' : (big === 'heavy' ? '#ffd54f' : (_VFX_ELE_COLOR[ele] || '#f1f5f9'));   // 爆擊大紅／重擊大金／其餘依屬性
     el.style.fontSize = (big ? 32 : 20) + 'px';   // ⚔️ 清晰 RPG 飄字：保留強弱差異，避免過大重疊或厚描邊糊字
-    el.textContent = dmg >= 10000 ? (dmg / 1000).toFixed(1) + 'k' : ('' + dmg);
+    const dmgText = dmg >= 10000 ? (dmg / 1000).toFixed(1) + 'k' : ('' + dmg);
+    if (big === 'crit' || big === 'heavy') {
+        const tag = document.createElement('span');
+        tag.className = 'vfx-dmg-tag';
+        tag.textContent = big === 'crit' ? '爆擊' : '重擊';
+        const value = document.createElement('span');
+        value.className = 'vfx-dmg-value';
+        value.textContent = dmgText;
+        el.append(tag, value);
+    } else {
+        el.textContent = dmgText;
+    }
     _vfxLayer().appendChild(el);
     el.addEventListener('animationend', () => el.remove(), { once: true });
     setTimeout(() => { if (el.parentNode) el.remove(); }, 1400);

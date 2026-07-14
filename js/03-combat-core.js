@@ -311,7 +311,14 @@ function tick() {
                     delay = Math.max(1, delay);
                 }
                 if(mapState.spawnAt[i] == null) mapState.spawnAt[i] = nowT + delay; // 空格剛出現：排程 delay 後（一般／純BOSS房／軍王之室皆 5 秒）
-                if(nowT >= mapState.spawnAt[i]) { spawnMob(i); mapState.spawnAt[i] = null; }
+                if(nowT >= mapState.spawnAt[i]) {
+                    // 🌑 v3.4.18 聖地/崩壞廳 BOSS 復活收費：首次生成免費（入場費已付），之後每次復活扣 1 入場道具；沒道具→傳送出去、停止本輪出怪
+                    if(isPureBossMap && i === 1 && typeof SANCT_RESPAWN_COST !== 'undefined' && SANCT_RESPAWN_COST[mapState.current]) {
+                        if(mapState._sanctBossSpawned) { if(!sanctBossRespawnCharge()) { mapState.spawnAt[i] = null; break; } }   // 復活：扣道具/無道具傳送出去
+                        else mapState._sanctBossSpawned = true;                                                                   // 首次生成免費
+                    }
+                    spawnMob(i); mapState.spawnAt[i] = null;
+                }
             }
         }
     }
@@ -532,6 +539,27 @@ const KING_ROOMS = {
     tikal_altar:        { dual: true, bosses: ['tikal_boss_m', 'tikal_boss_f'], key: 'item_tikal_altar_key', name: '提卡爾 庫庫爾坎祭壇' }
 };
 const PURE_BOSS_MAPS = ['antaras_lair', 'fafurion_lair', 'valakas_lair', 'king_baranka_room', 'law_king_room', 'necro_king_room', 'assassin_king_room', 'thebes_temple', 'tikal_altar', 'cursed_dark_elf_sanctuary', 'collapsed_elder_council_hall'];   // 🌑 v3.3.33 受詛咒的黑暗妖精聖地(吉爾塔斯)／崩壞的長老會議廳(冥皇丹特斯)＝龍窟式單BOSS房（只生中央·死後5秒重生·由長老會議廳NPC進入）
+// 🌑 v3.4.18 聖地/崩壞廳 BOSS「復活收費」：擊敗頭目後每次復活扣 1 入場道具（首次生成免費·入場費已付於 sanctuaryEnter）；沒道具→傳送出去。map→入場道具 id。
+const SANCT_RESPAWN_COST = { cursed_dark_elf_sanctuary: 'item_dk_book', collapsed_elder_council_hall: 'item_giltas_seal' };
+//   回傳 true=已扣道具可生成、false=沒道具已強制傳送出去(呼叫端勿再 spawn)。首次生成免費由呼叫端 mapState._sanctBossSpawned 旗標把關(sanctuaryEnter 進場時重置為 false·此旗標隨 mapState 入存檔→save/load 不可刷)。
+function sanctBossRespawnCharge() {
+    let cost = SANCT_RESPAWN_COST[mapState.current];
+    if(!cost) return true;
+    let d0 = DB.items[cost];
+    let bossName = (mapState.current === 'collapsed_elder_council_hall') ? '冥皇丹特斯' : '吉爾塔斯';
+    let ci = player.inv.findIndex(x => x && x.id === cost && (x.cnt || 1) >= 1);
+    if(ci < 0) {   // 沒道具→強制傳送出去（回上一個安全區＝長老會議廳入口·force 繞過受控限制）
+        logSys(`<span class="text-amber-300">你身上已沒有 ${d0 ? d0.n : cost} 可再獻祭——${bossName} 的封印之力將你逐出了此地。</span>`);
+        if(typeof setMapSelectors === 'function' && typeof getLastTown === 'function') setMapSelectors(getLastTown());
+        if(typeof changeMap === 'function') changeMap(true);
+        return false;
+    }
+    let it = player.inv[ci];
+    if((it.cnt || 1) > 1) it.cnt -= 1; else player.inv.splice(ci, 1);
+    logSys(`<span class="text-cyan-300">你獻祭了 1 個 ${d0 ? d0.n : cost}，${bossName} 再度降臨……</span>`);
+    try { renderTabs(true); saveGame(); } catch(e){}
+    return true;
+}
 const BOSS_BIG_MAPS = ['antaras_lair', 'fafurion_lair', 'valakas_lair'];   // 👑 方案B放大版面只套用這3個龍窟(不含底比斯祭壇等其餘純BOSS房)
 
 // 🆕 後排雙格：一般狩獵地圖在原本三格(前排)之外，再追加兩格「後排」小怪→場上最多同時 5 隻。
