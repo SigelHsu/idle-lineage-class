@@ -2221,7 +2221,7 @@ function alliesTick() {
     });
 }
 // 🤝 Phase 3：傭兵自動治癒——若已設定治癒魔法且隊伍(玩家＋自己＋其他非倒地傭兵)中有人 HP% 低於該傭兵門檻，對最低者施放（消耗 MP）。回傳是否施放（true→佔用本回合行動）。
-// 治癒量比照玩家 castSkillInner：(XdY healDice + healBase)×(1+3×magicDmg/16)，或 valBase+valDice+magicDmg；🆕 v2.6.17 水之元氣改全隊生效→套 waterVitalHeal(讀隊長 buff·全隊共用 7 秒冷卻)。HoT/淨化(autoBuff)不在此；🩸 v2.6.69 吸血(healSlot)改在本函式開頭支援（走 allyCastMagic·只看自身HP門檻）。
+// 治癒量比照玩家 castSkillInner：(XdY healDice + healBase)×(1+3×magicDmg/32)，或 valBase+valDice+magicDmg；🆕 v2.6.17 水之元氣改全隊生效→套 waterVitalHeal(讀隊長 buff·全隊共用 7 秒冷卻)。HoT/淨化(autoBuff)不在此；🩸 v2.6.69 吸血(healSlot)改在本函式開頭支援（走 allyCastMagic·只看自身HP門檻）。
 function allyTryHeal(ally) {
     let sid = ally._healSkill; if (!sid) return false;
     let sk = DB.skills[sid]; if (!sk) return false;
@@ -2253,7 +2253,7 @@ function allyTryHeal(ally) {
     if (!lowest) return false;   // 無人需要治癒
     ally.mp -= cost; allyManaMasteryRefund(ally, cost);
     let d = ally.d || {};
-    let _coef = 1 + (3 * (d.magicDmg || 0) / 16);
+    let _coef = 1 + (3 * (d.magicDmg || 0) / 32);
     let heal = sk.healDice
         ? Math.max(1, Math.floor((rollDice(sk.healDice[0], sk.healDice[1]) + (sk.healBase || 0)) * _coef))
         : Math.max(1, (sk.valBase || 0) + roll(sk.valDice[0], sk.valDice[1]) + (d.magicDmg || 0));

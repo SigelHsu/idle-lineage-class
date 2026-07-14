@@ -456,7 +456,7 @@ function castSkillInner(skId) {
         }
         // 一般瞬間治癒
         player.mp -= cost;
-        let _spCoefHeal = (1 + (3 * player.d.magicDmg / 16));   // 治癒：只套魔法傷害部分，不含階級係數
+        let _spCoefHeal = (1 + (3 * player.d.magicDmg / 32));   // 治癒：只套魔法傷害部分，不含階級係數
         let heal = sk.healDice
             ? Math.max(1, Math.floor((rollDice(sk.healDice[0], sk.healDice[1]) + (sk.healBase || 0)) * _spCoefHeal))   // (XdY + healBase) × 魔法傷害公式
             : Math.max(1, (sk.valBase || 0) + roll(sk.valDice[0], sk.valDice[1]) + player.d.magicDmg);
@@ -826,7 +826,7 @@ function applyTeamHot(skId, sk, dStats, caster) {
     let mDmg = (dStats && dStats.magicDmg) || 0;
     let _hm = 1;   // 🏺 v3.1.80 治癒者的恢復魔棒：施放者（玩家或傭兵）持有 hotHealMult 武器 → 此 HoT 每跳回復 ×N（施放時快照·中途換武器不影響已存在的 HoT）
     try { let _cw = caster && caster.eq && caster.eq.wpn && DB.items[caster.eq.wpn.id]; if (_cw && _cw.hotHealMult) _hm = _cw.hotHealMult; } catch (e) {}
-    player.hots[skId] = { skId: skId, healDice: sk.healDice, healBase: sk.healBase, valDice: sk.valDice, magicDmg: mDmg, spCoef: 1 + (3 * mDmg / 16), interval: sk.hot.interval, ticksLeft: sk.hot.ticks, cd: sk.hot.interval, skName: sk.n, msg: sk.msg, healMult: _hm };
+    player.hots[skId] = { skId: skId, healDice: sk.healDice, healBase: sk.healBase, valDice: sk.valDice, magicDmg: mDmg, spCoef: 1 + (3 * mDmg / 32), interval: sk.hot.interval, ticksLeft: sk.hot.ticks, cd: sk.hot.interval, skName: sk.n, msg: sk.msg, healMult: _hm };
 }
 function autoActions() {
     let hpPct = (player.hp / player.mhp) * 100;

@@ -31,7 +31,7 @@
     <title>放置天堂 - 吉爾塔斯降臨</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">   <!-- 🖼️ 瀏覽器分頁圖示(favicon)：把你的圖放到 assets/favicon.png 即生效；可改 href 路徑或副檔名(.ico/.svg) -->
 
-    <link rel="stylesheet" href="css/style.css?v=v3.4.24-abilityscale">
+    <link rel="stylesheet" href="css/style.css?v=v3.4.31-town-header">
     <link rel="stylesheet" href="css/floating-ui.css?v=20260714-weight-colors">
     <link rel="stylesheet" href="css/tailwind-built.css"><!-- 🔧 預編譯 Tailwind（取代執行期 JIT tailwind.js）：只含實際用到的 class，省 407KB runtime + 移除持續掃描 DOM 的成本。置於 style.css 之後以保留原 cascade（utility 平手時勝過自訂 class，與舊 JIT 注入順序一致） -->
 </head>
@@ -263,12 +263,12 @@
                         </div>
 
                     <div id="town-interaction-container" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-4 flex-1 mt-2 hidden flex-col min-h-0">
-                        <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-3 shrink-0">
-                            <div class="flex items-end gap-3">
-                                <h3 class="text-2xl font-bold text-yellow-400" id="interaction-npc-name">NPC名稱</h3>
-                                <span class="text-slate-400 text-sm mb-1" id="interaction-npc-title">[職業]</span>
+                        <div id="town-interaction-header" class="flex justify-between items-center mb-4 border-b border-slate-700 pb-3 shrink-0">
+                            <div id="town-interaction-heading" class="flex items-center">
+                                <h3 class="font-bold text-yellow-400" id="interaction-npc-name">NPC名稱</h3>
+                                <span class="text-slate-400" id="interaction-npc-title">[職業]</span>
                             </div>
-                            <button class="btn px-4 py-2 bg-slate-700 hover:bg-slate-600 text-base font-bold" onclick="closeNpcInteraction()">返回村莊</button>
+                            <button id="town-interaction-close" class="btn bg-slate-700 hover:bg-slate-600 font-bold" onclick="closeNpcInteraction()">關閉</button>
                         </div>
                         <div id="interaction-content" class="flex-1 overflow-y-auto pe-2">
                             </div>
@@ -360,7 +360,7 @@
                             <div><span>魔法命中</span><strong id="dt-mhit-mag">0</strong></div>
                             <div><span>額外魔法點數</span><strong id="dt-sp">0</strong></div>
                             <div><span>魔法爆擊率</span><strong id="dt-mcrit">0%</strong></div>
-                            <div><span>魔法爆擊傷害</span><strong id="dt-mgcritdmg">0%</strong></div>
+                            <div class="ability-magic-crit-dmg"><span>魔法爆擊傷害</span><strong id="dt-mgcritdmg">0%</strong></div>
                             <div><span>MP恢復量</span><strong id="dt-mpr">0</strong></div>
                             <div><span>MP消耗減免</span><strong id="dt-mpreduce">0%</strong></div>
                             <div><span>擊殺回魔</span><strong id="dt-mpkill">0</strong></div>
@@ -439,7 +439,7 @@
                         <label id="ui-elfcookie-row" class="cursor-pointer flex items-center gap-2"><input type="checkbox" id="set-elfcookie" class="w-4 h-4"> <span class="text-yellow-200">精靈餅乾</span></label>
                         <label class="cursor-pointer flex items-center gap-2"><input type="checkbox" id="set-poly" class="w-4 h-4"> <span class="text-gray-300">變形卷軸</span></label>
                         <label class="cursor-pointer flex items-center gap-2"><input type="checkbox" id="set-magicbarrier" class="w-4 h-4"> <span class="text-cyan-300">魔法屏障卷軸</span></label>
-                        <label class="cursor-pointer flex items-center gap-2"><input type="checkbox" id="set-teleport" class="w-4 h-4"> <span class="text-sky-300">瞬移卷軸(遇BOSS)</span></label>
+                        <label class="cursor-pointer flex items-center gap-2"><input type="checkbox" id="set-teleport" class="w-4 h-4"> <span class="text-sky-300">迴避頭目(瞬移卷軸)</span></label>
                         <label class="col-span-2 cursor-pointer flex items-center gap-2 border-t border-slate-700 pt-2 mt-1"><input type="checkbox" id="set-auto-buy-arrow" class="w-4 h-4" checked> <span class="text-orange-300">弓箭耗盡時自動購買 1000 銀箭</span></label>
 						<div id="auto-buff-skills" class="col-span-2 grid grid-cols-2 gap-1 mt-1 border-t border-slate-600 pt-2"></div>
                     </div>
@@ -544,20 +544,20 @@
     })();
     </script>
 
-    <script src="js/00-data.js?v=v3.4.26-elder-hit"></script>
-<script src="js/01-drops-config.js?v=v3.4.16-weight-colors"></script>
+    <script src="js/00-data.js?v=v3.4.29-petmastery2"></script>
+<script src="js/01-drops-config.js?v=v3.4.29-petmastery2"></script>
 <script src="js/02-stats-recompute.js?v=20260714-originalmagic"></script>
-    <script src="js/03-combat-core.js?v=20260714-magic-tier10"></script>
-    <script src="js/04-combat-attack.js?v=20260714-elder-hit"></script>
+    <script src="js/03-combat-core.js?v=v3.4.27-respawnmult"></script>
+    <script src="js/04-combat-attack.js?v=20260714-heal32"></script>
 <script src="js/05-kill-progression.js?v=v3.4.16-giltasleave"></script>
-    <script src="js/06-status-allies.js?v=20260714-elder-hit"></script>
-    <script src="js/07-skills-cast.js?v=20260714-magic-tier10"></script>
+    <script src="js/06-status-allies.js?v=20260714-heal32"></script>
+    <script src="js/07-skills-cast.js?v=20260714-heal32"></script>
 <script src="js/08-items-equip.js?v=20260714-originalmagic"></script>
 <script src="js/09-vfx-render.js?v=v3.4.20-dmglabels"></script>
 <script src="js/10-ui-tabs.js?v=v3.4.16-weight-colors"></script>
 <script src="js/11-world-map.js?v=v3.4.18-bossrespawncost"></script>
-<script src="js/12-npc-quests.js?v=v3.2.70-whtombs"></script>
-<script src="js/13-shop-save.js?v=v3.4.24-mercprefs"></script>
+<script src="js/12-npc-quests.js?v=v3.4.30-pledge-portrait"></script>
+<script src="js/13-shop-save.js?v=v3.4.27-pet-owner-lock"></script>
 <script src="js/14-craft-pandora.js?v=v3.4.12-soulearrings"></script>
 <script src="js/15-cards.js?v=v3.2.64-8dircodex"></script>
 <script src="js/16-equip-book.js?v=v3.2.37-petgear"></script>
@@ -567,6 +567,6 @@
 <script src="js/20-warehouse-window.js?v=20260702a"></script>
 <script src="js/21-relic-book.js?v=v3.1.7"></script>
     <script src="js/23-summons.js?v=v3.4.21-summon-hpdps"></script>
-    <script src="js/22-pets.js?v=v3.4.22-pet-balance"></script>
+    <script src="js/22-pets.js?v=v3.4.29-petmastery2"></script>
 </body>
 </html>

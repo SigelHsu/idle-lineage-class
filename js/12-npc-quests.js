@@ -515,9 +515,9 @@ function renderPledgeNPC(div, faction) {
             </button>`;
         }).join('');
         div.innerHTML = `
-        <div class="flex flex-row gap-4 items-start p-3">
-            <div class="w-[200px] h-[280px] border-4 border-amber-800 p-2 bg-slate-950/40 rounded-lg shadow-[0_0_30px_rgba(0,0,0,0.9)] outline outline-1 outline-offset-4 outline-amber-700/40 flex items-center justify-center shrink-0 overflow-hidden">
-                <img src="${cfg.img}" alt="${cfg.name}" onerror="this.style.display='none';" class="w-full h-full object-cover object-top rounded pointer-events-none drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)]">
+        <div class="pledge-leader-layout flex flex-row gap-4 items-start p-3">
+            <div class="pledge-leader-portrait">
+                <img src="${cfg.img}" alt="${cfg.name}" onerror="this.style.display='none';" class="pledge-leader-portrait-img">
             </div>
             <div class="flex-1 min-w-0 flex flex-col gap-2.5">
                 <div class="text-slate-200 text-base leading-relaxed">${cfg.name}：讓我們一起為血盟努力，並肩作戰吧！</div>
@@ -547,9 +547,9 @@ function renderPledgeNPC(div, faction) {
         btn = `<button class="btn w-full bg-blue-800 hover:bg-blue-700 border-blue-500 py-3 text-lg font-bold mt-4" onclick="confirmJoinPledge('${faction}')">加入血盟</button>`;
     }
     div.innerHTML = `
-        <div class="flex flex-row gap-5 items-start p-4">
-            <div class="w-[200px] h-[280px] border-4 border-amber-800 p-2 bg-slate-950/40 rounded-lg shadow-[0_0_30px_rgba(0,0,0,0.9)] outline outline-1 outline-offset-4 outline-amber-700/40 flex items-center justify-center shrink-0 overflow-hidden">
-                <img src="${cfg.img}" alt="${cfg.name}" onerror="this.style.display='none';" class="w-full h-full object-cover object-top rounded pointer-events-none drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)]">
+        <div class="pledge-leader-layout flex flex-row gap-5 items-start p-4">
+            <div class="pledge-leader-portrait">
+                <img src="${cfg.img}" alt="${cfg.name}" onerror="this.style.display='none';" class="pledge-leader-portrait-img">
             </div>
             <div class="flex-1 min-w-0">
                 <div class="text-slate-200 text-lg leading-relaxed">${dialogue}</div>

@@ -90,6 +90,7 @@
 .ability-detail-column > div{display:grid;grid-template-columns:74% 26%;align-items:center;min-height:0;white-space:nowrap}
 .ability-detail-column > .ability-detail-spacer{display:block;pointer-events:none}
 .ability-detail-column span{padding-left:5%;overflow:hidden;text-overflow:clip}
+.ability-detail-column .ability-magic-crit-dmg span{position:relative;top:-1px}
 .ability-detail-column strong{display:flex;align-items:center;justify-content:flex-end;height:100%;padding-right:8%;box-sizing:border-box;color:#ded9cc;font:600 2.72cqw/1 Arial,sans-serif;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;letter-spacing:0}
 .ability-res-fire span{color:#e77d76}
 .ability-res-water span{color:#79a9e8}
@@ -167,6 +168,48 @@
         /* 🔤 表單控制項（下拉選單/輸入框/按鈕）強制繼承全站字型——native <select> 的選項清單預設不繼承，
            會挑到不同的中文後備字，導致「展開的選項」字體與「關閉的值/全站文字」不一致。釘住同一套字型修正之。 */
         select, option, optgroup, input, textarea, button { font-family: inherit; }
+        /* 原生下拉選單備援：即使未啟用自訂選單，也維持遊戲的深色介面。 */
+        select { color-scheme: dark; }
+        select option, select optgroup {
+            background-color: #111827;
+            color: #dbeafe;
+        }
+        select option:checked {
+            background-color: #1d4ed8;
+            color: #ffffff;
+        }
+        /* 血盟盟主頭像：沿用左上角色狀態框約 340:250 的橫向比例，依詩蒂／特羅斯皆從人物上方裁切。 */
+        .pledge-leader-portrait {
+            width: 240px;
+            aspect-ratio: 340 / 250;
+            box-sizing: border-box;
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            padding: 8px;
+            border: 4px solid #92400e;
+            border-radius: 8px;
+            outline: 1px solid rgba(180, 83, 9, 0.4);
+            outline-offset: 4px;
+            background: rgba(2, 6, 23, 0.4);
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.9);
+        }
+        .pledge-leader-portrait-img {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+            object-position: center top;
+            border-radius: 4px;
+            pointer-events: none;
+            filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.8));
+        }
+        @media (max-width: 600px) {
+            .pledge-leader-layout { flex-direction: column !important; }
+            .pledge-leader-portrait { width: min(100%, 340px); align-self: center; }
+        }
         /* 🖥️ 打包版自訂下拉彈出層（.cdd-pop·見 js/11 openCustomSelectPopup）：Electron 原生 <select> 的彈出選單間距過擠且 padding/行高不可調，
            故僅打包版(html.pkg-build)攔截下拉、改用此自訂彈出層→間距完全可控、與遊戲深色主題一致。網頁版 <html> 無 .pkg-build → 維持原生選單、完全不受影響。 */
         .cdd-pop { position: fixed; z-index: 9999; background: #1e293b; border: 1px solid #64748b; border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,0.7); padding: 5px; max-height: 60vh; overflow-y: auto; }
@@ -2434,6 +2477,41 @@ button.classic-skill-cell { cursor:pointer; }
     display: flex; flex-direction: column;
     background: #111925fc; border: 3px solid #8b6a2f; border-radius: 13px;
     box-shadow: 0 22px 48px rgba(0,0,0,.85);
+}
+/* 村莊 NPC 浮動視窗表頭：限制左右內容尺寸，長名稱不再把關閉鈕推出框外。 */
+#town-interaction-header {
+    min-width: 0;
+    gap: 12px;
+    padding: 10px 12px !important;
+    margin-bottom: 10px !important;
+}
+#town-interaction-heading {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 8px;
+    overflow: hidden;
+}
+#interaction-npc-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 20px !important;
+    line-height: 1.25 !important;
+}
+#interaction-npc-title {
+    flex: 0 0 auto;
+    margin: 0 !important;
+    white-space: nowrap;
+    font-size: 12px !important;
+    line-height: 1.25 !important;
+}
+#town-interaction-close {
+    flex: 0 0 auto;
+    min-width: 64px;
+    padding: 6px 12px !important;
+    font-size: 14px !important;
+    line-height: 1.25 !important;
 }
 
 /* ===== Mobile floating-window bounds (desktop remains untouched) ===== */
