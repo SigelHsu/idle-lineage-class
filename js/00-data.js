@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.4.32';
+const GAME_VERSION = 'v3.4.34';
 // ===== 💾 存檔壓縮（LZString compressToUTF16/decompressFromUTF16·MIT, Pieroxy）：localStorage 內部以 UTF-16 壓縮，省 ~89%，繞過 5MB 上限 =====
 //  ⚠️ 只壓 localStorage（存檔位/倉庫/共用桶/_bak）；匯出檔維持明文 JSON（可攜·importSave 用 JSON.parse 驗證）。_lzGet 相容舊明文存檔（無 'LZ1:' 前綴→原樣回傳）。
 var LZString = (function () {
@@ -449,6 +449,7 @@ const DB = {
         "wpn_windblade_dagger":{ n: "風刃短劍", type: "wpn", legend: true, dmgS: 23, dmgL: 16, hit: 10, dmgBonus: 10, spd: 0.6, req: "knight,elf,mage,royal,dark", safe: 0, p: 500000, gachaWeight: 0, ignHardSkin: true, mhp: 100, dex: 2, vampPct: 0.1, d: "風之精靈寄宿的短劍，揮斬之間清風奪命。" },
         "wpn_redshadow_dual":  { n: "紅影雙刀", type: "wpn", w2h: true, legend: true, dmgS: 27, dmgL: 18, hit: 10, dmgBonus: 18, spd: 0.8, req: "dark", safe: 0, p: 500000, gachaWeight: 0, eff: "combo", comboRate: 35, ignHardSkin: true, dex: 2, wis: 2, procStatusSkill: { skId: "sk_slow", rate: 10 }, d: "殷紅殘影交織的雙刀，刃過之處敵人遲滯難動。" },
         "wpn_beastking_claw":  { n: "獸王鋼爪", type: "wpn", w2h: true, legend: true, dmgS: 25, dmgL: 20, hit: 15, dmgBonus: 10, spd: 0.9, req: "dark", safe: 0, p: 500000, gachaWeight: 0, eff: "combo", comboRate: 33, ignHardSkin: true, str: 2, dex: 2, d: "獸王之力灌注的鋼爪，撕咬如百獸之王臨陣。" },
+        "wpn_rond_dual":       { n: "倫得雙刀", type: "wpn", w2h: true, dmgS: 18, dmgL: 8, hit: 7, dmgBonus: 2, spd: 0.8, req: "dark", safe: 6, p: 56000, gachaWeight: 5, eff: "combo", comboRate: 33, ignHardSkin: true, procSkill: "sk_revenge_spike", procRateBase: 5, procRatePerEn: 0, d: "倫得一族代代相傳的雙刃，刃身封著大地的怨念，斬擊時激起復仇的尖石。" },   // 🗡️ 雙擊33/貫穿/5% 復仇尖石（WEAPON_TAGS 雙刀 於 js/10·重量與掉落於 js/01）
         "wpn_holycrystal_wand":{ n: "聖晶魔杖", type: "wpn", w2h: true, legend: true, dmgS: 13, dmgL: 15, hit: 8, dmgBonus: 0, spd: 1.0, req: "mage,illusion", safe: 0, p: 500000, gachaWeight: 0, eff: "magicburst", ignHardSkin: true, int: 2, mdmg: 8, mmp: 50, procSkill: "sk_holy_lightning", procRateBase: 10, procRatePerEn: 1, d: "聖潔水晶鑲嵌的魔杖，杖端雷光蓄勢待發。" },
         "mat_rasta_codex":     { n: "拉斯塔巴德製作武器秘笈", type: "etc", p: 100, noUse: true, gachaWeight: 0, c: "text-amber-300", d: "集封印的歷史書八頁殘篇而成的武器鍛造秘笈。可羅蘭斯製作五件傳說武器的核心材料。" },
         "hlm_elf": { n: "精靈皮盔", type: "arm", slot: "helm", ac: 1, req: "elf,mage", safe: 6, p: 120, gachaWeight: 100 },
@@ -2562,6 +2563,7 @@ const DB = {
         "sk_holy_light": { n: "聖潔之光", type: "heal", tier: 5, reqM: 20, reqE: 40, mp: 10, msg: "神聖光芒驅散了詛咒。" },
         "sk_ice_spike": { n: "冰錐", type: "atk", tier: 5, reqM: 20, reqE: 40, mp: 21, dmgType: "magic", ele: "water", dmgDice: [5, 6], dmgBase: 40 },
         "sk_demon_kiss": { n: "惡魔之吻", type: "atk", tier: 3, mp: 0, dmgType: "magic", ele: "earth", dmgDice: [3, 20], procOnly: true },   // 🏛️ 底比斯歐西里斯武器附魔施放（procSkill·不需學習/不耗MP·受魔法傷害公式影響）；procOnly：純武器proc、不顯示於技能列表/下拉
+        "sk_revenge_spike": { n: "復仇尖石", type: "atk", tier: 5, mp: 0, dmgType: "magic", ele: "earth", dmgDice: [5, 3], dmgBase: 50, procOnly: true },   // 🗡️ 倫得雙刀附魔施放（procSkill·不需學習/不耗MP·受魔法傷害公式影響）；procOnly：純武器proc、不顯示於技能列表/下拉
         "sk_mana_drain": { n: "魔力奪取", type: "convert", tier: 5, reqM: 20, reqE: 40, hpCost: 50, drain: true },   // 🔧 改為轉換技能（法師/妖精）：消耗HP、需對怪物施展且以異常魔法命中判定，命中吸取 MP=1D(怪物等級/2)；其餘機制比照魂體轉換
         "sk_dark_shadow": { n: "黑闇之影", type: "atk", tier: 5, reqM: 20, reqE: 40, mp: 25, dmgType: "magic", status: { kind: "blind", pbase: 150, hit: 5, dur: 20 } },
 

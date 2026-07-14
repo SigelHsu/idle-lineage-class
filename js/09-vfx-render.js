@@ -48,6 +48,7 @@ const SPELL_FX = {
     '呼喚盟友': { dir:'呼喚盟友', prefix:'2281-0', n:7, fps:14, blend:'screen', h:1, ax:0.50, ay:0.55 },
     '地獄之牙': { dir:'地獄之牙', prefix:'1801-0', n:9, fps:14, blend:'screen', h:0.7, ax:0.50, ay:0.55 },
     '地裂術': { dir:'地裂術', prefix:'129-1', n:10, fps:14, w:0.85, ax:0.50, ay:0.82, targetVc:0.92 },
+    '復仇尖石': { dir:'地裂術', prefix:'129-1', n:10, fps:14, w:0.85, ax:0.50, ay:0.82, targetVc:0.92 },   // 🗡️ v3.4.34 倫得雙刀 5% proc（sk_revenge_spike）：沿用地裂術素材（同 dir·不需新增圖檔）
     '地面障礙': { dir:'地面障礙', prefix:'2250-0', n:13, fps:14, blend:'screen', w:0.9, ax:0.50, ay:0.82, targetVc:0.9 },
     '壞物術': { dir:'壞物術', prefix:'172-0', n:15, fps:14, blend:'screen', h:1, ax:0.50, ay:0.55 },
     '寒冰氣息': { dir:'寒冰氣息', prefix:'1804-0', n:21, fps:16, blend:'screen', h:1.2, ax:0.50, ay:0.55 },

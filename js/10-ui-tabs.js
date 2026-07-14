@@ -628,6 +628,7 @@ const WEAPON_TAGS = {
     wpn_dk_flameblade:['單手劍'], wpn_kurt_sword:['單手劍'],   // 🔧 傳說單手劍（反擊）：死亡騎士的烈炎之劍／克特之劍
     wpn_assassin_mark:['雙刀'],   // 🔧 暗殺軍王之痕（雙刀・連擊）
     wpn_dual_bronze:['雙刀'], wpn_dual_steel:['雙刀'], wpn_dual_silver:['雙刀'], wpn_dual_gloom:['雙刀'], wpn_dual_dark:['雙刀'], wpn_dual_shadow:['雙刀'], wpn_dual_damascus:['雙刀'], wpn_dual_abyss:['雙刀'], wpn_thebes_dual:['雙刀'],
+    wpn_rond_dual:['雙刀'],   // 🗡️ v3.4.33 倫得雙刀（雙刀・雙擊33/貫穿/5% 復仇尖石）
     wpn_manadagger:['匕首'], wpn_crystal_dagger:['匕首'],
     wpn_chaos_thorn:['匕首'], wpn_demonking_dual:['雙刀'], wpn_demonking_2hsword:['雙手劍'],   // 🌑 暗影神殿：混沌之刺(匕首/出血)、惡魔王雙刀(雙刀/連擊)、惡魔王雙手劍(雙手劍/切割)
     // 🔧 拉斯塔巴德掉落武器：匕首(出血)/單手劍(反擊)/雙刀(連擊)
