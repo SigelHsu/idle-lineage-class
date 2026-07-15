@@ -643,6 +643,7 @@ const WEAPON_TAGS = {
     wpn_dual_destroy:['雙刀'], wpn_claw_destroy:['鋼爪'],   // 💥 破壞雙刀／破壞鋼爪（猛爆劇毒）
     wpn_old_sword:['單手劍','武士刀'],   // 🏛️ 古老的劍：反擊(單手劍)＋居合(武士刀)
     wpn_cursed_emperor_blade:['單手劍','武士刀'],   // 🌑 v3.4.0 受詛咒的真．冥皇執行劍：反擊(單手劍)＋居合(武士刀)·貫穿=ignHardSkin·裝備變身死亡騎士(js/02)
+    wpn_uncursed_emperor_blade:['單手劍','武士刀'],   // 🌑 v3.4.67 解除詛咒的真死亡騎士．冥皇執行劍：反擊(單手劍)＋居合(武士刀)·貫穿=ignHardSkin·裝備變身真死亡騎士 冥皇丹特斯(js/02)·對地/風敵×1.4·大地崩裂 proc
     wpn_ancient_darkelf_sword:['單手劍'],   // 🏛️ 古代黑暗妖精之劍：反擊(單手劍)
     wpn_demon_sword_hidden:['單手劍'],   // 👹 隱藏的魔族之劍：反擊(單手劍)
     wpn_demon_claw_hidden:['鋼爪'],   // 👹 隱藏的魔族鋼爪：鋼爪標籤(雙擊33預設＋貫穿＋黑暗妖精可裝)
@@ -768,7 +769,7 @@ function relicPurposeLabels(d) {
     if (d.fullHpMpHalf) out.push('滿血施法（自身滿血時魔力消耗減半）');
     if (d.lowHpPotionX2) out.push('瀕危急救（低HP時藥水恢復量×2）');
     if (d.lowMpRegenBonus) out.push(`魔力枯竭回復（MP低於15%時，MP自然恢復+${d.lowMpRegenBonus}）`);
-    if (d.hotHealMult) out.push(`持續治癒強化（持續回復量×${d.hotHealMult}）`);
+    if (d.groupHealMult) out.push(`團體治癒強化（體力回復術、生命的祝福恢復量×${d.groupHealMult}）`);
     if (d.onDmgHeal) out.push(`受擊自癒（每${d.onDmgHealCd || 5}秒自動施放${skillName(d.onDmgHeal)}）`);
     if (d.poisonHealMult) out.push(`毒素轉生（受到毒性持續傷害時，改為恢復其${pctText(d.poisonHealMult)}的HP）`);
     if (d.poisonMult) out.push(`劇毒增幅（附加劇毒傷害×${d.poisonMult}）`);
@@ -977,6 +978,7 @@ function buildItemDescHTML(item) {
             _eff.push(`屬性專攻（攻擊${_bonusEleName}屬性敵人時額外傷害+${d.eleBonusDmg.dmg || d.eleBonusDmg.add || 0}）`);
         }
         if (d.counterAllEle)         _eff.push('一般攻擊剋制所有屬性敵人');
+        if (d.counterEles)           _eff.push(`一般攻擊剋制${d.counterEles.map(e => ({ earth: '地', wind: '風', fire: '火', water: '水' }[e] || e)).join('、')}屬性敵人（×1.4）`);
         if (d.procBurn)              _eff.push(`灼燒${d.procBurn.rate ? ` ${d.procBurn.rate}%` : ''}（命中後每秒${d.procBurn.dmg || 10}點火傷，持續${d.procBurn.dur || 6}秒）`);
         if (d.onHitEleDmg) {
             let _eleName = { fire:'火焰', water:'寒冰', wind:'風雷', earth:'大地', none:'無屬性' }[d.onHitEleDmg.ele] || '屬性';

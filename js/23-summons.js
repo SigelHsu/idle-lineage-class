@@ -395,11 +395,11 @@ function summonV2AttackOnce(s, d, t, owner) {
             _petAnimAct(s, 'skill');
             if (pr.kind === 'poison') {   // 單體中毒（比照技能類中毒：單層固定 DoT）
                 t.st = t.st || newMobStatus();
-                t.st.poison = 150; t.st.poisonDmg = Math.max(1, Math.floor(skillPower / 2 * _ownerDmgMult)); t.st.poisonStacks = 1; t.st.poisonUnit = t.st.poisonDmg; t.st.poisonTick = 30;
+                t.st.poison = 150; t.st.poisonDmg = Math.max(1, Math.floor(skillPower / 2 * _ownerDmgMult)); t.st.poisonStacks = 1; t.st.poisonUnit = t.st.poisonDmg; t.st.poisonTick = 30; t.st.poisonSrc = 'summon';   // 🎯 DPS：召喚中毒歸召喚
                 logCombat(`<span class="text-purple-300">${s.form}</span> 發動 <span class="text-green-300 font-bold">${pr.name}</span>，<span class="${getMobColor(t.lv)}">${t.n}</span> 中毒了！`, 'magic');
             } else if (pr.kind === 'poisonAll') {   // 全體中毒
                 const all = mapState.mobs.filter(m => m && m.curHp > 0);
-                all.forEach(m => { m.st = m.st || newMobStatus(); m.st.poison = 150; m.st.poisonDmg = Math.max(1, Math.floor(skillPower / 2 * _ownerDmgMult)); m.st.poisonStacks = 1; m.st.poisonUnit = m.st.poisonDmg; m.st.poisonTick = 30; });
+                all.forEach(m => { m.st = m.st || newMobStatus(); m.st.poison = 150; m.st.poisonDmg = Math.max(1, Math.floor(skillPower / 2 * _ownerDmgMult)); m.st.poisonStacks = 1; m.st.poisonUnit = m.st.poisonDmg; m.st.poisonTick = 30; m.st.poisonSrc = 'summon'; });   // 🎯 DPS：召喚全體中毒歸召喚
                 if (all.length) logCombat(`<span class="text-purple-300">${s.form}</span> 發動 <span class="text-green-300 font-bold">${pr.name}</span>，敵方全體中毒！`, 'magic');
             } else {   // magic / magicAll：屬性魔法傷害（吃魔抗/DR/屬性剋制·summonElementDamage）
                 const targets = (pr.kind === 'magicAll') ? mapState.mobs.filter(m => m && m.curHp > 0) : [t];
@@ -476,7 +476,7 @@ function enemyAttackSummon(mob, s) {
     if (mob._sherine) dmg = Math.floor(dmg * (mob._sherineMad ? 3 : 2));
     if (mob._grace) dmg = Math.floor(dmg * 1.5);
     dmg = Math.max(1, Math.floor(dmg * riftDamageMult()) - d.dr);
-    dmg = Math.max(1, Math.floor(dmg * (typeof teamDmgReduceMult === 'function' ? teamDmgReduceMult(true) : 1)));   // 🩹 v3.2.67 鋼鐵防護/化身 全隊受傷減免也惠及召喚物（比照寵物）
+    dmg = Math.max(1, Math.floor(dmg * (typeof teamDmgReduceMult === 'function' ? teamDmgReduceMult(true) : 1)));   // 🔮 化身對寵物／召喚物保留受傷減免；鋼鐵防護只作用於施法者自身 AC
     s.hp -= dmg;
     _petAnimAct(s, 'hurt');
     logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 攻擊 <span class="text-purple-300">${s.form}</span>，造成 ${dmg} 點傷害。`, 'enemy-attack', 'enemy');

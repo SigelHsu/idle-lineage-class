@@ -839,7 +839,7 @@ function petAttackOnce(p, d, target, forceCrit, addDmg, skName) {
             markBossPhysicalHit(target);
             target.curHp -= dmg; target.justHit = 'none'; mobWake(target);
             let _pw = p && p.eq && p.eq.wpn ? DB.items[p.eq.wpn.id] : null;
-            if (_pw && _pw.petBleed && target.curHp > 0 && typeof applyBleed === 'function') applyBleed(target, dmg, 5);   // 🏺 遺物 仿製小惡魔尖牙套：寵物一般攻擊命中造成出血
+            if (_pw && _pw.petBleed && target.curHp > 0 && typeof applyBleed === 'function') applyBleed(target, dmg, 5, 'pet');   // 🏺 遺物 仿製小惡魔尖牙套：寵物一般攻擊命中造成出血；🎯 DPS 歸夥伴
             _petAnimAct(p, 'attack', target.uid);
             logCombat(`寵物 [${p.form}] ${skName ? `<span class="text-pink-300 font-bold">${skName}</span> ` : ''}攻擊 <span class="${getMobColor(target.lv)}">${target.n}</span>，造成 ${dmg}${heavy ? '（重擊）' : ''} 點傷害！`, 'player-special');
             _petAfterDamage(target);

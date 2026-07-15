@@ -1690,14 +1690,17 @@ window.onload = () => {
         let meta = [];
         let needLv = (typeof skillReqLv==='function') ? skillReqLv(sk, sid) : undefined;
         if(needLv !== undefined) meta.push('需求 Lv.'+needLv);
-        { let _costs = []; if(sk.hpCost) _costs.push('HP '+sk.hpCost); if(sk.mp) _costs.push('MP '+sk.mp); if(_costs.length) meta.push('消耗 '+_costs.join('、')); }   // 🐉 同時消耗 HP＋MP 的技能(覺醒/冥想/隱身/堅固防護/幻術士混亂等)：兩者並列顯示
+        { let _costs = []; if(sk.hpCost) _costs.push('HP '+sk.hpCost); if(sk.mp) _costs.push('MP '+sk.mp); if(sk.costItem){ let _ci = DB.items[sk.costItem.id]; _costs.push((_ci ? _ci.n : '材料')+'×'+(sk.costItem.qty||1)); } if(_costs.length) meta.push('消耗 '+_costs.join('、')); }   // 🐉 同時消耗 HP＋MP 的技能(覺醒/冥想/隱身/堅固防護/幻術士混亂等)：兩者並列顯示；🌀 costItem 為可選施法材料
         if(sk.dur) meta.push('持續 '+sk.dur+' 秒');
         if(sk.cd) meta.push('冷卻 '+(sk.cd/10)+' 秒');
         if(meta.length) parts.push(`<div class="text-slate-300">${meta.join(' ・ ')}</div>`);
         let eff = [];
         if(sk.dmgDice) eff.push((sk.target==='all'?'範圍':'')+'傷害 '+sk.dmgDice[0]+'d'+sk.dmgDice[1]+(sk.ele&&sk.ele!=='none'?'（'+SK_ELE[sk.ele]+'屬）':''));
         if(sk.multiDmg) eff.push('多段傷害 '+sk.multiDmg.map(function(x){return x[0]+'d'+x[1];}).join('＋')+(sk.ele&&sk.ele!=='none'?'（'+SK_ELE[sk.ele]+'屬）':''));
-        if(sk.healBase || sk.healDice) eff.push('治療 '+(sk.healBase||0)+(sk.healDice?('＋'+sk.healDice[0]+'d'+sk.healDice[1]):''));
+        if(sk.fullRestore) eff.push('單體治療：立即恢復全部已損失HP');
+        else if(sk.classicHeal) { let ch=sk.classicHeal; eff.push((sk.groupHeal?'全隊':'單體')+'治療 ('+ch.baseDice+'＋INT治癒加成)d'+ch.sides+' ×2'+(ch.mult&&ch.mult!==1?(' ×'+ch.mult):'')); }
+        else if(sk.healBase || sk.healDice) eff.push('治療 '+(sk.healBase||0)+(sk.healDice?('＋'+sk.healDice[0]+'d'+sk.healDice[1]):''));
+        if(sk.healCooldownTicks) eff.push('冷卻 '+(sk.healCooldownTicks/10)+' 秒');
         if(sk.lifesteal) eff.push('吸取生命');
         if(sk.instakill) eff.push('即死（不死系）');
         // 🛡️ v2.6.69 審計#15：補渲染 reqWpn/skillAddDmg/stun(Chance)——衝擊之暈等技能的機制原本在唯一說明面完全隱形
@@ -1803,6 +1806,7 @@ window.onload = () => {
                 _eff.push(`屬性專攻（攻擊${_bn}屬性敵人時額外傷害+${d.eleBonusDmg.dmg || d.eleBonusDmg.add || 0}）`);
             }
             if(d.counterAllEle) _eff.push('萬象剋制（一般攻擊剋制所有屬性敵人）');
+            if(d.counterEles) _eff.push(`一般攻擊剋制${d.counterEles.map(e => ({ earth: '地', wind: '風', fire: '火', water: '水' }[e] || e)).join('、')}屬性敵人（×1.4）`);
             if(d.procBurn) _eff.push(`灼燒${d.procBurn.rate ? ` ${d.procBurn.rate}%` : ''}（命中後每秒${d.procBurn.dmg || 10}點火傷，持續${d.procBurn.dur || 6}秒）`);
             if(d.onHitEleDmg) {
                 let _en = {fire:'火焰',water:'寒冰',wind:'風雷',earth:'大地',none:'無屬性'}[d.onHitEleDmg.ele] || '屬性';

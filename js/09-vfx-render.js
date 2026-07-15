@@ -48,7 +48,9 @@ const SPELL_FX = {
     '呼喚盟友': { dir:'呼喚盟友', prefix:'2281-0', n:7, fps:14, blend:'screen', h:1, ax:0.50, ay:0.55 },
     '地獄之牙': { dir:'地獄之牙', prefix:'1801-0', n:9, fps:14, blend:'screen', h:0.7, ax:0.50, ay:0.55 },
     '地裂術': { dir:'地裂術', prefix:'129-1', n:10, fps:14, w:0.85, ax:0.50, ay:0.82, targetVc:0.92 },
+    '污濁之水': { dir:'污濁之水', prefix:'mw', n:10, fps:12, h:1.1, ax:0.50, ay:0.55 },
     '復仇尖石': { dir:'地裂術', prefix:'129-1', n:10, fps:14, w:0.85, ax:0.50, ay:0.82, targetVc:0.92 },   // 🗡️ v3.4.34 倫得雙刀 5% proc（sk_revenge_spike）：沿用地裂術素材（同 dir·不需新增圖檔）
+    '大地崩裂': { dir:'大地崩裂', prefix:'dk', n:9, fps:14, w:0.95, ax:0.50, ay:0.68, targetVc:0.85, blend:'screen' },   // 🌑 v3.4.68 冥皇執行劍(解咒) 15% proc（sk_earth_collapse·8D12地全體）：套死亡騎士技能特效（skill_effect_start8+end1·複製至 assets/fx/大地崩裂/dk_0..8·screen 加亮）
     '地面障礙': { dir:'地面障礙', prefix:'2250-0', n:13, fps:14, blend:'screen', w:0.9, ax:0.50, ay:0.82, targetVc:0.9 },
     '壞物術': { dir:'壞物術', prefix:'172-0', n:15, fps:14, blend:'screen', h:1, ax:0.50, ay:0.55 },
     '寒冰氣息': { dir:'寒冰氣息', prefix:'1804-0', n:21, fps:16, blend:'screen', h:1.2, ax:0.50, ay:0.55 },
@@ -269,6 +271,7 @@ const SELF_FX = {
     '暴風神射': { dir:'暴風神射', prefix:'2248-0', n:13, fps:14, blend:'screen', h:0.50, overHead:true },
     '毒性抵抗': { dir:'毒性抵抗', prefix:'2948-0', n:11, fps:14, blend:'screen', h:0.50, overHead:true },
     '水之元氣': { dir:'水之元氣', prefix:'4401-0', n:21, fps:14, blend:'screen', h:0.50, overHead:true },
+    '治癒能量風暴': { dir:'治癒能量風暴', prefix:'hs', n:19, fps:14, blend:'screen', h:0.60, overHead:true },
     '淨化精神': { dir:'淨化精神', prefix:'2180-0', n:11, fps:14, blend:'screen', h:0.50, overHead:true },
     '火焰武器': { dir:'火焰武器', prefix:'2182-0', n:11, fps:14, blend:'screen', h:0.50, overHead:true },
     '火牢': { dir:'火牢', prefix:'168-0', n:11, fps:14, blend:'screen', h:0.50, overHead:true },
@@ -1228,7 +1231,7 @@ function _renderMobsImpl() {
 
             let _badgeTags = '';
             if(_showMobStatus && m.st) {   // 🩹 狀態開關關閉時不顯示異常狀態徽章
-                let order = ['freeze','stun','stone','sleep','blind','weaken','disease','vacuum','broken','slow','mrhalf','magicseal','fragile','armorbreak','confuse','panic','guardbreak','terror','doom'];   // 🔮 含脆弱、🔧 破甲(黑妖破壞盔甲)、🔮 混亂/恐慌、🐉 護衛毀滅/恐懼/死神；中毒不顯示、出血改用 🩸 emoji（見下方圖片下方列）
+                let order = ['freeze','stun','stone','sleep','blind','weaken','disease','vacuum','broken','slow','mrhalf','magicseal','fragile','armorbreak','confuse','panic','guardbreak','terror','doom','muddywater'];   // 🔮 含脆弱、🔧 破甲(黑妖破壞盔甲)、🔮 混亂/恐慌、🐉 護衛毀滅/恐懼/死神、🌊 污濁；中毒不顯示、出血改用 🩸 emoji（見下方圖片下方列）
                 _badgeTags = order.filter(k => m.st[k] > 0).map(k =>
                     `<span class="px-1 rounded bg-purple-900/70 text-purple-200 text-[10px]">${STATUS_NAME[k]}</span>`).join(' ');
             }
@@ -1818,7 +1821,8 @@ function _mobAnimApply() {
 const MORPH_BATTLE_ANIM = new Set(['克特', '卡司特王', '思克巴女皇', '死亡騎士', '炎魔', '白金法師', '白金騎士', '艾莉絲', '銀光法師', '銀光騎士', '騎士范德', '黃金法師', '黃金騎士', '黑暗法師', '黑暗騎士',
     '亞力安', '人形殭屍', '侏儒', '哥布林', '地靈', '多羅', '妖魔', '妖魔弓箭手', '小惡魔', '巴列斯', '巴風特', '思克巴', '惡魔', '歐吉', '死亡', '狼人', '萊肯', '食人妖精王', '食屍鬼', '骷髏弓箭手', '骷髏斧手', '骷髏槍兵', '黑暗妖精刺客',   // 🧝 v3.0.50 +23 變身（惡魔＝象牙塔惡魔套裝 SET_POLY_FORMS.demon 直接同名命中）
     '反王肯恩', '吸血鬼', '巨人', '白金巡守', '賽尼斯', '銀光巡守', '阿魯巴', '黃金巡守', '黑暗巡守', '黑暗精靈',   // 🧝 v3.0.52 +10 變身（黑暗精靈＝黑暗妖精套裝 高等黑暗精靈 經別名映射）
-    '卡士柏', '史巴托', '妖魔巡守', '妖魔鬥士', '巨大牛人', '巴土瑟', '暴走兔', '果凍怪', '格利芬', '歐姆民兵', '獨眼巨人', '甘地妖魔', '石頭高崙', '紙人', '羅孚妖魔', '西瑪', '那魯加妖魔', '都達瑪拉妖魔', '重裝歐姆', '長老', '阿吐巴妖魔', '雪怪', '食人妖精', '馬庫爾', '骷髏', '黑暗妖精運送員', '黑長者', '黑騎士']);   // 🧝 v3.0.57 +28 變身（合計 76＝POLY_TIERS 全形態·變身動畫全數到位）
+    '卡士柏', '史巴托', '妖魔巡守', '妖魔鬥士', '巨大牛人', '巴土瑟', '暴走兔', '果凍怪', '格利芬', '歐姆民兵', '獨眼巨人', '甘地妖魔', '石頭高崙', '紙人', '羅孚妖魔', '西瑪', '那魯加妖魔', '都達瑪拉妖魔', '重裝歐姆', '長老', '阿吐巴妖魔', '雪怪', '食人妖精', '馬庫爾', '骷髏', '黑暗妖精運送員', '黑長者', '黑騎士',   // 🧝 v3.0.57 +28 變身（合計 76＝POLY_TIERS 全形態·變身動畫全數到位）
+    '真死亡騎士 冥皇丹特斯', '烈焰的死亡騎士']);   // 🌑 v3.4.67 冥皇執行劍變身＋烈焰死騎（scroll/裝備變身·assets/morphanim 同名資料夾）
 const MORPH_BATTLE_ALIAS = { '真‧死亡騎士': '死亡騎士', '真‧克特': '克特', '高等黑暗精靈': '黑暗精靈' };   // 套裝變身→同源動畫（v3.0.52 黑暗妖精套裝→黑暗精靈·與 js/19 立繪別名一致）
 // ===== 🗡️ v3.0.67 職業戰鬥動態（ARPG Tier1·用戶確認：未變身＝職業 sprite 常駐場上·有變身＝變身形態取代）=====
 //   assets/classanim/<avatar>/：檔名＝<武器key>_<idle|attack|hurt>_N.png（+_s 影子）＋全武器共用 skill_N/death_N（+_s）·無 _w 層。

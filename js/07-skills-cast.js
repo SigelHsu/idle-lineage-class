@@ -313,6 +313,7 @@ function manualCast(skId) {
 function rollDice(count, sides) { let s = 0; for(let i = 0; i < count; i++) s += roll(1, sides); return s; }
 // 🔮 castSkill 包裝：魔力精通時，依本次施法實際消耗的 MP，回饋傭兵 10%（以 MP 差額判定，涵蓋所有施法分支；轉換類增MP不觸發）
 let _reqWpnWarnAt = -9999;   // 🛡️ v2.6.69 審計#15：reqWpn 不符提示節流（每 60 秒最多一次）
+let _costItemWarnAt = -9999;   // 🌀 costItem 施法材料不足提示節流（每 60 秒最多一次）
 function castSkill(skId) {
     let r;
     if (!(player && player.mastery === 'i_mana')) { r = castSkillInner(skId); }
@@ -409,6 +410,13 @@ function castSkillInner(skId) {
     if(sk.hpCost && player.hp <= sk.hpCost + 5) return false;  // HP 不足，拒絕施放
     if(sk.hpCost && sk.type !== 'convert') { let _hpSkEl = document.getElementById('set-hp-skill'); let _hpSkThr = _hpSkEl ? (parseFloat(_hpSkEl.value) || 0) : 0; if(_hpSkThr > 0 && (player.mhp || 0) > 0 && (player.hp / player.mhp * 100) < _hpSkThr) return false; }   // 🐉 消耗HP技能：HP 低於自訂門檻(%)時暫停自動施放（自動路徑專用；轉換魔法另有 set-hp-convert 門檻，故排除避免重複）
     if(sk.hpCost && sk.mp && sk.type !== 'convert') { let _mpSkEl = document.getElementById('set-mp-atk'); let _mpSkThr = _mpSkEl ? (parseFloat(_mpSkEl.value) || 0) : 0; if(_mpSkThr > 0 && (player.mmp || 0) > 0 && (player.mp / player.mmp * 100) < _mpSkThr) return false; }   // 🔧 同時消耗HP與MP的技能：MP 低於「攻擊技能MP門檻(set-mp-atk)」時亦暫停自動施放→與HP門檻(set-hp-skill)取「任一不符即停」（攻擊型本就在 autoCastSpells 先擋過此門檻，這裡再涵蓋增益型如覺醒/冥想/隱身/堅固防護）
+    if(sk.costItem) {   // 🌀 施法材料：背包＋倉庫合併計量（比照製作系統），不足則不施放（提示 60 秒節流）
+        let _ciQ = sk.costItem.qty || 1;
+        if(typeof invCountId !== 'function' || invCountId(sk.costItem.id) < _ciQ) {
+            if(state.ticks - _costItemWarnAt > 600) { _costItemWarnAt = state.ticks; logSys(`${(DB.items[sk.costItem.id] || {}).n || '施法材料'}不足，無法施放 ${sk.n}。`); }
+            return false;
+        }
+    }
 
     if(sk.type === 'convert') {
         // 🔧 魔力奪取（drain）：消耗 HP，必須對怪物施展；以異常魔法命中（abnormalMagicHit，與迷魅術一致，
@@ -453,7 +461,8 @@ function castSkillInner(skId) {
         return true;
     }
 
-    if(sk.type === 'heal' && player.cds.healSk <= 0) {
+    let _healOwnCd = (player.cds.healSkillCds && player.cds.healSkillCds[skId]) || 0;
+    if(sk.type === 'heal' && player.cds.healSk <= 0 && _healOwnCd <= 0) {
         // 體力回復術 / 生命的祝福：HoT 持續回復
         if(sk.hot) {
             if(player.hots && player.hots[skId] && player.hots[skId].ticksLeft > 0) return false;  // 🍃 該技能團隊 HoT 已在持續中→不重複(防自動施放洗版/耗MP)；不同技能(生命的祝福/體力回復術)可並存、同技能後放取代先放
@@ -463,21 +472,36 @@ function castSkillInner(skId) {
             logCombat(`施放 ${sk.n}，全隊開始持續回復 HP。`, 'heal');
             return true;
         }
-        // 一般瞬間治癒
-        player.mp -= cost;
-        let _spCoefHeal = (1 + (3 * player.d.magicDmg / 32));   // 治癒：只套魔法傷害部分，不含階級係數
-        let heal = sk.healDice
-            ? Math.max(1, Math.floor((rollDice(sk.healDice[0], sk.healDice[1]) + (sk.healBase || 0)) * _spCoefHeal))   // (XdY + healBase) × 魔法傷害公式
-            : Math.max(1, (sk.valBase || 0) + roll(sk.valDice[0], sk.valDice[1]) + player.d.magicDmg);
-        // 🤝 v3.0.94→v3.2.67 隊長治癒也幫隊員/寵物/召喚物：目標＝隊伍(玩家＋未倒地傭兵＋出戰寵物＋召喚物)中 HP% 最低者（鏡像傭兵 allyTryHeal 的選人規則）
+        // 舊版方向瞬間治癒：基本骰數＋INT治癒加成，固定滿正義×2；不吃魔法傷害／SP／法術階級。
+        // 團體治癒對每名存活成員獨立擲骰；生命之泉則直接恢復目標全部已損失HP。
         let _cands = (typeof healBeneficiaries === 'function') ? healBeneficiaries() : [player];
+        if (!_cands.length) return false;
         let _hTgt = player, _hPct = Infinity;
         _cands.forEach(c => { let _mx = (typeof _supMhp === 'function') ? _supMhp(c) : (c.mhp || 1); if (_mx > 0) { let _p2 = ((typeof _supHp === 'function') ? _supHp(c) : (c === player ? player.hp : c.curHp) || 0) / _mx; if (_p2 < _hPct) { _hPct = _p2; _hTgt = c; } } });
-        heal = waterVitalHeal(heal, _hTgt);   // 🤝 v3.4.45 水之元氣改單體：移到選定目標(_hTgt)後·僅被治癒者持有才加倍
+        player.mp -= cost;
         _lastHealFxTarget = _hTgt;   // 🩹 記錄受益者→castSkill 把治癒特效疊在其身上（寵物/召喚物 _partyMemberRect 回 null→退預設錨點）
-        if (typeof _supHeal === 'function') _supHeal(_hTgt, heal); else if (_hTgt === player) player.hp = Math.min(player.mhp, player.hp + heal); else _hTgt.curHp = Math.min(_hTgt.mhp, (_hTgt.curHp || 0) + heal);
         player.cds.healSk = getAutoCastInterval();
-        logCombat(`施放 ${sk.n}，恢復了${_hTgt === player ? '' : (' ' + ((typeof _supName === 'function') ? _supName(_hTgt) : ('協力·' + _hTgt._allyName)))} ${heal} 點 HP。${sk.msg || ''}`, 'heal');
+        if (sk.healCooldownTicks) { if (!player.cds.healSkillCds) player.cds.healSkillCds = {}; player.cds.healSkillCds[skId] = sk.healCooldownTicks; }
+        if (sk.groupHeal) {
+            let _total = 0, _hit = 0;
+            _cands.forEach(c => {
+                let _before = (typeof _supHp === 'function') ? _supHp(c) : (c === player ? player.hp : (c.curHp != null ? c.curHp : c.hp));
+                let _heal = rollHealingSpell(sk, player.d, player, c);
+                if (!sk.ignoreWaterVital) _heal = waterVitalHeal(_heal, c);
+                if (typeof _supHeal === 'function') _supHeal(c, _heal); else if (c === player) player.hp = Math.min(player.mhp, player.hp + _heal); else if (c.curHp != null) c.curHp = Math.min(c.mhp, (c.curHp || 0) + _heal); else c.hp = Math.min(c.mhp, (c.hp || 0) + _heal);
+                let _after = (typeof _supHp === 'function') ? _supHp(c) : (c === player ? player.hp : (c.curHp != null ? c.curHp : c.hp));
+                _total += Math.max(0, _after - _before); _hit++;
+            });
+            logCombat(`施放 ${sk.n}，立即治癒全隊 ${_hit} 名成員，共恢復 ${_total} 點 HP。${sk.msg || ''}`, 'heal');
+        } else {
+            let heal = rollHealingSpell(sk, player.d, player, _hTgt);
+            if (!sk.ignoreWaterVital) heal = waterVitalHeal(heal, _hTgt);   // 生命之泉本身已補滿，不消耗水之元氣
+            let _before = (typeof _supHp === 'function') ? _supHp(_hTgt) : (_hTgt === player ? player.hp : (_hTgt.curHp != null ? _hTgt.curHp : _hTgt.hp));
+            if (typeof _supHeal === 'function') _supHeal(_hTgt, heal); else if (_hTgt === player) player.hp = Math.min(player.mhp, player.hp + heal); else if (_hTgt.curHp != null) _hTgt.curHp = Math.min(_hTgt.mhp, (_hTgt.curHp || 0) + heal); else _hTgt.hp = Math.min(_hTgt.mhp, (_hTgt.hp || 0) + heal);
+            let _after = (typeof _supHp === 'function') ? _supHp(_hTgt) : (_hTgt === player ? player.hp : (_hTgt.curHp != null ? _hTgt.curHp : _hTgt.hp));
+            let _actual = Math.max(0, _after - _before);
+            logCombat(`施放 ${sk.n}，恢復了${_hTgt === player ? '' : (' ' + ((typeof _supName === 'function') ? _supName(_hTgt) : ('協力·' + _hTgt._allyName)))} ${_actual} 點 HP。${sk.msg || ''}`, 'heal');
+        }
         return true;
     }
     
@@ -663,6 +687,7 @@ function castSkillInner(skId) {
             return true;
         } else {
             let targets = sk.target === 'all' ? mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead) : [getTarget()].filter(m => m && m.curHp > 0);   // 🛡️ v2.6.69 審計#7：排除同 tick 已死屍體（killMob 只標記·settleDeadMobs 才移除）——原本對屍體結算的傷害會灌進 _burstDmg 使魔爆總量膨脹；與傭兵 allyCastMagic 過濾一致
+            if(sk.bossOnly) targets = targets.filter(m => m && m.boss);   // 🌊 頭目限定技能（污濁之水）：非頭目不施放、不扣 MP／冷卻
             if(targets.length === 0) return false;
 
             // 防止對「已具有該異常狀態」的目標重複施放異常：
@@ -821,6 +846,7 @@ function castSkillInner(skId) {
         if(sk.haste) player.buffs.haste = Math.max(player.buffs.haste || 0, sk.dur); // 加速術 → 套用 haste 效果
         player.mp -= cost;
         if(sk.hpCost) player.hp = Math.max(1, player.hp - effHpCost(sk));  // 消耗 HP（冥想術/堅固防護/隱身術；🐉 龍血精通減半）
+        if(sk.costItem && typeof consumeMaterialById === 'function') consumeMaterialById(sk.costItem.id, sk.costItem.qty || 1);   // 🌀 施法材料扣除（背包優先、不足取倉庫；上方已驗存量。目前僅增益型技能使用 costItem，其他類型若要用需自行在該分支扣除）
         logCombat(`施放 ${sk.n}。${sk.msg || ''}`, 'magic');
         calcStats();
         return true;
@@ -921,6 +947,7 @@ function autoActions() {
             if(sk.cube && mapState.current.startsWith('town_')) return;   // 🔮 立方：安全區(村莊)不自動施放，進入狩獵區(非 town_)才展開
             if(sk.stormInterval && mapState.current.startsWith('town_')) return;   // 🌨️🔥 火牢/冰雪颶風等持續傷害增益(STORM_BUFF_SKILLS)：安全區(村莊)無敵人→不自動施放(免空耗 MP/洗版)，與立方/轉換魔法一致
             if(sk.summon && typeof _petInWild === 'function' && !_petInWild()) return;   // 🧟 v3.2.21 召喚類增益：安全區/無怪區不自動施放（v2 施放會被擋→免反覆嘗試洗版·比照立方/颶風）
+            if(sk.costItem && mapState.current.startsWith('town_')) return;   // 🌀 消耗道具型增益：安全區無戰鬥損耗，不自動施放以免白耗材料（手動施放不受限）
             // 👑 力盔/敏盔版同效果已生效：跳過自動施放對應的法師/王族魔法版（recomputeStats@4037 會把同名 buff 歸零；若仍自動施放會每 tick 被歸零後反覆重施＝無限洗版）
             if((sid === 'sk_ench_wpn' && (player.buffs.sk_helm_str1||0) > 0) || (sid === 'sk_dex_up' && (player.buffs.sk_helm_dex1||0) > 0) || (sid === 'sk_reveal' && (player.buffs.sk_helm_str2||0) > 0)) return;
             let chk = document.getElementById(`auto-sk-${sid}`);

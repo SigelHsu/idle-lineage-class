@@ -980,7 +980,7 @@ function getBuffColor(k, def) {
 const STATUS_ICON_SKILLS = {
     'sk_sunlight':'日光術','sk_shield':'保護罩','sk_holy_wpn':'神聖武器','sk_ench_wpn':'擬似魔法武器','sk_reveal':'無所遁形術','sk_load_up':'負重強化','sk_shield2':'鎧甲護持',
     'sk_dex_up':'通暢氣脈術','sk_magic_shield':'魔法屏障','sk_meditation':'冥想術','sk_haste_spell':'加速術','sk_str_up':'體魄強健術',
-    'sk_bless_wpn':'祝福魔法武器','sk_greater_haste':'加速術','sk_berserk':'狂暴術','sk_holy_dash':'神聖疾走','sk_blizzard_storm':'冰雪颶風','sk_fire_prison':'火牢','sk_invisible':'隱身術',
+    'sk_bless_wpn':'祝福魔法武器','sk_greater_haste':'加速術','sk_berserk':'狂暴術','sk_holy_dash':'神聖疾走','sk_blizzard_storm':'冰雪颶風','sk_fire_prison':'火牢','sk_invisible':'隱身術','sk_heal_energy_storm':'治癒能量風暴',
     'sk_holy_barrier':'聖結界','sk_soul_up':'靈魂昇華','sk_solid_shield':'堅固防護','sk_reduction_armor':'增幅防禦','sk_spike_armor':'尖刺盔甲',
     'sk_counter_barrier':'反擊屏障','sk_elf_mr':'魔法防禦','sk_elf_purify':'淨化精神','sk_elf_eleres':'屬性防禦','sk_elf_singleres':'單屬性防禦',
     'sk_elf_firewpn':'火焰武器','sk_elf_windshot':'風之神射','sk_elf_winddash':'風之疾走','sk_elf_earthguard':'大地防護','sk_elf_watervital':'水之元氣',
