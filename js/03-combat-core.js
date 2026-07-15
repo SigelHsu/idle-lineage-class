@@ -894,6 +894,15 @@ function stretchHitValue(raw) {
     let hvInt = lo + ((Math.random() < (hv - lo)) ? 1 : 0);
     return Math.max(1, Math.min(20, hvInt));
 }
+
+// 高難度目標的物理命中軟下限：近戰與遠距離共用，依角色的總物理命中逐階提升。
+// 一般怪物不套用；席琳世界、頭目與困難怪才啟用，最高只保證判定值 5，仍會逐擊擲骰。
+function physicalHitSoftFloor(hitBonus, target) {
+    if (!target || !(target.boss || target.hard || target._sherine)) return 1;
+    return Math.max(1, Math.min(5,
+        1 + Math.floor(Math.max(0, Number(hitBonus) || 0) / 20)
+    ));
+}
 // 🏺 遺物 魔力塑造的海洋水晶球：潮濕（_wetUntil）目標受到的下一次「風屬性」傷害 ×2 並立即解除潮濕。回傳傷害乘數（1 或 2）。掛在各風屬性傷害結算點（物理 getPhysicalDmg／魔法 castSkillInner／procFreeMagicSkill）。
 function consumeWetMult(target, ele) {
     if (target && ele === 'wind' && (target._wetUntil || 0) > state.ticks) { target._wetUntil = 0; return 2; }
@@ -910,6 +919,7 @@ function getPhysicalDmg(diceStr, target, wpn, arrowData, forceHeavy, forceHit, f
     // 命中判定 = 投擲一顆20面骰，骰到1必定未命中，骰到20為重擊，2~19 則 命中值 >= 判定即命中
     let rawHitValue = player.lv + hitBonus - target.lv + mobEffAC(target);
     let hitValue = stretchHitValue(rawHitValue);
+    hitValue = Math.max(hitValue, physicalHitSoftFloor(hitBonus, target));
     if (player.buffs && player.buffs.sk_warrior_outlaw > 0) hitValue = Math.max(hitValue, 10);   // ⚔️ 亡命之徒：一般攻擊最低命中率 50%
 
     // 🔧 重擊特效武器（雙手鈍器）：骰 19 一律觸發重擊（粉碎），不論本應為擦傷/命中/未命中 → 重擊率 5%→10%
