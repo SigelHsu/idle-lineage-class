@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.4.63';
+const GAME_VERSION = 'v3.4.65';
 // ===== 💾 存檔壓縮（LZString compressToUTF16/decompressFromUTF16·MIT, Pieroxy）：localStorage 內部以 UTF-16 壓縮，省 ~89%，繞過 5MB 上限 =====
 //  ⚠️ 只壓 localStorage（存檔位/倉庫/共用桶/_bak）；匯出檔維持明文 JSON（可攜·importSave 用 JSON.parse 驗證）。_lzGet 相容舊明文存檔（無 'LZ1:' 前綴→原樣回傳）。
 var LZString = (function () {
@@ -3297,18 +3297,20 @@ const DB = {
     // 格式：怪物顯示名稱: [[物品ID, 掉落機率(%)], ...]  每樣獨立判定一次
 
 /* ============================================================================
- * 🛡️ 原作者防護 / 反盜用（原作者：shines871｜官方免費版：idle-lineage-class）
- *   本遊戲「純單機、永久免費」。此段只做兩件事，皆無破壞性、不蒐集任何個資：
- *     1) 偵測到「非官方網域」的部署（有人把整包碼搬去別站營利）→ 於頁面頂端蓋一條
- *        指向官方免費版的橫幅，把玩家導回原作者（盜站的廣告/金流因此失去意義）。
- *     2) 於原始碼內留存作者浮水印與唯一識別碼，供日後著作權 / DMCA 舉證。
- *   官方網域 / localhost / 127.0.0.1 / file://（本機離線遊玩）一律放行，
- *   玩家體驗與你自己的本機測試完全不受影響。
+ * 🛡️ 原作者標記 / 官方版指引（原作者：shines871｜官方免費版：idle-lineage-class）
+ *   授權立場：本作**開放非商業轉載**（須標示原作者出處），**僅禁止商業營利**。
+ *   故此段刻意「中性、無指控」，只做兩件事，皆無破壞性、不蒐集任何個資：
+ *     1) 於「非官方網域」的部署頂端蓋一條**中性**橫幅：告知這是非官方轉載、
+ *        並提供官方最新免費版連結（把玩家導回原作者·對合法非商業轉載與商業盜用皆為真陳述）。
+ *        ⚠️措辭嚴禁出現「盜版 / 未授權 / 廣告 / 惡意」等指控字眼——因授權允許非商業轉載，
+ *        對合法轉載者作此指控＝不實/毀謗，風險落在原作者身上。
+ *     2) 於原始碼留存作者浮水印與唯一識別碼，供「商業營利」侵權時著作權 / DMCA 舉證。
+ *   官方網域 / localhost / 127.0.0.1 / file://（本機離線遊玩）一律放行。
  *   🔒 舉證用不可移除的唯一識別碼（canary，請勿刪除）：ORIG-shines871-idle-lineage-class-8F3C1A2B
  * ========================================================================== */
 // 可見浮水印（executable，去註解 / 壓縮也清不掉；請勿刪除，這是舉證依據之一）
 try {
-  console.log('%c© shines871 — 官方免費版：https://shines871.github.io/idle-lineage-class/ ｜ 未經授權散布必究',
+  console.log('%c© shines871 · 官方最新免費版：https://shines871.github.io/idle-lineage-class/ ｜ 本作開放非商業轉載（須標示出處）· 禁止商業營利',
     'color:#c8a24a;font-weight:bold;font-size:12px');
 } catch (_) {}
 
@@ -3327,7 +3329,7 @@ function _origAuthorizedHost() {
   return _origAuthCache;
 }
 
-// 盜版橫幅：僅在非官方網域顯示；若被移除可安全重掛（見 gameLoop）
+// 官方版指引橫幅（中性·無指控）：僅在非官方網域顯示；若被移除可安全重掛（見 gameLoop）
 function _origEnforce() {
   try {
     if (_origAuthorizedHost()) return;
@@ -3336,13 +3338,13 @@ function _origEnforce() {
     var bar = document.createElement('div');
     bar.id = '_orig_pbar';
     bar.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:2147483647;'
-      + 'background:linear-gradient(90deg,#3a0d0d,#8a1717,#3a0d0d);color:#fff6e6;'
+      + 'background:linear-gradient(90deg,#0d1f3a,#17408a,#0d1f3a);color:#eef4ff;'
       + 'font:bold 15px/1.5 "Microsoft JhengHei","Segoe UI",Arial,sans-serif;'
       + 'padding:11px 16px;text-align:center;letter-spacing:.3px;'
-      + 'box-shadow:0 2px 14px rgba(0,0,0,.6);border-bottom:2px solid #ffcf5a;';
-    bar.innerHTML = '⚠️ 你正在遊玩<span style="color:#ffcf5a">未經授權的盜版</span>。'
-      + '本遊戲<span style="color:#ffcf5a">永久免費</span>，此站可能為舊版或遭竄改（挾帶廣告 / 惡意內容）。'
-      + '請改至官方免費版遊玩（最新且安全）：'
+      + 'box-shadow:0 2px 14px rgba(0,0,0,.45);border-bottom:2px solid #ffcf5a;';
+    // ⚠️中性措辭·勿加「盜版/未授權/廣告/惡意」等指控（授權允許非商業轉載→指控合法轉載者有毀謗風險）
+    bar.innerHTML = '📢 這是<span style="color:#ffcf5a">非官方轉載版本</span>，內容可能不是最新。'
+      + '本遊戲<span style="color:#ffcf5a">永久免費</span>，前往<span style="color:#ffcf5a">官方最新版</span>：'
       + '<a href="' + url + '" style="color:#ffcf5a;font-weight:bold;text-decoration:underline">'
       + 'shines871.github.io/idle-lineage-class</a>';
     document.body.appendChild(bar);
