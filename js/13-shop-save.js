@@ -696,9 +696,11 @@ function updateLoadInfo(){
     set('load-info-int', empty ? '' : (base.int || ''));
     const create = document.getElementById('load-btn-create');
     const importBtn = document.getElementById('load-btn-import');
+    const enter = document.getElementById('load-btn-enter');
     const del = document.getElementById('load-btn-delete');
     if(create) create.classList.toggle('hidden', !empty);
     if(importBtn) importBtn.classList.toggle('hidden', !empty);
+    if(enter) enter.classList.toggle('hidden', empty);
     if(del) del.classList.toggle('hidden', empty);
 }
 function loadSelectSlot(n){
@@ -1033,7 +1035,7 @@ function startGame() {
     player.name = null;   // 預設未取名，狀態欄顯示「點擊取名」，玩家可點擊命名
     player.enSeed = 'es' + uid() + uid();   // 🎲 強化決定論種子（創角產生一次、存進存檔永久固定）：讓強化成敗由種子決定、不可用 save/load 刷
     player._roleEpoch = _roleEpoch();        // 🛡️ 角色世代：刪除後舊分頁不得把同欄位的舊角色寫回
-    player.expMigV = 2;   // ⚠️ 新角色天生在最新經驗刻度（v3.0.82 天堂經典表）→ 標記免遷移
+    player.expMigV = 3;   // ⚠️ 新角色天生使用最新經驗刻度（Lv70+ 同級怪等比例曲線）→ 標記免遷移
 
     let b = createBase[curCreate.cls];
     player.base = { str: b.str+curCreate.str, dex: b.dex+curCreate.dex, con: b.con+curCreate.con, int: b.int+curCreate.int, wis: b.wis+curCreate.wis, cha: b.cha+curCreate.cha };
@@ -1437,8 +1439,9 @@ function loadGame() {
             const EXP_MIG_OLD_BASE = 36065092;   // v2.6.40 前 Lv49+ 的固定升級需求（＝EXP_T[49]，新制 getExpReq 的未放大基準）
             let _mlv = player.lv || 1;
             if (_mlv >= 50 && _mlv < 100 && (player.exp || 0) > 0 && player.exp < EXP_MIG_OLD_BASE) {
-                let _factor = Math.round(getExpReq(_mlv) / EXP_MIG_OLD_BASE);   // 2,4,8,…,1024（整數·精確）
-                if (_factor > 1) player.exp = Math.min(Math.floor(player.exp * _factor), getExpReq(_mlv) - 1);   // 夾在「不足以升級」→ 不白升等
+                let _v1Req = _expReqOldV1(_mlv);
+                let _factor = Math.round(_v1Req / EXP_MIG_OLD_BASE);   // 舊固定需求 → v1 分段需求
+                if (_factor > 1) player.exp = Math.min(Math.floor(player.exp * _factor), _v1Req - 1);   // 夾在「不足以升級」→ 不白升等
             }
             player.expMigV = 1;   // 標記本檔已遷移（存檔時固化·跨載入不重跑）
         }
@@ -1448,13 +1451,27 @@ function loadGame() {
             let _mig2 = (lv, exp) => {
                 lv = Math.max(1, Math.min(100, Math.floor(lv || 1)));
                 if (lv >= 100) return 0;
-                let o = _expReqOldV1(lv), n = getExpReq(lv);
+                let o = _expReqOldV1(lv), n = _expReqClassicV2(lv);
                 if (!isFinite(o) || !isFinite(n) || o <= 0) return 0;
                 return Math.min(Math.floor(Math.max(0, exp || 0) / o * n), n - 1);
             };
             player.exp = _mig2(player.lv, player.exp);
             (player.allies || []).forEach(a => { if (a) a.exp = _mig2(a.lv, a.exp); });
             player.expMigV = 2;
+        }
+        // ⚖️ v3.4.58 經驗刻度遷移（expMigV=3）：Lv70-99 改為與同級怪經驗等比例。
+        //   玩家與目前在隊傭兵保留該級原有進度百分比，避免需求降低後下一次擊殺連升多級；Lv1-69 數值不變。
+        if ((player.expMigV || 0) < 3) {
+            let _mig3 = (lv, exp) => {
+                lv = Math.max(1, Math.min(100, Math.floor(lv || 1)));
+                if (lv >= 100) return 0;
+                let o = _expReqClassicV2(lv), n = getExpReq(lv);
+                if (!isFinite(o) || !isFinite(n) || o <= 0) return 0;
+                return Math.min(Math.floor(Math.max(0, exp || 0) / o * n), n - 1);
+            };
+            player.exp = _mig3(player.lv, player.exp);
+            (player.allies || []).forEach(a => { if (a) a.exp = _mig3(a.lv, a.exp); });
+            player.expMigV = 3;
         }
         // 🏛️ v3.0.83 傳統模式已取消：舊傳統角色一次性併入對應基礎模式（一般+傳統→一般、經典+傳統→經典）。
         //   共用倉庫/圖鑑桶另由 js/12 _mergeTradBuckets 於頁面載入時合併（'_tradonly'→''、'_trad'→'_classic'）。

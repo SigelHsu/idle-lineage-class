@@ -31,7 +31,7 @@
     <title>放置天堂 - 吉爾塔斯降臨</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">   <!-- 🖼️ 瀏覽器分頁圖示(favicon)：把你的圖放到 assets/favicon.png 即生效；可改 href 路徑或副檔名(.ico/.svg) -->
 
-    <link rel="stylesheet" href="css/style.css?v=v3.4.31-town-header">
+    <link rel="stylesheet" href="css/style.css?v=v3.4.61-load-enter">
     <link rel="stylesheet" href="css/floating-ui.css?v=20260714-weight-colors">
     <link rel="stylesheet" href="css/tailwind-built.css"><!-- 🔧 預編譯 Tailwind（取代執行期 JIT tailwind.js）：只含實際用到的 class，省 407KB runtime + 移除持續掃描 DOM 的成本。置於 style.css 之後以保留原 cascade（utility 平手時勝過自訂 class，與舊 JIT 注入順序一致） -->
 </head>
@@ -98,6 +98,7 @@
             <div id="load-action-panel">
                 <button onclick="loadCreateSelected()" id="load-btn-create" type="button">創新角色</button>
                 <button onclick="loadImportSelected()" id="load-btn-import" type="button">匯入進度</button>
+                <button onclick="loadEnterSelected()" id="load-btn-enter" type="button" class="hidden">進入遊戲</button>
                 <button onclick="loadDeleteSelected()" id="load-btn-delete" type="button" class="hidden" style="color:#e7a09a;border-color:rgba(151,61,52,.82);">刪除角色</button>
                 <button onclick="loadBackToMenu()" id="load-btn-back" type="button">返回</button>
             </div>
@@ -544,20 +545,20 @@
     </script>
 
     <script src="js/anim-manifest.js?v=v3.4.40-manifest"></script>
-    <script src="js/00-data.js?v=v3.4.54-royalcha"></script>
-<script src="js/01-drops-config.js?v=v3.4.52-relic16"></script>
-<script src="js/02-stats-recompute.js?v=v3.4.52-relic16"></script>
-    <script src="js/03-combat-core.js?v=v3.4.56-physical-hit-floor"></script>
-    <script src="js/04-combat-attack.js?v=v3.4.52-relic16"></script>
+    <script src="js/00-data.js?v=v3.4.63-antipiracy"></script>
+<script src="js/01-drops-config.js?v=v3.4.62-royal-team"></script>
+<script src="js/02-stats-recompute.js?v=v3.4.55-relic17"></script>
+    <script src="js/03-combat-core.js?v=v3.4.63-antipiracy"></script>
+    <script src="js/04-combat-attack.js?v=v3.4.62-royal-team"></script>
 <script src="js/05-kill-progression.js?v=v3.4.57-sherine-mr"></script>
-    <script src="js/06-status-allies.js?v=v3.4.56-physical-hit-floor"></script>
-    <script src="js/07-skills-cast.js?v=v3.4.52-relic16"></script>
+    <script src="js/06-status-allies.js?v=v3.4.55-relic17"></script>
+    <script src="js/07-skills-cast.js?v=v3.4.62-royal-team"></script>
 <script src="js/08-items-equip.js?v=20260714-originalmagic"></script>
 <script src="js/09-vfx-render.js?v=v3.4.52-relic16"></script>
-<script src="js/10-ui-tabs.js?v=v3.4.52-relic16"></script>
+<script src="js/10-ui-tabs.js?v=v3.4.60-relic-text-all"></script>
 <script src="js/11-world-map.js?v=v3.4.57-sherine-mr"></script>
 <script src="js/12-npc-quests.js?v=v3.4.30-pledge-portrait"></script>
-<script src="js/13-shop-save.js?v=v3.4.54-delete-role-flow"></script>
+<script src="js/13-shop-save.js?v=v3.4.61-load-enter"></script>
 <script src="js/14-craft-pandora.js?v=v3.4.12-soulearrings"></script>
 <script src="js/15-cards.js?v=v3.2.64-8dircodex"></script>
 <script src="js/16-equip-book.js?v=v3.2.37-petgear"></script>
@@ -566,7 +567,7 @@
 <script src="js/19-equipment-window.js?v=v3.3.24-eq-item-glow-weight-topalign-native-size"></script>
 <script src="js/20-warehouse-window.js?v=20260702a"></script>
 <script src="js/21-relic-book.js?v=v3.1.7"></script>
-    <script src="js/23-summons.js?v=v3.4.51-mercsummonbar"></script>
-    <script src="js/22-pets.js?v=v3.4.52-relic16"></script>
+    <script src="js/23-summons.js?v=v3.4.62-royal-team"></script>
+    <script src="js/22-pets.js?v=v3.4.58-exp70-curve"></script>
 </body>
 </html>

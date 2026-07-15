@@ -2105,6 +2105,8 @@ button.classic-skill-cell { cursor:pointer; }
         gap: 10px;
     }
     #load-action-panel button { width: 100%; height: 48px; font-size: 14px; }
+    #load-btn-enter,
+    #load-btn-delete { grid-column: 1 / -1; }
     #load-btn-back { grid-column: 1 / -1; }
 
     /* Character creation: a scrollable portrait composition with no overlapping controls. */

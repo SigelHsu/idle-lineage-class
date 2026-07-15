@@ -17,6 +17,7 @@ function recomputeStats() {
     d.meleeDmg = 0; d.meleeHit = 0; d.meleeCrit = 0;
     d.crushDr = 0; d.meleeHaste = 0; d.atkSpdPct = 0;   // 🏺 遺物 第二批：受重擊減傷% / 裝近戰武器攻速% / 通用攻速%
     d.hpRegenFaster = 0; d.noEvade = false;   // 🏺 遺物 第十六批：巨魔的再生戒指（HP恢復間隔縮短秒數）／笨重的鋼鐵石盾（無法迴避）
+    d.critDmgLowHp = null;   // 🏺 遺物 第十七批：鬥士的決戰服裝（HP<N 時近爆傷+add）
     d.thornsDmg = 0; d.instakillFull = 0; d.onDmgHeal = null; d.onDmgHealCd = 0; d.onDmgHealName = '';   // 🏺 遺物 第三批：受擊反傷固定值 / 命中滿血怪即死率 / 受擊自癒技能id（onDmgHealCd=冷卻秒數、onDmgHealName=來源名稱）
     d.hurtExplode = 0;   // 🏺 遺物 第四批 爆彈花蕊：受擊時對自己與全體敵人的火魔傷固定值
     d.fireNullify = false;   // 🏺 遺物 火熱愛意：免疫受到的火屬性傷害（每10秒最多1次·js/04 火魔傷攔截·player._fireNullCd 節流）
@@ -340,6 +341,7 @@ d.mr += (baseMr + bonusMr);
         if(ed.eleWpnMult) d.eleWpnMult = ed.eleWpnMult;        // 🏺 v3.1.80 四之牙臂甲：裝對應屬性武器時一般攻擊 ×mult（僅副手單槽·無疊加疑慮）
         if(ed.hpRegenFaster) d.hpRegenFaster += ed.hpRegenFaster;   // 🏺 遺物 巨魔的再生戒指：HP 自然恢復間隔縮短 N 秒（js/03 regenTick 排程）
         if(ed.noEvade) d.noEvade = true;                       // 🏺 遺物 笨重的鋼鐵石盾：無法迴避攻擊（js/04 受擊迴避閘）
+        if(ed.critDmgLowHp) d.critDmgLowHp = ed.critDmgLowHp;   // 🏺 遺物 鬥士的決戰服裝：HP<N 時近爆傷+add（js/03 getPhysicalDmg／js/06 allyAttackOnce）
         // 🛡️ 臂甲（副手）：每強化+1 → HP+10；門檻特效（達 +5/+7/+9 套用對應階、取最高階、非累加）
         if(ed.armguard) {
             let _agEn = capEn(e.en, ed);

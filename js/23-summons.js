@@ -437,7 +437,7 @@ function spiritAttackOnce(s, t, owner) {
     const flat = Math.floor(cha * (owner.lv || 1) / (spec.scale || 20));
     const mrPen = (spec.mrPenBase || 0) + Math.floor(cha / 10);
     const mult = summonDamageMult(smLike, owner, true, (_ownerIa && _ownerIa.md) || 0);
-    const dmg = summonElementDamage(spec.dice || [1, 40], s.ele, t, flat + _sgb.dmg, mult, mrPen);
+    const dmg = summonElementDamage(spec.dice || [1, 40], s.ele, t, flat + _sgb.dmg + ((_ia && _ia.royalEd) || 0), mult, mrPen);   // 👑 灼熱武器：魔法型屬性精靈的一般攻擊亦取得全隊額外傷害
     t.justHit = (s.ele && s.ele !== 'none') ? s.ele : 'magic';
     t.curHp -= dmg; mobWake(t);
     logCombat(`<span class="text-purple-300">${s.form}</span> 攻擊 <span class="${getMobColor(t.lv)}">${t.n}</span>，造成 ${dmg} 點傷害。`, 'player');
