@@ -1510,7 +1510,41 @@ function _animDir(name) { return (typeof MOB_ANIM_ALIAS !== 'undefined' && MOB_A
 //   高延遲環境（GitHub Pages RTT ~100ms）首次動畫就緒時間 ≈ 原本 1/6（法利昂 death 27 幀：27 次往返→5 次）。
 //   語意不變：幀必須從 0 連續、遇缺號即止；缺號當下已在途的最多多載 5 個 404（無害·不進結果）。
 //   urlFor(i)→第 i 幀 URL；done(frames|null, n)=連續幀陣列（<minF 給 null）＋連續幀數。共用於 _mobAnimProbe/_mob8Probe/_battleSpriteProbe/js22 寵物八方向。
+// 📇 v3.4.40 幀數 manifest 查表（js/anim-manifest.js·工具 tools/gen-anim-manifest.js）：由 urlFor(0) 反解「資料夾＋前綴」→ 已知幀數。
+//   回傳 number＝確定幀數（0＝確定沒有此序列·連一個請求都不用發）；null＝manifest 未涵蓋 → 呼叫端退回原本的 404 探測（安全網）。
+//   ⚠️ 三棵資產樹的 URL 編碼不一致（_mobAnimProbe 用裸中文名·_mob8Probe/js22/classanim 用 encodeURIComponent）→ 一律 decodeURIComponent 正規化後再查。
+function _manifestCount(url0) {
+    if (typeof ANIM_MANIFEST === 'undefined' || !ANIM_MANIFEST) return null;
+    let p; try { p = decodeURIComponent(url0); } catch (e) { return null; }   // 壞的 % 序列→退探測
+    if (p.slice(-5) !== '0.png') return null;
+    let parts = p.slice(0, -5).split('/');                                    // 去掉結尾的 "0.png"（urlFor(0) 的索引恆為單字元 0）
+    if (parts.length < 4) return null;
+    let ent = ANIM_MANIFEST[parts.slice(0, 3).join('/')];                     // assets/<tree>/<資料夾>
+    if (!ent) return null;                                                    // 整個資料夾不在表內→退探測（不敢斷言 0）
+    let n = ent[parts.slice(3).join('/')];                                    // 前綴（八方向含 "d6/" 前置）
+    return (typeof n === 'number') ? n : 0;                                   // 資料夾在表內但無此前綴＝確定 0 幀
+}
 function _probeFramesWin(urlFor, maxF, minF, done) {
+    // 🚀 v3.4.40 快路徑：幀數已知→直接平行載精確張數（零 404·零探測往返·離線同樣受益）。
+    //    仍逐幀檢查載入結果並只取「從 0 起的連續段」→ manifest 過期(少載/多載)也不會壞，語意與探測完全一致。
+    let known = _manifestCount(urlFor(0));
+    if (known !== null) {
+        if (known === 0) { done(null, 0); return; }                           // 確定沒有此序列→零請求
+        let got = [], left = known;
+        let step = () => {
+            if (--left > 0) return;
+            let n = 0;
+            while (n < known && got[n]) n++;                                  // 連續段（與探測同語意）
+            done(n >= (minF || 2) ? got.slice(0, n) : null, n);
+        };
+        for (let i = 0; i < known; i++) {
+            let im = new Image();
+            im.onload = () => { got[i] = im; step(); };
+            im.onerror = () => { got[i] = false; step(); };                   // manifest 過期→該幀當缺號·截斷至連續段
+            im.src = urlFor(i);
+        }
+        return;
+    }
     const WIN = 6;
     let results = [], next = 0, inFlight = 0, stopAt = maxF, finished = false;
     function settle() {
