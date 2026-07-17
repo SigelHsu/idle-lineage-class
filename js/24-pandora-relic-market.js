@@ -761,16 +761,16 @@
         let base = Object.keys(DB.items).filter(id => {
             let d = DB.items[id];
             let w = Math.floor(Number(d && d.gachaWeight) || 0);
-            return !!(d && d.n && !d.relic && id !== relicId && ((w >= 1 && w <= 30) || craftable.has(id)));
+            return !!(d && d.n && !d.relic && id !== relicId && ((w >= 1 && w <= 50) || craftable.has(id)));
         });
         let p1 = base.filter(id => Math.floor(Number(DB.items[id].gachaWeight) || 0) === 1);
         let p2 = base.filter(id => {
             let w = Math.floor(Number(DB.items[id].gachaWeight) || 0);
-            return w >= 2 && w <= 10;
+            return w >= 1 && w <= 20;
         });
         let p3 = base.filter(id => {
             let w = Math.floor(Number(DB.items[id].gachaWeight) || 0);
-            return (w >= 11 && w <= 30) || craftable.has(id);
+            return (w >= 1 && w <= 50) || craftable.has(id);
         });
         if (!p1.length || !p2.length || !p3.length) return { error: '遺物委託材料池不足，請先檢查潘朵拉權重與製作資料。' };
         let chosen = [];
@@ -781,8 +781,8 @@
             return id;
         }
         let a = choose(p1, 'relic-req-weight1');
-        let b = choose(p2, 'relic-req-weight2-10');
-        let c = choose(p3, 'relic-req-weight11-30-craft');
+        let b = choose(p2, 'relic-req-weight1-20');
+        let c = choose(p3, 'relic-req-weight1-50-craft');
         if (!a || !b || !c) return { error: '無法建立三種不重複的委託物品。' };
         return {
             contract: {
