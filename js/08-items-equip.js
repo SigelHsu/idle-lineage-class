@@ -423,11 +423,11 @@ function useItem(u, silent = false) {
                 openPolySelect(item.uid);
                 return;
             }
-            if (silent && ringOn && player.poly) {
+            if (silent && ringOn && player.poly && polyFormMatchesEquippedWeapon(player.poly)) {
                 // 自動使用 + 持有變形控制戒指：維持上次的變身狀態（不重抽、不跳選單）
                 // 保留 player.poly 不變，僅於下方重置持續時間。
             } else {
-                // 其餘情況（手動且無戒指 / 自動但尚無變身紀錄）：依等級隨機抽取一種
+                // 其餘情況（手動且無戒指／尚無紀錄／換成不同攻擊類型武器）：依等級與武器類型隨機抽取。
                 player.poly = getPolyState();
             }
             player.buffs.poly = d.dur;
@@ -1275,11 +1275,14 @@ function _updateUIImpl() {
 	if(document.getElementById('dt-hpr')) document.getElementById('dt-hpr').innerText = formatBonus(player.d.hpR || 0);
     document.getElementById('dt-er').innerText = `${effResistPct(player.d.er)}%`;   // 🔧 顯示有效迴避率（>50 每+5才+1%）
     document.getElementById('dt-dr').innerText = player.d.dr;
-    document.getElementById('dt-spd').innerText = `${player.d.aspd.toFixed(2)}s`;
+    { let _attackSec = (typeof playerAttackIntervalTicks === 'function')
+            ? playerAttackIntervalTicks(false) / 10
+            : Math.max(0.1, Number(player.d.aspd) || 0.1);
+      document.getElementById('dt-spd').innerText = `${_attackSec.toFixed(2)}s`; }
     { let _potionPct = (typeof getConPotionPct === 'function' ? getConPotionPct(player.d.con || 0) : 0);
       try { _potionPct += (typeof dollFieldVal === 'function' ? dollFieldVal('potionBonus') : 0) + (player._miscPotionBonus || 0); } catch (e) {}
       let _el = document.getElementById('dt-potion'); if (_el) _el.innerText = `${_potionPct}%`;
-      _el = document.getElementById('dt-movespeed'); if (_el) _el.innerText = `${100 + (player.d.moveSpeedPct || 0)}%`;
+      _el = document.getElementById('dt-movespeed'); if (_el) _el.innerText = `${typeof playerEffectiveMoveSpeedPct === 'function' ? playerEffectiveMoveSpeedPct() : 100 + (player.d.moveSpeedPct || 0)}%`;
       _el = document.getElementById('dt-mpkill'); if (_el) _el.innerText = (typeof getWisMpOnKill === 'function' ? getWisMpOnKill(player.d.wis || 0) : 0);
       _el = document.getElementById('dt-mr'); if (_el) _el.innerText = player.d.mr || 0;
       _el = document.getElementById('dt-resnone'); if (_el) _el.innerText = Math.round(player.d.resNone || 0); }

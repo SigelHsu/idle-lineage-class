@@ -356,6 +356,32 @@ function _slotCharEnSeed(slotN) {
         return (p && p.enSeed) || '';
     } catch (e) { return ''; }
 }
+// 舊版在建立傭兵時會清除變身。首次載入舊傭兵快照時，從來源存檔補回仍在生效的卷軸變身。
+function _savedMercPolyState(ally) {
+    try {
+        if (!ally || ally._slot == null) return null;
+        let raw = _saveUnwrap(_lzGet('lineage_idle_save_' + String(ally._slot))).payload;
+        if (!raw) return null;
+        let p = JSON.parse(raw).p;
+        if (!p || (ally.enSeed && p.enSeed && ally.enSeed !== p.enSeed)) return null;
+        let remaining = p.buffs ? Math.floor(Number(p.buffs.poly) || 0) : 0;
+        if (remaining <= 0 || !p.poly || !p.poly.n) return null;
+        return { poly: JSON.parse(JSON.stringify(p.poly)), remaining: Math.max(1, remaining) };
+    } catch (e) { return null; }
+}
+function _migrateMercPoly(ally) {
+    if (!ally || ally._mercPolyAuto !== undefined) return false;
+    let active = (ally.poly && ally.poly.n && ally.buffs && (ally.buffs.poly || 0) > 0)
+        ? { poly: JSON.parse(JSON.stringify(ally.poly)), remaining: Math.max(1, Math.floor(ally.buffs.poly)) }
+        : _savedMercPolyState(ally);
+    ally._mercPolyAuto = !!active;
+    ally._mercPolyNoGoldWarned = false;
+    if (!active) return false;
+    if (!ally.buffs) ally.buffs = {};
+    ally.poly = active.poly;
+    ally.buffs.poly = active.remaining;
+    return true;
+}
 // 傭兵可記憶的「喝水＋技能設定」欄位（跨解散/重新招募沿用；戰力快照仍每次重建，只有這些偏好還原）
 const MERC_PREF_FIELDS = ['_atkSkill', '_healSkill', '_convertSkill', '_healHpPct', '_potHpPct', '_hpSkillPct', '_castMpPct', '_hpSafePct'];
 // 解散/重新招募前呼叫：把該傭兵當前設定存入 player.mercPrefs（鍵＝enSeed·同一角色再次招募即還原）
@@ -410,12 +436,16 @@ function buildAlly(slotN) {
     if (!p || !p.cls) return null;
     let ally = JSON.parse(JSON.stringify(p));   // 深拷貝，不動原存檔
     ally._mercPermanentPotions = true;   // 🤝 全職常駐加速；勇敢/餅乾/慎重依職業於 recomputeStats 套用
-    // 安全防護：補齊 calcStats 會取用的欄位，並清掉協力者自身的召喚/夥伴/變身
+    // 安全防護：補齊 calcStats 會取用的欄位，並清掉協力者自身的召喚/夥伴；來源存檔仍在生效的卷軸變身則保留。
     ally.buffs = ally.buffs || {}; ally.statuses = ally.statuses || {}; ally.eq = ally.eq || {}; ally.skills = ally.skills || [];
     ally.blessings = (ally.blessings && typeof ally.blessings === 'object') ? ally.blessings : {};
     ally.alloc = ally.alloc || { str:0,dex:0,con:0,int:0,wis:0,cha:0 };
     ally.panacea = ally.panacea || { str:0,dex:0,con:0,int:0,wis:0,cha:0 };
-    ally.poly = null; ally.summon = null; ally.charmed = null; ally.partners = []; ally.allies = [];
+    let _savedPolyActive = !!(ally.poly && ally.poly.n && (ally.buffs.poly || 0) > 0);
+    if (!_savedPolyActive) { ally.poly = null; ally.buffs.poly = 0; }
+    ally._mercPolyAuto = _savedPolyActive;
+    ally._mercPolyNoGoldWarned = false;
+    ally.summon = null; ally.charmed = null; ally.partners = []; ally.allies = [];
     delete ally.summonsV2; delete ally._summonV2On; delete ally._summonV2Sk; delete ally._summonV2RecastCd;   // 🧙 v3.2.40 稽核修：來源存檔的 v2 召喚欄位不隨傭兵快照入檔（無人讀取·純存檔肥大）
     let _save = player;
     // 🆕 v3.0.93 收集冊加成（卡片/裝備/道具/娃娃全收集）：招募快照改讀「招募者(隊長)即時共用桶」而非傭兵來源存檔的舊快照
@@ -2013,21 +2043,24 @@ function processAllyStatusTick(ally) {
     }
     return false;
 }
-// 每 tick 處理協力角色攻擊（間隔依武器攻速，最快 8 ticks）
-// ⏳ v2.6.3：傭兵攻擊技能改「週期施放」（等同玩家）——平時普攻，攻擊技能每 ~2 秒才放一次。
-// 施放間隔＝比照玩家 getAutoCastInterval（20×自身 spdMult ticks·攻速越快間隔越短）。
-function allyAtkSkillInterval(ally) { return Math.max(1, Math.round(20 * ((ally.d && ally.d.spdMult) || 1))); }
+// 每 tick 處理協力角色攻擊；物理攻擊仍走武器攻速，施法週期則分攻擊／輔助並只看職業／變身 cast。
+// 🔮 current 用來承接小數 tick 的超時餘數；攻速藥水、切割、武器精通與攻速裝備不介入。
+function allyAtkSkillInterval(ally, support, current) {
+    return arguments.length >= 3 ? nextCastCooldown(current, ally, !!support) : castIntervalTicks(ally, !!support);
+}
 // 以「攻擊技能冷卻(_atkSkillCd)」閘門包住職業 act：冷卻好且有攻擊技→本回合施放該技並重設冷卻；否則暫時清空 _atkSkill 讓職業 act 走各自「普攻」路徑(保留妖精連射/黑妖連擊/法師光箭/幻術奇古獸等)。
 function allyActWithSkillGate(ally, actFn) {
     let _sk = ally._atkSkill ? DB.skills[ally._atkSkill] : null;
     let _mpPct = allyCastMpPct(ally);   // 🆕 v2.6.27 施法MP門檻：MP% 高於此值才施放攻擊技（0=不限）；未達→退回普攻·且不重設冷卻(MP 回滿即施放)
     let _mpOk = (_mpPct <= 0) || ((ally.mp || 0) >= (ally.mmp || 0) * _mpPct / 100);
     if ((ally._atkSkillCd || 0) <= 0 && _sk && _sk.type === 'atk' && _mpOk) {   // 技能回合（且 MP 達門檻）
-        ally._atkSkillCd = allyAtkSkillInterval(ally);                 // 設冷卻(即使因 MP/HP 不足未放成功也等下個間隔再試·比照「每~2秒一次」)
+        ally._atkSkillCd = allyAtkSkillInterval(ally, false, ally._atkSkillCd); // 設攻擊施法冷卻（即使資源不足也等下一次嘗試）
         actFn(ally);
+        return true;
     } else {                                                            // 普攻回合(或 MP 未達門檻)：暫清 _atkSkill→職業 act 內部退回普攻(同步·try/finally 還原)
         let _save = ally._atkSkill; ally._atkSkill = '';
         try { actFn(ally); } finally { ally._atkSkill = _save; }
+        return false;
     }
 }
 // 🔮 v2.6.4 立方：和諧＝回「全隊」MP（玩家＋全體非倒地傭兵各回 amount·夾各自上限）。玩家 cubeTick(js/07)與傭兵 allyCubeTick 共用。
@@ -2089,19 +2122,20 @@ function allyCastConvert(ally, sk) {
         } catch (e) {}
     };
     if (sk.drain) {
-        let t = getTarget(); if (!t || t.curHp <= 0) return;   // 魔力奪取：無目標不施放、不耗 HP
+        let t = getTarget(); if (!t || t.curHp <= 0) return false;   // 魔力奪取：無目標不施放、不耗 HP
         _playConvertVfx();   // 確認有效目標後才播（無目標時不空放動作/特效）
         ally.curHp = Math.max(1, (ally.curHp || 0) - (sk.hpCost || 0));
         let _sv = player; player = ally; let _hit = false;
         try { _hit = abnormalMagicHit(t); } finally { player = _sv; }
         if (_hit) { let gain = roll(1, Math.max(1, Math.floor((t.lv || 1) / 2))); ally.mp = Math.min(ally.mmp || 0, (ally.mp || 0) + gain); logCombat(`<span class="text-emerald-300 font-bold">協力·${ally._allyName}</span> 施放 ${sk.n}，從 <span class="${getMobColor(t.lv)}">${t.n}</span> 吸取了 ${gain} 點魔力。`, 'heal', 'mercenary'); }
         else logCombat(`<span class="text-emerald-300 font-bold">協力·${ally._allyName}</span> 的 ${sk.n} 未能命中。`, 'miss', 'mercenary');
-        return;
+        return true;
     }
     _playConvertVfx();   // 心靈轉換／魂體轉換：無目標需求→直接播
     ally.curHp = Math.max(1, (ally.curHp || 0) - (sk.hpCost || 0));
     ally.mp = Math.min(ally.mmp || 0, (ally.mp || 0) + (sk.mpGain || 0));
     logCombat(`<span class="text-emerald-300 font-bold">協力·${ally._allyName}</span> 施放 ${sk.n}，消耗 ${sk.hpCost} HP，恢復了 ${sk.mpGain} 點 MP。`, 'heal', 'mercenary');
+    return true;
 }
 // 🆕 v2.6.8 [傭兵能力補完 #1a]：傭兵自我增益 buff 自動維持（比照玩家 autoActions；傭兵無勾選框→維持所有已學「自我增益」·只付 MP 不付 HP·比照既有傭兵設計）。
 //   透過重算 ally.d 讓 buff 的衍生值(extraDmg/extraHit/ac/str/攻速/覺醒 HP·MR·免疫/屬性抗性…)生效。排除：召喚(#2未做)/淨化(#6)/立方·颶風·團隊HoT(各自 ally 常駐路徑)/幻覺·大地祝福·鋼鐵防護(隊長團隊增益·避免與 team aura 疊加或浪費 MP)/暗隱術(受擊迴避層#5另處理)。
@@ -2161,6 +2195,29 @@ function allyAutoCastableSkills(ally) {
 const _MERC_AWAKENS = ['sk_dragon_awaken_antares', 'sk_dragon_awaken_falion', 'sk_dragon_awaken_baraka'];
 // 🔮 v3.2.2 攻擊型幻覺光環（會被 recompute 注入玩家 d）：傭兵取得/失去任一 → 需 calcStats 讓玩家即時吃到/退掉。鑽石高崙只給 AC（teamAcBonus 受擊時即時讀）故不在此列。
 const _MERC_ILLU_ATK_AURA = ['sk_illu_avatar', 'sk_illu_ogre', 'sk_illu_lich'];
+// 傭兵若在來源存檔中處於卷軸變身，該變身成為受雇期間的維持目標。
+// 到期時直接替該傭兵購買並消耗一張卷軸；不挪用主玩家背包中的卷軸，費用仍套用攻城商店折扣。
+function allyMaintainPoly(ally) {
+    if (!ally || !ally._mercPolyAuto || !ally.poly || !ally.poly.n) return false;
+    if (!ally.buffs) ally.buffs = {};
+    if ((ally.buffs.poly || 0) > 0) { ally._mercPolyNoGoldWarned = false; return false; }
+    let def = DB.items && DB.items.scroll_poly;
+    if (!def) return false;
+    let price = (typeof shopPrice === 'function') ? shopPrice(def.p || 0) : (def.p || 0);
+    if ((player.gold || 0) < price) {
+        if (!ally._mercPolyNoGoldWarned) {
+            logSys(`<span class="text-amber-300">協力·${ally._allyName || allyName(ally)} 的變身已到期；自動購買變形卷軸需要 ${price.toLocaleString()} 金幣，目前金幣不足。</span>`);
+            ally._mercPolyNoGoldWarned = true;
+        }
+        return false;
+    }
+    player.gold -= price;
+    ally.buffs.poly = Math.max(1, Math.floor(def.dur || 1800));
+    ally._mercPolyNoGoldWarned = false;
+    logSys(`<span class="text-emerald-300">自動花費 ${price.toLocaleString()} 金幣購買變形卷軸，協力·${ally._allyName || allyName(ally)} 繼續維持 <span class="${ally.poly.c || 'text-gray-300'}">${ally.poly.n}</span>。</span>`);
+    try { updateUI(); } catch (e) {}
+    return true;
+}
 function allyMaintainBuffs(ally) {
     if (!ally || ally._downed) return;
     if (state.ticks % 10 !== 0) return;                 // 每秒一次（比照玩家 buff 遞減節奏；限制重算頻率）
@@ -2169,6 +2226,7 @@ function allyMaintainBuffs(ally) {
     let _auraBefore = _MERC_ILLU_ATK_AURA.map(s => ((ally.buffs[s] || 0) > 0) ? '1' : '0').join('');   // 🌟 v3.0.100→🔮 v3.2.2 攻擊型幻覺光環(化身+10／歐吉+4傷+4命／巫妖+2魔傷)前狀態：本傭兵取得/失去任一→末尾 calcStats 刷新玩家 d（玩家攻擊即時吃/退·recompute 末段重注入 teamIlluAura(player)）。高崙 AC 走 teamAcBonus 受擊時即時讀取·不需刷新
     let changed = false;
     for (let k in ally.buffs) { if (ally.buffs[k] > 0) { ally.buffs[k]--; if (ally.buffs[k] <= 0) { ally.buffs[k] = 0; changed = true; } } }   // 遞減；到期→需重算移除衍生值
+    if (allyMaintainPoly(ally)) changed = true;   // 變身於同一秒完成續用，重算後不會出現一個 tick 的能力空窗
     let _ast = ally.statuses || {};
     let _block = mapState.current.startsWith('town_') || _ast.silence > 0 || _ast.magicseal > 0 || _ast.stun > 0 || _ast.freeze > 0 || _ast.stone > 0 || _ast.paralyze > 0 || _ast.sleep > 0;   // 安全區／沉默／硬控時不施放（仍遞減）
     if (!_block && ally.skills && ally.skills.length) {
@@ -2279,6 +2337,7 @@ function dispelCasterBlocked(st) { return !!(st && (st.stun > 0 || st.freeze > 0
 //    v2.6.29 改「一次只解一人·優先主要玩家」：teamCleanseOne 只解隊列首位有可解狀態者（player 排首）。
 function allyTryDispel(ally) {
     if (!ally || ally._downed || !ally.skills || !ally.skills.length) return false;
+    if ((ally._purifySkillCd || 0) > 0) return false;   // 🔮 淨化與其他施法共用職業／變身 cast 速度公式
     let st = ally.statuses; if (!st) return false;
     if (dispelCasterBlocked(st)) return false;   // 🆕 v2.6.28 施法者硬控(石化/冰凍/暈眩/麻痺/沉睡)或沉默/魔封→無法施放（不再自救）
     let has = (sid) => ally.skills.includes(sid) && _mercAutoOn(ally, sid);   // 👑 v2.7.95 淨化(相消/聖潔/解毒)也吃「開啟閘」：來源角色沒勾自動施放→傭兵不耗 MP 淨化（比照玩家 autoActions js/07:818-824）
@@ -2294,13 +2353,14 @@ function allyTryDispel(ally) {
     let _tgt = teamCleanseOne(kinds);   // 🆕 v2.6.29 一次只解一人·優先主要玩家
     if (!_tgt) return false;            // 保險（teamHasCurableStatus 已檢查·理論上非 null）
     ally.mp -= cost; allyManaMasteryRefund(ally, cost);
+    ally._purifySkillCd = allyAtkSkillInterval(ally, true, ally._purifySkillCd);
     logCombat(`<span class="text-emerald-300 font-bold">協力·${ally._allyName}</span> 施放 ${skd.n}，解除了 ${_dispelTargetName(_tgt)} 的負面狀態。`, 'heal', 'mercenary');
     return true;
 }
 // 傭兵一般行動間隔：使用完整 ally.d.aspd（職業/性別/武器＋常駐藥水＋變身/精通/負重），暫態切割與緩速在此補入。
 function allyAttackIntervalTicks(ally, st) {
-    let itv = Math.max(1, Math.round(((ally.d && ally.d.aspd) ? ally.d.aspd : atkSpdBaseItv(ally)) * 10));
-    if (!ally.classicMode && ally._cleaveTicks > 0 && !allyHasMastery(ally, 'k_cleave')) itv = Math.max(1, Math.round(itv * 0.8));
+    let itv = Math.max(1, ((ally.d && ally.d.aspd) ? ally.d.aspd : atkSpdBaseItv(ally)) * 10);
+    if (!ally.classicMode && ally._cleaveTicks > 0 && !allyHasMastery(ally, 'k_cleave')) itv = Math.max(1, itv * 0.8);
     if (st && st.slowAtk > 0) itv *= 2;
     return itv;
 }
@@ -2309,6 +2369,7 @@ function alliesTick() {
     player.allies.forEach(ally => {
         if (!ally) return;
         let _needsLegacyRecompute = false;
+        if (_migrateMercPoly(ally)) _needsLegacyRecompute = true;   // 舊存檔傭兵：一次性補回來源角色仍在生效的變身
         if (!ally._mercPermanentPotions) { ally._mercPermanentPotions = true; _needsLegacyRecompute = true; }   // 舊存檔既有傭兵補上常駐職業藥水效果
         if (ally._mercChaModelV !== 2) _needsLegacyRecompute = true;   // 舊王族隊伍可能已把魅力 HP/MP 倍率存入快照，須重建一次移除
         if (_needsLegacyRecompute) {
@@ -2321,7 +2382,10 @@ function alliesTick() {
         allyTryPotion(ally);   // 🍶 HP% 低於安全線→消耗隊長設定的藥水回血（獨立於行動·硬控中仍可喝·安全線=0 則略過）
         allyMaintainBuffs(ally);   // 🆕 v2.6.8 #1a：每秒自動維持傭兵自我增益 buff（覺醒/加速/狂暴術/神聖武器/屬性buff…）·重算 ally.d 使其生效（須在幻覺 _iRn 擷取前）
         allyTryBluePotion(ally);   // 🔵 隊長勾選自動藍水時，每名傭兵各自消耗隊長庫存並維持藍水
-        if ((ally._atkSkillCd || 0) > 0) ally._atkSkillCd--;   // ⏳ 攻擊技能施放間隔（每 tick 遞減·比照玩家 cds.atkSk）
+        if ((ally._atkSkillCd || 0) > 0) ally._atkSkillCd--;   // 🔮 攻擊施法冷卻（職業／變身 cast）
+        if ((ally._healCastCd || 0) > 0) ally._healCastCd--;   // 🔮 治癒施法冷卻（同一速度公式）
+        if ((ally._convertSkillCd || 0) > 0) ally._convertSkillCd--;   // 🔮 轉換施法冷卻（同一速度公式）
+        if ((ally._purifySkillCd || 0) > 0) ally._purifySkillCd--;   // 🔮 淨化施法冷卻（同一速度公式）
         if (ally._healSkillCds) for (let _hk in ally._healSkillCds) { if (ally._healSkillCds[_hk] > 0) ally._healSkillCds[_hk]--; }   // 🩹 團補／生命之泉的逐技能冷卻
         allyTryDispel(ally);   // 🆕 v2.6.15 #6→v2.6.28 團隊淨化：自己非硬控/沉默時幫全隊解可解狀態（自己硬控中則不施放·由其他自由隊員代解）
         // 🩸 v2.6.25 傭兵召喚物 tick（造屍術/召喚術/精靈召喚·owner=ally）＋🩸 v2.6.26 幻術士幻象召喚（歐吉/巫妖/鑽石高崙·i_illusion 精通·學過該技即召·stat aura 由隊長 teamIlluAura 提供避免雙套）：owner=ally·輸出獨立歸 _dps.summon（不計入本傭兵回合 _dpsAllyTurn·硬控中召喚物仍行動·擊殺獎勵歸真隊長·不換身）。倒地傭兵已於上方 return 不驅動。
@@ -2337,25 +2401,28 @@ function alliesTick() {
         if (!_ccBlock && ally.cls === 'illusion') allyCubeTick(ally);   // 🔮 幻術士傭兵：立方常駐光環（硬控中不展開）
         if (!_ccBlock && ally.skills && ally.skills.length) for (let _ssid of STORM_BUFF_SKILLS) { let _ssk = DB.skills[_ssid]; if (ally.skills.includes(_ssid) && _mercAutoOn(ally, _ssid) && _ssk && !mapState.current.startsWith('town_') && state.ticks % (_ssk.stormInterval || 40) === 0) allyStormTick(ally, _ssk); }   // 🌨️🔥 傭兵 冰雪颶風/火牢：v2.7.96 加「來源有勾自動施放」閘（比照玩家 autoActions js/07:807·免 MP 但沒開→不展開）；安全區不展開
         // 🍃 傭兵維持團隊 HoT（生命的祝福/體力回復術）：已學會的 hot+autoBuff 技能·該技能團隊 HoT 未在持續中→施放(全隊回復·消耗傭兵MP)·安全區不施放·硬控/沉默/魔封中不施放
-        if (!_ccBlock && !_castBlock && ally.skills && ally.skills.length && !mapState.current.startsWith('town_')) for (let _hid of ally.skills) {   // 🛡️ v2.6.69 審計#19：補 !_castBlock——沉默中不能補血卻能放 HoT 自相矛盾（玩家路徑走 castSkillInner 有沉默閘）
+        if (!_ccBlock && !_castBlock && (ally._healCastCd || 0) <= 0 && ally.skills && ally.skills.length && !mapState.current.startsWith('town_')) for (let _hid of ally.skills) {   // 🛡️ v2.6.69 審計#19：補 !_castBlock——沉默中不能補血卻能放 HoT 自相矛盾（玩家路徑走 castSkillInner 有沉默閘）
             let _hsk = DB.skills[_hid]; if (!_hsk || !_hsk.hot || !_hsk.autoBuff) continue;
             if (!_mercAutoOn(ally, _hid)) continue;   // 👑 v2.7.95 團隊 HoT(生命的祝福/體力回復術)也吃「開啟閘」：來源角色沒勾自動施放→傭兵不耗 MP 放（比照玩家 autoActions js/07:814-817）
             if (player.hots && player.hots[_hid] && player.hots[_hid].ticksLeft > 0) continue;   // 已在持續→不重複(單一團隊實例·後放取代先放)
             let _hcost = (ally.d && typeof ally.d.getMpCost === 'function') ? ally.d.getMpCost(_hsk.mp || 0, _hsk.tier) : (_hsk.mp || 0);   // 🛡️ v2.6.69 審計#20：套 mpReduce/學徒折扣（比照傭兵攻擊技/淨化）
             if (ally._setIllusion3 && isSupportSkill(_hsk)) _hcost = Math.max(1, Math.ceil(_hcost / 2));   // 🔮 v3.1.77 幻覺3/5（傭兵）：輔助技能 MP -50%
             if ((ally.mp || 0) < _hcost) continue;
-            ally.mp -= _hcost; allyManaMasteryRefund(ally, _hcost); applyTeamHot(_hid, _hsk, ally.d, ally);   // 🏺 v3.1.80 治癒者的恢復魔棒：傳施放者供 hotHealMult 快照
+            ally.mp -= _hcost; allyManaMasteryRefund(ally, _hcost); applyTeamHot(_hid, _hsk, ally.d, ally); ally._healCastCd = allyAtkSkillInterval(ally, true, ally._healCastCd);   // 🏺 v3.1.80 治癒者的恢復魔棒：傳施放者供 hotHealMult 快照；🔮 套用輔助施法速度
             logCombat(`<span class="text-emerald-300 font-bold">協力·${ally._allyName}</span> 施放 ${_hsk.n}，全隊開始持續回復 HP。`, 'heal', 'mercenary');
+            break;   // 同一施法週期只啟動一個 HoT
         }
-        // 🔄 傭兵轉換技能(轉換技能欄選 type:'convert' 者)：比照玩家轉換魔法·每 30tick·安全區/硬控/沉默不施放·MP<90%·HP 高於「停耗HP技」門檻才施放(消耗HP換MP)。立方和諧不走這裡(由 allyCubeTick 處理)。
-        if (!_ccBlock && !_castBlock && ally._convertSkill && !mapState.current.startsWith('town_') && state.ticks % 30 === 0) {
+        // 🔄 傭兵轉換技能：安全區／硬控／沉默不施放，頻率改由自身職業／變身 cast 控制，不再固定每 3 秒。
+        if (!_ccBlock && !_castBlock && (ally._convertSkillCd || 0) <= 0 && ally._convertSkill && !mapState.current.startsWith('town_')) {
             let _cvsk = DB.skills[ally._convertSkill];
             if (_cvsk && _cvsk.type === 'convert' && ally.skills && ally.skills.includes(ally._convertSkill)) {
                 let _hs = allyHpSkillPct(ally);
                 let _hpOk = (_hs <= 0) || ((ally.curHp || 0) > (ally.mhp || 1) * _hs / 100);   // 🛡️ 低於停耗HP技門檻→暫停(轉換技耗HP)
-                if (_hpOk && (ally.mp || 0) < (ally.mmp || 0) * 0.9) allyCastConvert(ally, _cvsk);
+                if (_hpOk && (ally.mp || 0) < (ally.mmp || 0) * 0.9 && allyCastConvert(ally, _cvsk)) ally._convertSkillCd = allyAtkSkillInterval(ally, true, ally._convertSkillCd);
             }
         }
+        // 🩹 治癒每 tick 依自身施法冷卻判定，不再等待物理攻擊週期；施放後仍延後下一次一般攻擊，保留「治癒佔用一次行動」語意。
+        if (!_ccBlock && !_castBlock && ally._healSkill && allyTryHeal(ally)) ally._atkCd = Math.max(ally._atkCd || 0, allyAtkSkillInterval(ally, ally._lastHealCastSupport !== false));
         // 回魔：比照玩家每 160 ticks(16秒) +mpR（法師施法 / 妖精三重矢皆需 MP）
         if (state.ticks % 160 === 0 && (ally.mp||0) < (ally.mmp||0) && ((ally.d && ally.d.mpR) || 0) > 0) {   // 🔧 mpR 可能因套裝懲罰（黑暗妖精套裝 -7）為負 → 與玩家回魔一致，只在 >0 時回魔，避免扣傭兵MP
             ally.mp = Math.min(ally.mmp, (ally.mp||0) + ((ally.d && ally.d.mpR) || 0));
@@ -2368,22 +2435,24 @@ function alliesTick() {
             if (_hrMax > 0 || _hrFlat > 0) { let _hr = (_hrMax > 0 ? roll(1, _hrMax) : 0) + _hrFlat; if (_hr > 0) ally.curHp = Math.min(ally.mhp, (ally.curHp||0) + _hr); }
         }
         if (ally._cleaveTicks > 0) ally._cleaveTicks--;   // 🔧 切割（雙手劍重擊觸發）：攻速+20% 持續倒數
-        if (!_ccBlock && (ally._atkCd = (ally._atkCd || 0) - 1) <= 0) {
+        let _atkCdBeforeTick = Number.isFinite(ally._atkCd) ? ally._atkCd : 0;
+        if (!_ccBlock && (ally._atkCd = _atkCdBeforeTick - 1) <= 0) {
+            // 只承接有效倒數產生的小數超時；新招募的 0 冷卻仍維持立即首擊。
+            let _atkCdRemainder = _atkCdBeforeTick > 0 ? Math.min(0, ally._atkCd) : 0;
+            let _setNextActionCd = ticks => { ally._atkCd = Math.max(0.000001, ticks + _atkCdRemainder); };
             ally._stunCycle = false;   // ⚔️ 硬直：攻擊週期結束→重置旗標（下週期被擊可再延遲一次）
             if (_castBlock) {   // 🤝 Phase4：沉默/魔法封印→只能基本攻擊（不施放 _atkSkill 與治癒）
-                ally._atkCd = allyAttackIntervalTicks(ally, _ast); allyAttackOnce(ally);
-            } else if (ally._healSkill && allyTryHeal(ally)) {   // 🤝 Phase 3：隊伍有人低於門檻→改施放治癒（消耗本回合行動）
-                ally._atkCd = 20;
+                _setNextActionCd(allyAttackIntervalTicks(ally, _ast)); allyAttackOnce(ally);
             } else if (ally.cls === 'mage') {
-                ally._atkCd = allyAttackIntervalTicks(ally, _ast);   // 法師使用真正職業/武器攻速與常駐加速（不再固定 2 秒）
-                allyActWithSkillGate(ally, allyMageAct);   // ⏳ 法師：攻擊魔法週期施放·平時基礎光箭普攻
+                let _didCast = allyActWithSkillGate(ally, allyMageAct);   // 🔮 施法成功週期走 cast；普攻才走武器攻速
+                _setNextActionCd(_didCast ? allyAtkSkillInterval(ally, false) : allyAttackIntervalTicks(ally, _ast));
             } else {
                 let wpn = (ally.eq && ally.eq.wpn) ? DB.items[ally.eq.wpn.id] : null;
                 // ⚔️ v3.0.98 傭兵攻速改用 recompute 後的完整 ally.d.aspd（＝base×spdMult：加速術/強力加速/行走加速/勇敢/餅乾/切割·劍術·巨斧·雙斧·王族劍術·奇古·魔劍精通/覺醒/血之渴望/變身/負重 全含·比照玩家 player.d.aspd）。
                 //   原本只用 atkSpdBaseItv(base)＋手動 cleave/劍術/奇古 且 floor 8＝0.8s → 漏掉加速術等、且把已算的精通夾在 0.8s（傭兵過慢主因）。buff 變動由 allyMaintainBuffs→_allyLevelRecompute 即時重算 ally.d.aspd；floor 改 1 比照玩家(js/03:290)使加速確實生效。
-                ally._atkCd = allyAttackIntervalTicks(ally, _ast);
                 let _actFn = (ally.cls === 'elf') ? allyElfAct : (ally.cls === 'dark') ? allyDarkAct : (ally.cls === 'knight') ? allyKnightAct : (ally.cls === 'dragon') ? allyDragonAct : (ally.cls === 'illusion') ? allyIllusionAct : (ally.cls === 'warrior') ? allyWarriorAct : (ally.cls === 'royal') ? allyRoyalAct : null;
-                if (_actFn) allyActWithSkillGate(ally, _actFn); else allyAttackOnce(ally);   // ⏳ 攻擊技能週期施放(每~2秒)·平時走職業各自普攻
+                if (_actFn) { let _didCast = allyActWithSkillGate(ally, _actFn); _setNextActionCd(_didCast ? allyAtkSkillInterval(ally, false) : allyAttackIntervalTicks(ally, _ast)); }
+                else { _setNextActionCd(allyAttackIntervalTicks(ally, _ast)); allyAttackOnce(ally); }   // 🔮 攻擊施法與普攻分開取各自速度
             }
         }
         } finally { if (_iAura && _iBase && (ally._recompN || 0) === _iRn) { ally.d.extraDmg = _iBase.ed; ally.d.extraHit = _iBase.eh; ally.d.magicDmg = _iBase.md; }   // 🔮 還原幻覺光環（若本回合發生升級重算→ally.d 已就地重建·跳過還原·避免把光環當基底扣掉）
@@ -2394,6 +2463,7 @@ function alliesTick() {
 // 治癒量與玩家共用 rollHealingSpell：只看 INT 治癒加成，不吃 magicDmg／SP／階級。回傳 true 代表佔用本回合行動。
 function allyTryHeal(ally) {
     let sid = ally._healSkill; if (!sid) return false;
+    if ((ally._healCastCd || 0) > 0) return false;   // 🔮 治癒套用與攻擊施法相同的職業／變身 cast 間隔
     let sk = DB.skills[sid]; if (!sk) return false;
     // 🩸 v2.6.69 審計#9：治癒欄支援吸血魔法（寒冷戰慄/吸血鬼之吻·type:'atk'+healSlot）——UI 可選但原讀取端只收 type:'heal'，選了永不施放。
     //    吸血只回復施放者本人 → 只看「自身」HP 門檻；有存活目標且 MP 足夠→走 allyCastMagic（其 lifesteal 分支回復 ally.curHp）
@@ -2406,6 +2476,8 @@ function allyTryHeal(ally) {
         let t0 = getTarget(); if (!t0 || t0.curHp <= 0) return false;
         ally.mp -= cost0; allyManaMasteryRefund(ally, cost0);
         allyCastMagic(ally, sk);
+        ally._healCastCd = allyAtkSkillInterval(ally, false, ally._healCastCd);
+        ally._lastHealCastSupport = false;
         return true;
     }
     let isHeal = (sk.type === 'heal' && !sk.autoBuff && !sk.hot && !['sk_antidote', 'sk_holy_light', 'sk_cancel'].includes(sid));
@@ -2447,6 +2519,8 @@ function allyTryHeal(ally) {
     if (typeof playSelfFx === 'function') { try { playSelfFx(sk.n, (typeof _partyMemberRect === 'function') ? _partyMemberRect(lowest) : null); } catch (e) {} }
     if (sk.groupHeal) logCombat(`<span class="text-emerald-300 font-bold">協力·${ally._allyName}</span> 施放 ${sk.n}，立即治癒全隊 ${_hit} 名成員，共恢復 ${_actual} 點 HP。`, 'heal', 'mercenary');
     else { let _who = (typeof _supName === 'function') ? _supName(lowest) : ((lowest === player) ? (player.name || '你') : ('協力·' + lowest._allyName)); logCombat(`<span class="text-emerald-300 font-bold">協力·${ally._allyName}</span> 施放 ${sk.n}，為 ${_who} 恢復 ${_actual} 點 HP。`, 'heal', 'mercenary'); }
+    ally._healCastCd = allyAtkSkillInterval(ally, true, ally._healCastCd);
+    ally._lastHealCastSupport = true;
     return true;
 }
 // 🍶 傭兵自動喝藥水：當傭兵 HP% 低於「HP 安全線」(_hpSafePct·隊伍面板設定)，消耗「隊長設定的藥水」(自動化設定的 set-pot·紅/橙/白藥水)回血。

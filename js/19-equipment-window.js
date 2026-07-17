@@ -46,7 +46,7 @@
         '亞力安', '人形殭屍', '侏儒', '哥布林', '地靈', '多羅', '妖魔', '妖魔弓箭手', '小惡魔', '巴列斯', '巴風特', '思克巴', '惡魔', '歐吉', '死亡', '狼人', '萊肯', '食人妖精王', '食屍鬼', '骷髏弓箭手', '骷髏斧手', '骷髏槍兵', '黑暗妖精刺客',   // 🧝 v3.0.50 +23 變身動態立繪
         '反王肯恩', '吸血鬼', '巨人', '白金巡守', '賽尼斯', '銀光巡守', '阿魯巴', '黃金巡守', '黑暗巡守', '黑暗精靈',   // 🧝 v3.0.52 +10 變身動態立繪
         '卡士柏', '史巴托', '妖魔巡守', '妖魔鬥士', '巨大牛人', '巴土瑟', '暴走兔', '果凍怪', '格利芬', '歐姆民兵', '獨眼巨人', '甘地妖魔', '石頭高崙', '紙人', '羅孚妖魔', '西瑪', '那魯加妖魔', '都達瑪拉妖魔', '重裝歐姆', '長老', '阿吐巴妖魔', '雪怪', '食人妖精', '馬庫爾', '骷髏', '黑暗妖精運送員', '黑長者', '黑騎士',   // 🧝 v3.0.57 +28 變身動態立繪（合計 76＝POLY_TIERS 全形態·變身動畫全數到位）
-        '真死亡騎士 冥皇丹特斯', '烈焰的死亡騎士']);   // 🌑 v3.4.67 冥皇執行劍變身＋烈焰死騎立繪
+        '真死亡騎士 冥皇丹特斯', '烈焰的死亡騎士', '莉絲安']);   // 🌑 v3.4.67 冥皇執行劍變身＋烈焰死騎立繪；🏹 v3.5.7 莉絲安立繪
     const MORPH_PORTRAIT_REF_H = 191;   // 炎魔 morph 畫布高＝基準（用戶：炎魔目前大小剛好）
     let _morphPortrait = { name: null, body: [], shadow: [], weapon: [], i: 0, timer: null, bandH: 0 };
     function _portraitLayers(image) {   // 影子/武器覆疊層（動態建立→index.html/test.html 免改）
@@ -72,11 +72,11 @@
         const sh = document.getElementById('equipment-morph-shadow'); if (sh) sh.style.visibility = 'hidden';
         const wp = document.getElementById('equipment-morph-weapon'); if (wp) wp.style.visibility = 'hidden';
     }
-    function _startMorphPortrait(dir, image) {   // 逐號探測 morph_0..N（含 _s/_w）→ 8fps 三層同步循環
+    function _startMorphPortrait(dir, image, tree) {   // 逐號探測 morph_0..N（含 _s/_w）→ 8fps 三層同步循環·tree 預設 morphanim（🧝 真夏納職業式變身→classanim）
         _stopMorphPortrait();
         _morphPortrait.name = dir;
         image.classList.add('morph-anim-portrait');
-        const base = 'assets/morphanim/' + encodeURIComponent(dir) + '/';
+        const base = 'assets/' + (tree || 'morphanim') + '/' + encodeURIComponent(dir) + '/';
         let natH = 0, pending = 3;
         const seqs = { body: [], shadow: [], weapon: [] };
         const done = () => {
@@ -174,7 +174,7 @@
         const box = el('equipment-morph-snapshot');
         if (!box || typeof player === 'undefined' || !player) return;
         const form = player._setPoly || ((player.buffs && player.buffs.poly > 0 && player.poly) ? player.poly : null);
-        if (!form) { _stopMorphPortrait(); const _im = el('equipment-morph-image'); if (_im) _im.setAttribute('data-morph', ''); box.classList.add('hidden'); return; }
+        if (!form || form.keepClassAppearance) { _stopMorphPortrait(); const _im = el('equipment-morph-image'); if (_im) _im.setAttribute('data-morph', ''); box.classList.add('hidden'); return; }
         box.classList.remove('hidden');
         el('equipment-morph-name').textContent = form.n || '變身';
         const aliases = {
@@ -190,11 +190,15 @@
         const image = el('equipment-morph-image');
         // 🖼️ v3.0.33 圖片退回鏈＋只在「變身名稱改變」時重載：專屬立繪(assets/morph/*.jpg) → 該怪戰鬥動畫首幀(assets/anim/<原名>/idle_0.png) → 隱藏。
         //   守衛避免 500ms 定時刷新每次都把 src 重設回可能 404 的立繪 → 退回鏈重跑造成閃爍。
-        if (image.getAttribute('data-morph') !== (form.n || '')) {
-            image.setAttribute('data-morph', form.n || '');
+        const _pKey = form.classMorph ? ((form.n || '') + (player.avatar || '')) : (form.n || '');   // 🧝 v3.5.21 真夏納：立繪逐職業性別（換職業存檔也要換立繪）
+        if (image.getAttribute('data-morph') !== _pKey) {
+            image.setAttribute('data-morph', _pKey);
             image.classList.remove('no-image');
             image.alt = form.n || '變身快照';
-            if (MORPH_ANIM_PORTRAIT.has(imageName)) {   // 🎬 v3.0.44 動態立繪（morph.spr 幀循環）
+            if (form.classMorph) {   // 🧝 真夏納：職業式變身立繪＝assets/classanim/<形態名><avatar>/morph_*
+                image.onerror = null;
+                _startMorphPortrait(_pKey, image, 'classanim');
+            } else if (MORPH_ANIM_PORTRAIT.has(imageName)) {   // 🎬 v3.0.44 動態立繪（morph.spr 幀循環）
                 image.onerror = null;
                 _startMorphPortrait(imageName, image);
             } else {   // 其餘：舊 .jpg → 動畫首幀 → 隱藏 退回鏈

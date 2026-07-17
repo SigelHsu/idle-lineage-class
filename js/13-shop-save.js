@@ -1365,6 +1365,7 @@ function loadGame() {
         if(player.panaceaUsed === undefined) player.panaceaUsed = 0;
         if(player.ismaelAccUsed === undefined) player.ismaelAccUsed = ((((player.siege || {}).accCdUntil) || 0) > Date.now());   // 🔧 舊檔遷移：飾品卷軸 24h 冷卻 → 次數制（冷卻中視為本額度已用）
         if(player.cds && player.cds.purifySk === undefined) player.cds.purifySk = 0;   // 🔧 舊檔遷移：淨化技獨立冷卻
+        if(player.cds && player.cds.convertSk === undefined) player.cds.convertSk = 0;   // 🔄 舊檔遷移：轉換技獨立施法冷卻
         if(!player.lastMapByCat) player.lastMapByCat = {};
         if(player.tracking === undefined) player.tracking = null;
         // 相容舊存檔：單一 partner → partners 陣列

@@ -506,7 +506,8 @@ function playMobSkill(mob) {
 //   攻擊音維持「武器類型」變體（怪物表無攻擊音）；施法音維持 per-法術（playSpellCast）。
 const MORPH_CLASS_VOICE = { '黃金騎士': 'knight_m', '白金騎士': 'knight_m', '銀光騎士': 'knight_m', '黑暗騎士': 'knight_m',
                             '黃金法師': 'mage_m', '白金法師': 'mage_m', '銀光法師': 'mage_m', '黑暗法師': 'mage_m',
-                            '黃金巡守': 'royal_m', '白金巡守': 'royal_m', '銀光巡守': 'royal_m', '黑暗巡守': 'royal_m' };   // 🧝 v3.0.57 四巡守→王子(王族男)語音
+                            '黃金巡守': 'royal_m', '白金巡守': 'royal_m', '銀光巡守': 'royal_m', '黑暗巡守': 'royal_m',   // 🧝 v3.0.57 四巡守→王子(王族男)語音
+                            '莉絲安': 'elf_m' };   // 🏹 v3.5.16 莉絲安受傷/死亡音套用男妖精語音（hurt_elf_m·用戶指定）
 function _morphSfxName() { return (typeof _playerMorphName === 'function') ? _playerMorphName() : null; }   // js/09 的 15 形態解析（含套裝別名）
 function _morphHurtOverride() {   // 回傳受傷音 pool key（並確保已排載）；無覆蓋→null
     var mn = _morphSfxName(); if (!mn) return null;

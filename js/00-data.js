@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.5.4';
+const GAME_VERSION = 'v3.5.26';
 // ===== 💾 存檔壓縮（LZString compressToUTF16/decompressFromUTF16·MIT, Pieroxy）：localStorage 內部以 UTF-16 壓縮，省 ~89%，繞過 5MB 上限 =====
 //  ⚠️ 只壓 localStorage（存檔位/倉庫/共用桶/_bak）；匯出檔維持明文 JSON（可攜·importSave 用 JSON.parse 驗證）。_lzGet 相容舊明文存檔（無 'LZ1:' 前綴→原樣回傳）。
 var LZString = (function () {
@@ -305,7 +305,7 @@ const DB = {
         "wpn_14": { n: "闊矛", type: "wpn", w2h: true, dmgS: 12, dmgL: 16, hit: 0, spd: 1.1, req: "knight,elf", safe: 6, p: 42, gachaWeight: 100, eff: "pierce", pierceChance: 60 },
         "wpn_15": { n: "吉薩", type: "wpn", w2h: true, dmgS: 12, dmgL: 14, hit: 0, spd: 1.1, req: "knight,elf", safe: 6, p: 280, gachaWeight: 100, eff: "pierce", pierceChance: 70 },
         "wpn_16": { n: "戟", type: "wpn", w2h: true, dmgS: 16, dmgL: 12, hit: 0, spd: 1.1, req: "knight", safe: 6, p: 2800, gachaWeight: 50, eff: "pierce", pierceChance: 60 },
-        "wpn_17": { n: "槍", type: "wpn", w2h: true, dmgS: 6, dmgL: 8, hit: 0, spd: 1.1, req: "knight", safe: 6, p: 84, gachaWeight: 100 },
+        "wpn_17": { n: "槍", type: "wpn", w2h: true, dmgS: 6, dmgL: 8, hit: 0, spd: 1.1, req: "knight", safe: 6, p: 84, gachaWeight: 100, eff: "pierce", pierceChance: 35 },   // 🔱 雙手矛＝穿透（原漏 eff·唯一沒穿透的雙手矛→補 35%·比照巴迪須/柴刀基礎階）
         "wpn_18": { n: "露西錘", type: "wpn", w2h: true, dmgS: 15, dmgL: 17, hit: 0, spd: 1.1, req: "knight", safe: 6, p: 14000, gachaWeight: 30, eff: "pierce", pierceChance: 50 },
         "wpn_19": { n: "戰錘", type: "wpn", w2h: true, dmgS: 17, dmgL: 19, hit: 0, spd: 1.2, req: "knight,elf", safe: 6, p: 1400, gachaWeight: 100, eff: "crush" },
         "wpn_20": { n: "流星錘", type: "wpn", dmgS: 9, dmgL: 10, hit: 0, spd: 1.1, req: "knight,elf", safe: 6, p: 4900, gachaWeight: 50 },
@@ -330,7 +330,7 @@ const DB = {
         "wpn_redknight": { n: "紅騎士之劍", type: "wpn", dmgS: 8, dmgL: 12, hit: 0, spd: 0.9, req: "all", safe: 6, p: 2400, str: 1, gachaWeight: 20 },
         "wpn_invader": { n: "侵略者之劍", type: "wpn", dmgS: 9, dmgL: 11, hit: 0, spd: 0.9, req: "all", safe: 6, p: 3500, gachaWeight: 100 },
         "wpn_33": { n: "骰子匕首", type: "wpn", dmgS: 3, dmgL: 3, hit: 0, spd: 0.7, eff: "dice_death", req: "all", safe: 6, p: 444, gachaWeight: 10 },
-        "wpn_damascus": { n: "大馬士革刀", type: "wpn", dmgS: 10, dmgL: 11, hit: 0, spd: 0.9, req: "knight,elf", safe: 6, p: 22000, eff: "crush", gachaWeight: 20 },   // 🔧 特效由反擊改為重擊（粉碎；粉碎消磨硬皮 -20）
+        "wpn_damascus": { n: "大馬士革刀", type: "wpn", dmgS: 10, dmgL: 11, hit: 0, spd: 0.9, req: "knight,elf", safe: 6, p: 22000, ignHardSkin: true, gachaWeight: 20 },   // ⚔️ 單手劍：反擊由 WEAPON_TAGS 賦予；貫穿無視硬皮額外減傷
         "wpn_34": { n: "短劍的劍身", type: "wpn", dmgS: 2, dmgL: 2, hit: 0, spd: 0.8, req: "all", safe: 6, p: 320, unBonus: true, gachaWeight: 100 },
         "wpn_35": { n: "長劍的劍身", type: "wpn", dmgS: 3, dmgL: 3, hit: 0, spd: 0.9, req: "all", safe: 6, p: 360, unBonus: true, gachaWeight: 100 },
         "wpn_36": { n: "奧里哈魯根的劍身", type: "wpn", dmgS: 4, dmgL: 4, hit: 0, spd: 0.9, req: "all", safe: 6, p: 960, unBonus: true, gachaWeight: 100 },
@@ -850,9 +850,9 @@ const DB = {
         "relic_sr_akaoni_pants": { n: "赤鬼的內褲",         type: "arm", slot: "shin", relic: true, noEnhance: true, ac: 2, str: 2, con: 1, req: "all", p: 10000, gachaWeight: 0, d: "【遺物】赤鬼的虎紋兜襠布，穿上便湧現蠻勇之力。" },
         "relic_sr_aooni_shirt":  { n: "青鬼的虎皮衫",       type: "arm", slot: "armor", relic: true, noEnhance: true, ac: 12, str: 1, con: 2, req: "all", p: 10000, gachaWeight: 0, d: "【遺物】青鬼披掛的虎皮衫，粗獷厚實如鬼族的筋骨。" },
         "relic_sr_nue_tail":     { n: "毒鵺的黑尾",         type: "wpn", chainsword: true, relic: true, noEnhance: true, weakExpose: true, ignHardSkin: true, procPoisonPct: { pct: 50, dur: 6 }, atkSpdPct: 20, dmgS: 26, dmgL: 26, hit: 16, dmgBonus: 18, req: "dragon", p: 10000, gachaWeight: 0, d: "【遺物】鵺的蛇頭黑尾製成的鎖鏈劍，噬咬之毒滲入每一道傷口。" },
-        "relic_sr_tengu_fan":    { n: "天狗的羽扇",         type: "wpn", isBow: true, ranged: true, relic: true, noEnhance: true, rapidfire: 80, ignHardSkin: true, wearerEle: "wind", onHitCastSkill: { skId: "sk_windblade", cdSec: 5 }, mdmg: 2, dmgS: 2, dmgL: 2, hit: 17, dmgBonus: 13, req: "elf,illusion", p: 10000, gachaWeight: 0, d: "【遺物】天狗搧起狂風的羽團扇，每一擊都挾帶撕裂的風刃。" },
+        "relic_sr_tengu_fan":    { n: "天狗的羽扇",         type: "wpn", isBow: true, ranged: true, relic: true, noEnhance: true, rapidfire: 80, ignHardSkin: true, ele: "wind", onHitCastSkill: { skId: "sk_windblade", cdSec: 5 }, mdmg: 2, dmgS: 2, dmgL: 2, hit: 17, dmgBonus: 13, req: "elf,illusion", p: 10000, gachaWeight: 0, d: "【遺物】天狗搧起狂風的羽團扇，每一擊都挾帶撕裂的風刃。" },
         "relic_sr_asura_arm":    { n: "阿修羅的武神技",     type: "arm", slot: "shield", armguard: { stat: "none", base: 0, th: [0, 0, 0] }, relic: true, noEnhance: true, ac: 0, atkSpdPct: 20, extraDmg: 2, extraHit: 2, req: "all", p: 10000, gachaWeight: 0, d: "【遺物】阿修羅像六臂的戰技凝為臂甲，出手快如修羅。臂甲（裝於副手，可與雙手武器並用）。" },
-        "relic_sr_kyuubi_wand":  { n: "九尾妖狐的怒火",     type: "wpn", isWand: true, relic: true, noEnhance: true, ignHardSkin: true, wearerEle: "fire", procSkill: "sk_fireball", procRateBase: 15, procRatePerEn: 0, procSkill2: { skId: "sk_fire_storm", rate: 5 }, mdmg: 4, mpR: 6, dmgS: 2, dmgL: 2, hit: 16, dmgBonus: 16, req: "mage,illusion", p: 10000, gachaWeight: 0, d: "【遺物】九尾妖狐的怒火凝成的妖杖，狐火隨揮舞飛散燎原。" },
+        "relic_sr_kyuubi_wand":  { n: "九尾妖狐的怒火",     type: "wpn", isWand: true, relic: true, noEnhance: true, ignHardSkin: true, ele: "fire", procSkill: "sk_fireball", procRateBase: 15, procRatePerEn: 0, procSkill2: { skId: "sk_fire_storm", rate: 5 }, mdmg: 4, mpR: 6, dmgS: 2, dmgL: 2, hit: 16, dmgBonus: 16, req: "mage,illusion", p: 10000, gachaWeight: 0, d: "【遺物】九尾妖狐的怒火凝成的妖杖，狐火隨揮舞飛散燎原。" },
         "relic_sr_ushioni_horn": { n: "牛鬼的斷角",         type: "wpn", w2h: true, noBleed: true, relic: true, noEnhance: true, eff: "pierce", pierceChance: 100, ignHardSkin: true, procStatusSkill: { skId: "sk_disease", rate: 15 }, heavyBonusDmg: 20, dmgS: 25, dmgL: 25, hit: 17, dmgBonus: 18, req: "royal,knight", p: 10000, gachaWeight: 0, d: "【遺物】牛鬼折斷的巨角削成的長矛，帶著瘴癘之氣貫穿一切。" },
         "relic_sr_child_ring":   { n: "牛鬼之子的黑戒",     type: "acc", slot: "ring", relic: true, noEnhance: true, ac: 0, statusHealHp: 50, req: "all", p: 10000, gachaWeight: 0, d: "【遺物】牛鬼之子甲殼磨成的黑戒，受到異常狀態侵襲時反而激發生機，恢復 50 點 HP。" },
         "relic_sr_gasha_skull":  { n: "巨大骷髏的頭骨",     type: "arm", slot: "armor", relic: true, noEnhance: true, ac: 20, mr: 10, resNone: 10, req: "royal,knight,dragon,warrior", p: 10000, gachaWeight: 0, d: "【遺物】巨大骷髏的頭骨鑿成的胸鎧，怨念的殘響替穿戴者擋下詛咒。" },
@@ -1023,7 +1023,7 @@ const DB = {
         "mat_emperor_manual":  { n: "真．冥皇製作防具秘笈", type: "etc", p: 0, c: "text-amber-300", noSell: true, gachaWeight: 0, d: "記載 真．冥皇 系列防具鍛造祕法的秘笈，每鍛造一件消耗 1 本。" },
         "mat_de_soul_crystal": { n: "黑暗妖精的靈魂水晶", type: "etc", p: 3000, gachaWeight: 0, d: "受詛咒的黑暗妖精殘留的靈魂結晶，鍛造 真．冥皇 系列防具的材料。" },
         "wpn_giltas_sword":  { n: "吉爾塔斯之劍", type: "wpn", w2h: true, legend: true, dmgS: 43, dmgL: 53, hit: 7, dmgBonus: 30, spd: 1, req: "knight,dragon", safe: 0, p: 990000, gachaWeight: 0, eff: "cleave", ignHardSkin: true, str: 2, con: 1, cha: 2, d: "吉爾塔斯魔力凝成的雙手魔劍，劍身纏繞著異界的沙塵與血氣。切割（一般限定）、貫穿、力量+2、體質+1、魅力+2；擊殺敵人後，獲得額外傷害+10，持續10秒。" },
-        "wpn_giltas_wand":   { n: "吉爾塔斯魔杖", type: "wpn", w2h: true, legend: true, dmgS: 15, dmgL: 15, hit: 0, dmgBonus: 0, spd: 1.0, req: "mage,illusion", safe: 0, p: 990000, gachaWeight: 0, eff: "magicburst", int: 2, wis: 2, mpR: 15, d: "吉爾塔斯魔力凝成的雙手魔杖，杖端迴盪著異界的低語。魔爆（一般限定）、貫穿、智力+2、精神+2、MP自然恢復量+15；擊殺敵人後，獲得額外魔法點數+10，持續10秒。" },
+"wpn_giltas_wand":   { n: "吉爾塔斯魔杖", type: "wpn", w2h: true, legend: true, dmgS: 15, dmgL: 15, hit: 0, dmgBonus: 0, spd: 1.0, req: "mage,illusion", safe: 0, p: 990000, gachaWeight: 0, eff: "magicburst", int: 2, wis: 2, mpR: 15, d: "吉爾塔斯魔力凝成的雙手魔杖，杖端迴盪著異界的低語。魔爆（一般限定）、貫穿、智力+2、精神+2、MP自然恢復量+15；擊殺敵人後，獲得額外魔法點數+20，持續10秒。" },
         "wpn_rotten_longbow":{ n: "腐壞的長弓", type: "wpn", w2h: true, isBow: true, ranged: true, legend: true, dmgS: 5, dmgL: 4, hit: 7, dmgBonus: 5, rapidfire: 100, ignHardSkin: true, req: "elf,illusion", safe: 6, p: 850000, gachaWeight: 1, d: "在聖地深處腐朽多年的長弓，弓身雖朽、殺意未減。連射100%（一般限定）、貫穿（需裝備箭矢）。" },
         "wpn_cursed_emperor_blade": { n: "受詛咒的真．冥皇執行劍", type: "wpn", legend: true, dmgS: 19, dmgL: 22, hit: 4, dmgBonus: 0, spd: 1, ignHardSkin: true, hpR: -30, req: "royal,knight,elf,mage,dark", safe: 6, p: 990000, gachaWeight: 0, d: "冥皇的詛咒滲入劍身的漆黑執行劍，握柄傳來刺骨的死寂。反擊（一般限定）、居合（一般限定）、貫穿、HP自然恢復量-30；裝備時變身為 死亡騎士。" },   // 🌑 v3.4.0 裝備時變身死亡騎士＝js/02 _setPoly 管線；反擊+居合＝WEAPON_TAGS 雙標籤（js/10）
         "shd_rebel":    { n: "反叛者的盾牌", type: "arm", slot: "shield", legend: true, ac: 3, hitstunReduce: 5, dmgReduceProc: { rate: 1, per: 2, amt: 50 }, req: "royal,knight", safe: 4, p: 700000, gachaWeight: 1, d: "反叛者們代代相傳的堅盾。硬質減少0.5秒；受到傷害時 1% 機率使該次傷害減少 50，每強化 +1 機率 +2%。" },

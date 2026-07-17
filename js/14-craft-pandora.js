@@ -450,7 +450,7 @@ function renderUniversalCraft(div, npcId) {
         html += `
         <div class="list-item bg-slate-800 rounded mb-2 border border-slate-700 p-3 hover:bg-slate-700 transition-colors" style="display:flex !important; justify-content:space-between !important; align-items:center !important; width:100% !important; box-sizing:border-box !important;">
             <div class="flex items-center gap-4 min-w-0 flex-1">
-                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host">
+                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host" data-tip-id="${r.result}" data-tip-craft="1">
                     <img src="${imgUrl}" onerror="this.style.display='none';" class="w-10 h-10 object-contain pointer-events-none">
                 </div>
                 <div class="flex flex-col items-start gap-1.5">
@@ -504,7 +504,7 @@ function buildDemonKingCraftHTML() {
         html += `
         <div class="list-item bg-slate-800 rounded mb-2 border border-slate-700 p-3" style="display:flex !important; justify-content:space-between !important; align-items:center !important; width:100% !important; box-sizing:border-box !important;">
             <div class="flex items-center gap-4 min-w-0 flex-1">
-                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host">
+                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host" data-tip-id="${r.result}" data-tip-craft="1">
                     <img src="${imgUrl}" onerror="this.style.display='none';" class="w-10 h-10 object-contain pointer-events-none">
                 </div>
                 <div class="flex flex-col items-start gap-1.5">
@@ -567,7 +567,7 @@ function buildLumielCraftHTML() {
         html += `
         <div class="list-item bg-slate-800 rounded mb-2 border border-slate-700 p-3" style="display:flex !important; justify-content:space-between !important; align-items:center !important; width:100% !important; box-sizing:border-box !important;">
             <div class="flex items-center gap-4 min-w-0 flex-1">
-                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host">
+                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host" data-tip-id="${r.result}" data-tip-craft="1">
                     <img src="${imgUrl}" onerror="this.style.display='none';" class="w-10 h-10 object-contain pointer-events-none">
                 </div>
                 <div class="flex flex-col items-start gap-1.5">
@@ -632,7 +632,7 @@ function buildMysticWandCraftHTML() {
         html += `
         <div class="list-item bg-slate-800 rounded mb-2 border border-slate-700 p-3" style="display:flex !important; justify-content:space-between !important; align-items:center !important; width:100% !important; box-sizing:border-box !important;">
             <div class="flex items-center gap-4 min-w-0 flex-1">
-                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host">
+                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host" data-tip-id="${r.result}" data-tip-craft="1">
                     <img src="${imgUrl}" onerror="this.style.display='none';" class="w-10 h-10 object-contain pointer-events-none">
                 </div>
                 <div class="flex flex-col items-start gap-1.5">
@@ -689,7 +689,7 @@ function buildSlayerCraftHTML() {
         html += `
         <div class="list-item bg-slate-800 rounded mb-2 border border-slate-700 p-3" style="display:flex !important; justify-content:space-between !important; align-items:center !important; width:100% !important; box-sizing:border-box !important;">
             <div class="flex items-center gap-4 min-w-0 flex-1">
-                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host">
+                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host" data-tip-id="${r.result}" data-tip-craft="1">
                     <img src="${imgUrl}" onerror="this.style.display='none';" class="w-10 h-10 object-contain pointer-events-none">
                 </div>
                 <div class="flex flex-col items-start gap-1.5">
@@ -738,7 +738,7 @@ function renderMoliCraft(div) {
         html += `
         <div class="list-item bg-slate-800 rounded mb-2 border border-slate-700 p-3 hover:bg-slate-700 transition-colors" style="display:flex !important; justify-content:space-between !important; align-items:center !important; width:100% !important; box-sizing:border-box !important;">
             <div class="flex items-center gap-4 min-w-0 flex-1">
-                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host">
+                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host" data-tip-id="${r.result}" data-tip-craft="1">
                     <img src="${imgUrl}" onerror="this.style.display='none';" class="w-10 h-10 object-contain pointer-events-none">
                 </div>
                 <div class="flex flex-col items-start gap-1.5">
@@ -769,7 +769,7 @@ function renderBraboCraft(div) {
         html += `
         <div class="list-item bg-slate-800 rounded mb-2 border border-slate-700 p-3 hover:bg-slate-700 transition-colors" style="display:flex !important; justify-content:space-between !important; align-items:center !important; width:100% !important; box-sizing:border-box !important;">
             <div class="flex items-center gap-4 min-w-0 flex-1">
-                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host">
+                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host" data-tip-id="${r.result}" data-tip-craft="1">
                     <img src="${imgUrl}" onerror="this.style.display='none';" class="w-10 h-10 object-contain pointer-events-none">
                 </div>
                 <div class="flex flex-col items-start gap-1.5">
@@ -799,7 +799,7 @@ function renderFinnCraft(div, npcId) {
         html += `
         <div class="list-item bg-slate-800 rounded mb-2 border border-slate-700 p-3 hover:bg-slate-700 transition-colors" style="display:flex !important; justify-content:space-between !important; align-items:center !important; width:100% !important; box-sizing:border-box !important;">
             <div class="flex items-center gap-4 min-w-0 flex-1">
-                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host">
+                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host" data-tip-id="${r.result}" data-tip-craft="1">
                     <img src="${imgUrl}" onerror="this.style.display='none';" class="w-10 h-10 object-contain pointer-events-none">
                 </div>
                 <div class="flex flex-col items-start gap-1.5">
@@ -829,7 +829,7 @@ function renderJoelCraft(div, npcId) {
         html += `
         <div class="list-item bg-slate-800 rounded mb-2 border border-slate-700 p-3 hover:bg-slate-700 transition-colors" style="display:flex !important; justify-content:space-between !important; align-items:center !important; width:100% !important; box-sizing:border-box !important;">
             <div class="flex items-center gap-4 min-w-0 flex-1">
-                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host">
+                <div class="w-12 h-12 bg-slate-900 rounded border border-slate-600 flex items-center justify-center shrink-0 tip-host" data-tip-id="${r.result}" data-tip-craft="1">
                     <img src="${imgUrl}" onerror="this.style.display='none';" class="w-10 h-10 object-contain pointer-events-none">
                 </div>
                 <div class="flex flex-col items-start gap-1.5">
@@ -1243,13 +1243,14 @@ function getWeightedGachaResult(doubleNonRare) {
 }
 
 // ==========================================
-// 🔧 潘朵拉黑市 v3.0.81：一次陳列 20 件商品（緊湊格·icon/名稱/價格/購買·能力走 tooltip）。
-//    每 5 分鐘輪換 1 格（round-robin），每件商品自上架起持續 100 分鐘（20 格 × 5 分鐘一圈）才再刷新。
-//    以遊戲 tick 計時（存讀檔保留·離線經補跑自然推進）；離線超過一圈(100分鐘)直接全面換貨。
+// 🔧 潘朵拉黑市：一次陳列 24 件商品（桌面 3 欄 × 8 列；icon/名稱/價格/購買·能力走 tooltip）。
+//    每 10 分鐘輪換 1 格（round-robin），每件商品自上架起持續 240 分鐘（24 格 × 10 分鐘一圈）才再刷新。
+//    以遊戲 tick 計時（存讀檔保留·離線經補跑自然推進）；離線超過一圈(240分鐘)直接全面換貨。
 //    出現機率＝原始 gachaWeight（v3.0.81 起 initGachaWeights 的 ≥50 ×2 加倍已移除）。
 // ==========================================
-const PANDORA_SLOT_COUNT = 20;
-const PANDORA_SLOT_TICKS = 3000;   // 5 分鐘 = 300 秒 × 10 tick/秒（每 5 分鐘輪換一格 → 每格 100 分鐘刷新一次）
+const PANDORA_SLOT_COUNT = 24;
+const PANDORA_SLOT_TICKS = 6000;   // 10 分鐘 = 600 秒 × 10 tick/秒
+const PANDORA_LIFETIME_TICKS = PANDORA_SLOT_TICKS * PANDORA_SLOT_COUNT;   // 240 分鐘
 let _pandoraDiv = null;            // 目前黑市面板容器（購買/輪換後重繪用）
 
 // 🔧 v3.0.81 售價公式（使用者規格）：權重 w 夾 [1,100]
@@ -1266,11 +1267,110 @@ function pandoraPrice(id) {
     return Math.max(1, Math.round(base * mult));
 }
 
-// 上架一件新商品（依原始權重抽選＋擲售價）
-function _pandoraStock(nowT) {
+// 上架一件新商品：若有收購單，先替指定物品擲一次市場價；市場價不高於喊價才命中，
+// 並以玩家喊價上架。失敗時不影響收購單，改走正常權重抽選。
+function _pandoraStock(nowT, market) {
+    let order = market && market.buyOrder;
+    if (order && DB.items[order.id] && (DB.items[order.id].gachaWeight || 0) > 0 && Number.isSafeInteger(order.price) && order.price > 0) {
+        let rolledPrice = pandoraPrice(order.id);
+        if (rolledPrice <= order.price) {
+            let od = DB.items[order.id];
+            let hit = { id: order.id, price: order.price, weight: od.gachaWeight || 100, setTick: nowT, sold: false, buyOrder: true };
+            market.buyOrder = null;   // 單一收購單命中即完成，不再重複上架
+            market.notice = { type: 'success', text: `玩家收購物品上架了：${od.n}（${order.price.toLocaleString()} 金幣）` };
+            return hit;
+        }
+    }
     let id = getWeightedGachaResult();
     let d = DB.items[id] || {};
     return { id: id, price: pandoraPrice(id), weight: d.gachaWeight || 100, setTick: nowT, sold: false };
+}
+
+function _pandoraEsc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function _pandoraSetNotice(m, type, text) {
+    if (m) m.notice = { type: type || 'info', text: String(text || '') };
+}
+
+function _pandoraNoticeHTML(m) {
+    let n = m && m.notice;
+    if (!n || !n.text) return '';
+    let c = n.type === 'success' ? 'text-green-400' : n.type === 'error' ? 'text-red-400' : 'text-amber-300';
+    return `<span class="${c}">${_pandoraEsc(n.text)}</span>`;
+}
+
+// 收購名稱自動提示：輸入至少 2 個連續字元後，以名稱片段搜尋實際可進潘朵拉市場的物品。
+function pandoraSuggestBuyItems(value) {
+    let box = document.getElementById('pandora-buy-suggestions');
+    if (!box) return;
+    let q = String(value || '').trim();
+    if (q.length < 2) { box.innerHTML = ''; box.classList.add('hidden'); return; }
+    let seen = new Set();
+    let names = Object.keys(DB.items).map(id => DB.items[id]).filter(d => {
+        if (!d || !d.n || (d.gachaWeight || 0) <= 0 || !d.n.includes(q) || seen.has(d.n)) return false;
+        seen.add(d.n); return true;
+    }).map(d => d.n).sort((a, b) => {
+        let ap = a.startsWith(q) ? 0 : 1, bp = b.startsWith(q) ? 0 : 1;
+        return ap - bp || a.length - b.length || a.localeCompare(b, 'zh-Hant');
+    }).slice(0, 8);
+    if (!names.length) {
+        box.innerHTML = '<div class="pandora-buy-suggestion-empty">沒有可販售的相符物品</div>';
+    } else {
+        box.innerHTML = names.map(n =>
+            `<button type="button" class="pandora-buy-suggestion" data-name="${encodeURIComponent(n)}"
+                onclick="pandoraChooseBuyItem(decodeURIComponent(this.dataset.name))">${_pandoraEsc(n)}</button>`
+        ).join('');
+    }
+    box.classList.remove('hidden');
+}
+
+function pandoraChooseBuyItem(name) {
+    let el = document.getElementById('pandora-buy-name');
+    let box = document.getElementById('pandora-buy-suggestions');
+    if (el) { el.value = String(name || ''); el.focus(); }
+    if (box) { box.innerHTML = ''; box.classList.add('hidden'); }
+}
+
+// 設定單一收購單：物品名稱必須完全吻合，且必須屬於潘朵拉會販售的權重池。
+function pandoraSetBuyOrder() {
+    let m = player && player.pandoraMarket2;
+    if (!m) return;
+    let nameEl = document.getElementById('pandora-buy-name');
+    let priceEl = document.getElementById('pandora-buy-price');
+    let name = nameEl ? nameEl.value.trim() : '';
+    let rawPrice = priceEl ? priceEl.value.replace(/[,\s，]/g, '') : '';
+    let price = Number(rawPrice);
+    let matches = Object.keys(DB.items).filter(id => DB.items[id] && DB.items[id].n === name);
+    if (!name || !matches.length) {
+        _pandoraSetNotice(m, 'error', '無此物品，請輸入完整且正確的物品名稱。');
+    } else {
+        let sellable = matches.filter(id => (DB.items[id].gachaWeight || 0) > 0);
+        if (!sellable.length) {
+            _pandoraSetNotice(m, 'error', '目前沒人販售此物品。');
+        } else if (!Number.isSafeInteger(price) || price <= 0) {
+            _pandoraSetNotice(m, 'error', '請輸入正確的正整數收購價格。');
+        } else {
+            let id = sellable[0];
+            m.buyOrder = { id: id, price: price, setTick: (typeof state !== 'undefined' && state) ? (state.ticks || 0) : 0 };
+            _pandoraSetNotice(m, 'info', `已登記收購：${DB.items[id].n}，最高 ${price.toLocaleString()} 金幣。每次商品刷新前都會嘗試一次。`);
+            try { saveGame(); } catch (e) {}
+        }
+    }
+    if (_pandoraDiv) pandoraRenderMarket(_pandoraDiv);
+}
+
+function pandoraCancelBuyOrder() {
+    let m = player && player.pandoraMarket2;
+    if (!m) return;
+    if (m.buyOrder) {
+        let d = DB.items[m.buyOrder.id];
+        m.buyOrder = null;
+        _pandoraSetNotice(m, 'info', `已取消收購${d ? '：' + d.n : '單'}。`);
+        try { saveGame(); } catch (e) {}
+    }
+    if (_pandoraDiv) pandoraRenderMarket(_pandoraDiv);
 }
 
 // 物品系統日誌只保留「最新刷新」的上架訊息：先移除舊的上架列，再記一筆（補跑期間 logSys 自靜音）
@@ -1278,7 +1378,12 @@ function _pandoraLogLatest(slot) {
     let d = DB.items[slot.id]; if (!d) return;
     try { document.querySelectorAll('#sys-log .pandora-stock-log').forEach(sp => { let le = sp.closest('.log-entry'); if (le) le.remove(); }); } catch (e) {}
     let rare = slot.weight === 1;
-    logSys(`<span class="pandora-stock-log"><span class="text-purple-300 font-bold">📢【潘朵拉黑市】</span>${rare ? '珍稀商品 ' : '新上架 '}<span class="${getItemColor({ id: slot.id })}">${d.n}</span>（${slot.price.toLocaleString()} 金幣）${rare ? '！' : '。'}</span>`);
+    let lead = slot.buyOrder ? '玩家收購物品上架了：' : (rare ? '珍稀商品 ' : '新上架 ');
+    logSys(`<span class="pandora-stock-log"><span class="text-purple-300 font-bold">📢【潘朵拉黑市】</span>${lead}<span class="${getItemColor({ id: slot.id })}">${d.n}</span>（${slot.price.toLocaleString()} 金幣）${rare ? '！' : '。'}</span>`);
+}
+function _pandoraLogBuyOrder(slot) {
+    let d = slot && DB.items[slot.id]; if (!d) return;
+    logSys(`<span class="pandora-buyorder-log"><span class="text-amber-300 font-bold">📢【潘朵拉收購】</span>玩家收購物品上架了：<span class="${getItemColor({ id: slot.id })}">${d.n}</span>（${slot.price.toLocaleString()} 金幣）。</span>`);
 }
 
 // 黑市輪換（js/03 每 10 秒呼叫一次；force＝全面換貨）。回傳本次是否有商品刷新。
@@ -1286,19 +1391,30 @@ function refreshPandoraMarket(force) {
     if (typeof player === 'undefined' || !player) return false;
     let nowT = (typeof state !== 'undefined' && state) ? (state.ticks || 0) : 0;
     let m = player.pandoraMarket2;
-    let changed = false, latest = null;
+    let changed = false, latest = null, orderHit = null;
     let bad = !m || !Array.isArray(m.slots) || m.slots.length !== PANDORA_SLOT_COUNT || m.slots.some(s => !s || !DB.items[s.id]);
-    if (force || bad || (nowT - (m ? (m.lastTick || 0) : 0)) >= PANDORA_SLOT_TICKS * PANDORA_SLOT_COUNT) {
+    if (force || bad || (nowT - (m ? (m.lastTick || 0) : 0)) >= PANDORA_LIFETIME_TICKS) {
         // 初次進場／資料損壞／離線超過一圈：全面換貨（日誌只公告最新一件，不洗版）
-        let slots = []; for (let i = 0; i < PANDORA_SLOT_COUNT; i++) slots.push(_pandoraStock(nowT));
-        m = player.pandoraMarket2 = { slots: slots, seq: 0, lastTick: nowT, lastIdx: PANDORA_SLOT_COUNT - 1 };
+        let nextMarket = {
+            slots: [], seq: 0, lastTick: nowT, lastIdx: PANDORA_SLOT_COUNT - 1,
+            buyOrder: m && m.buyOrder ? m.buyOrder : null,
+            notice: m && m.notice ? m.notice : null
+        };
+        for (let i = 0; i < PANDORA_SLOT_COUNT; i++) {
+            let s = _pandoraStock(nowT, nextMarket);
+            if (s.buyOrder) orderHit = s;
+            nextMarket.slots.push(s);
+        }
+        let slots = nextMarket.slots;
+        m = player.pandoraMarket2 = nextMarket;
         latest = slots[PANDORA_SLOT_COUNT - 1]; changed = true;
     } else {
         let n = 0;
         while ((nowT - m.lastTick) >= PANDORA_SLOT_TICKS && n < PANDORA_SLOT_COUNT) {
             m.lastTick += PANDORA_SLOT_TICKS;
-            let i = (m.seq || 0) % PANDORA_SLOT_COUNT;   // round-robin：每格恰好 100 分鐘輪到一次
-            m.slots[i] = _pandoraStock(nowT);
+            let i = (m.seq || 0) % PANDORA_SLOT_COUNT;   // round-robin：每格恰好 240 分鐘輪到一次
+            m.slots[i] = _pandoraStock(nowT, m);
+            if (m.slots[i].buyOrder) orderHit = m.slots[i];
             latest = m.slots[i]; m.lastIdx = i;
             m.seq = (m.seq || 0) + 1; n++; changed = true;
         }
@@ -1306,8 +1422,9 @@ function refreshPandoraMarket(force) {
     if (!changed) return false;
     if (latest) {
         _pandoraLogLatest(latest);   // 🔧 物品系統日誌只顯示最新刷新的物品
+        if (orderHit && orderHit !== latest) _pandoraLogBuyOrder(orderHit);   // 離線補跑／全面換貨中若較早的格命中收購，仍要獨立提示玩家
         // 珍稀(權重1)橫幅：最新上架為珍稀→公告之；否則若原公告品仍在架上未售出則保留、已下架/售出則清除
-        player.pandoraAnnounce = (latest.weight === 1) ? latest.id
+        player.pandoraAnnounce = (orderHit && orderHit.weight === 1) ? orderHit.id : (latest.weight === 1) ? latest.id
             : (player.pandoraAnnounce && m.slots.some(s => s && s.id === player.pandoraAnnounce && !s.sold) ? player.pandoraAnnounce : null);
     }
     try { renderPandoraBanner(); } catch (e) {}
@@ -1365,7 +1482,7 @@ function pandoraTipShow(ev, i) {
     let inst = { id: s.id };
     let desc = ''; try { desc = buildItemDescHTML(inst); } catch (e) {}
     let nowT = (typeof state !== 'undefined' && state) ? (state.ticks || 0) : 0;
-    let mins = Math.max(1, Math.ceil((PANDORA_SLOT_TICKS * PANDORA_SLOT_COUNT - (nowT - (s.setTick || 0))) / 600));
+    let mins = Math.max(1, Math.ceil((PANDORA_LIFETIME_TICKS - (nowT - (s.setTick || 0))) / 600));
     let el = _pandoraTipEl();
     el.innerHTML = `<div class="font-bold ${getItemColor(inst)}">${getItemFullName(inst)}</div>
         <div class="text-yellow-300 font-bold">售價 ${s.price.toLocaleString()} 金幣${s.weight === 1 ? '<span style="color:#c084fc;">（珍稀）</span>' : ''}${s.sold ? '<span style="color:#64748b;">（已售出）</span>' : ''}</div>
@@ -1384,7 +1501,7 @@ function pandoraTipMove(ev) {
 }
 function pandoraTipHide() { let el = document.getElementById('pandora-tooltip'); if (el) el.style.display = 'none'; }
 
-// 繪製黑市面板：20 件商品緊湊格（4×5）·只顯示 icon／名稱／價格／購買·能力用 tooltip
+// 繪製黑市面板：24 件商品（桌面 3×8）·只顯示 icon／名稱／價格／購買·能力用 tooltip
 function pandoraRenderMarket(div) {
     if (!div) return;
     _pandoraDiv = div;
@@ -1393,31 +1510,56 @@ function pandoraRenderMarket(div) {
     if (!m) { div.innerHTML = '<div class="p-6 text-center text-slate-300">黑市目前沒有商品，請稍候。</div>'; return; }
     let nowT = (typeof state !== 'undefined' && state) ? (state.ticks || 0) : 0;
     let nextMin = Math.max(1, Math.ceil((PANDORA_SLOT_TICKS - (nowT - (m.lastTick || 0))) / 600));
+    let order = m.buyOrder;
+    let orderItem = order && DB.items[order.id];
+    let orderName = orderItem ? orderItem.n : '';
+    let orderPrice = order && Number.isSafeInteger(order.price) ? String(order.price) : '';
     let cards = m.slots.map((s, i) => {
         let d = s && DB.items[s.id]; if (!d) return '';
         let inst = { id: s.id };
         let rare = s.weight === 1;
         let afford = (player.gold || 0) >= s.price;
         let border = s.sold ? 'border-slate-700' : rare ? 'border-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.45)]' : 'border-slate-600';
-        // 🔧 v3.0.87 緊湊「單行橫條」：圖示｜名稱/價格｜購買鈕（右側·窄）→ 每列高度約砍半，5 橫排可完整顯示、少捲動
+        // 三欄橫條：圖示｜名稱/價格｜購買鈕；卡片加寬後保留完整名稱與清楚點擊區。
         let btn = s.sold
-            ? `<button disabled class="btn shrink-0 bg-slate-700 border-slate-600 opacity-60 cursor-not-allowed font-bold rounded" style="font-size:10px;padding:2px 6px;">售出</button>`
-            : `<button onclick="buyPandoraItem(${i})" ${afford ? '' : 'disabled'} class="btn shrink-0 ${afford ? 'bg-purple-700 hover:bg-purple-600 border-purple-500' : 'bg-slate-700 border-slate-600 opacity-60 cursor-not-allowed'} font-bold rounded" style="font-size:10px;padding:2px 7px;">購買</button>`;
-        return `<div class="rounded-md border ${border} bg-slate-900/80 flex items-center gap-1 ${s.sold ? 'opacity-70' : ''}" style="padding:2px 4px;"
+            ? `<button disabled class="btn shrink-0 bg-slate-700 border-slate-600 opacity-60 cursor-not-allowed font-bold rounded pandora-card-buy">售出</button>`
+            : `<button onclick="buyPandoraItem(${i})" ${afford ? '' : 'disabled'} class="btn shrink-0 ${afford ? 'bg-purple-700 hover:bg-purple-600 border-purple-500' : 'bg-slate-700 border-slate-600 opacity-60 cursor-not-allowed'} font-bold rounded pandora-card-buy">購買</button>`;
+        return `<div class="pandora-market-card rounded-md border ${border} bg-slate-900/80 flex items-center ${s.sold ? 'opacity-70' : ''}"
             onmouseenter="pandoraTipShow(event,${i})" onmousemove="pandoraTipMove(event)" onmouseleave="pandoraTipHide()">
-            <img src="${getIconUrl(d)}" onerror="this.src='https://placehold.co/40x40/1e293b/ffffff?text=?';" class="shrink-0 object-contain ${s.sold ? 'grayscale opacity-40' : getGlowClass(inst, d)}" style="width:22px;height:22px;">
+            <img src="${getIconUrl(d)}" onerror="this.src='https://placehold.co/40x40/1e293b/ffffff?text=?';" class="pandora-card-icon shrink-0 object-contain ${s.sold ? 'grayscale opacity-40' : getGlowClass(inst, d)}">
             <div class="min-w-0 flex-1">
-                <div class="font-bold leading-none truncate ${getItemColor(inst)}" style="font-size:11px;">${d.n}</div>
-                <div class="text-yellow-300 font-bold leading-none truncate" style="font-size:10px;margin-top:2px;">${s.price.toLocaleString()}<span class="text-slate-500" style="font-size:8px;"> 金</span></div>
+                <div class="pandora-card-name font-bold leading-none truncate ${getItemColor(inst)}">${d.n}${s.buyOrder ? '<span class="pandora-order-tag">收購</span>' : ''}</div>
+                <div class="pandora-card-price text-yellow-300 font-bold leading-none truncate">${s.price.toLocaleString()}<span class="text-slate-500"> 金</span></div>
             </div>
             ${btn}
         </div>`;
     }).join('');
     div.innerHTML = `
-    <div class="flex flex-col h-full w-full overflow-y-auto" style="padding:4px 6px;">
-        <h3 class="text-center font-bold text-purple-400 drop-shadow-md leading-none shrink-0" style="font-size:15px;margin-bottom:4px;">潘朵拉黑市 <span class="text-slate-400 font-normal" style="font-size:10px;">每 5 分輪換 1 件·滑鼠移上檢視能力·約 ${nextMin} 分後輪換｜金幣 <span class="text-yellow-300 font-bold">${(player.gold || 0).toLocaleString()}</span></span></h3>
-        <div class="grid gap-1.5" style="grid-template-columns:repeat(4,minmax(0,1fr));">${cards}</div><!-- 🔧 v3.0.87 用 inline grid-template-columns 指定 4 欄：預編譯 tailwind-built.css 只含 .md:grid-cols-4（響應式變體）而無無前綴 .grid-cols-4→原 class 失效退回單欄(20 直排·太長)；改 inline 不依賴 build -->
-        <p id="pandora-msg" class="text-yellow-300 font-bold text-center shrink-0 empty:hidden" style="font-size:12px;margin-top:4px;"></p>
+    <div class="pandora-market-panel flex flex-col h-full w-full overflow-y-auto">
+        <h3 class="pandora-market-title text-center font-bold text-purple-400 drop-shadow-md leading-none shrink-0">潘朵拉黑市
+            <span class="text-slate-400 font-normal">每 10 分鐘輪換 1 件·單件持續 240 分鐘·約 ${nextMin} 分鐘後輪換｜金幣 <span class="text-yellow-300 font-bold">${(player.gold || 0).toLocaleString()}</span></span>
+        </h3>
+        <div class="pandora-buy-box shrink-0">
+            <div class="pandora-buybar">
+                <span class="pandora-buy-word">收</span>
+                <div class="pandora-buy-name-wrap">
+                    <input id="pandora-buy-name" type="text" value="${_pandoraEsc(orderName)}" placeholder="完整物品名稱" autocomplete="off"
+                        oninput="pandoraSuggestBuyItems(this.value)" onkeydown="if(event.key==='Enter'){pandoraSetBuyOrder()}">
+                    <div id="pandora-buy-suggestions" class="pandora-buy-suggestions hidden"></div>
+                </div>
+                <span class="pandora-buy-comma">，</span>
+                <input id="pandora-buy-price" type="text" inputmode="numeric" value="${_pandoraEsc(orderPrice)}" placeholder="收購價錢" autocomplete="off"
+                    onkeydown="if(event.key==='Enter'){pandoraSetBuyOrder()}">
+                <span class="pandora-buy-word">收</span>
+                <button class="btn pandora-buy-submit font-bold" onclick="pandoraSetBuyOrder()">確認收購</button>
+            </div>
+            <div class="pandora-buy-status">
+                <span>${orderItem ? `目前收購：<b class="${getItemColor({ id: order.id })}">${_pandoraEsc(orderItem.n)}</b>，最高 <b class="text-yellow-300">${order.price.toLocaleString()}</b> 金幣` : '目前沒有收購單；輸入完整物品名稱與最高收購價。'}</span>
+                ${orderItem ? '<button class="pandora-buy-cancel" onclick="pandoraCancelBuyOrder()">取消收購</button>' : ''}
+            </div>
+        </div>
+        <div class="pandora-market-grid">${cards}</div>
+        <p id="pandora-msg" class="font-bold text-center shrink-0 empty:hidden">${_pandoraNoticeHTML(m)}</p>
     </div>`;
 }
 
@@ -1846,7 +1988,7 @@ window.onload = () => {
             if(d.procSkill) {
                 let _procName = (DB.skills[d.procSkill] && DB.skills[d.procSkill].n) || '技能';
                 let _rateText = `${d.procRateBase || 1}%${d.procRatePerEn ? `＋每強化${d.procRatePerEn}%` : ''}`;
-                _eff.push(`攻擊施法 ${_rateText}（觸發${_procName}）`);
+                _eff.push(`${d.procOnHit ? '命中施法' : '攻擊施法'} ${_rateText}（觸發${_procName}）`);
             }
             if(d.procSkill2 && d.procSkill2.skId) _eff.push(`攻擊施法 ${d.procSkill2.rate || 5}%（觸發${(DB.skills[d.procSkill2.skId] && DB.skills[d.procSkill2.skId].n) || '技能'}）`);   // 🌅 九尾妖狐的怒火：第二觸發槽
             if(d.procPoisonPct) _eff.push(`附毒（命中附加每秒該次傷害${d.procPoisonPct.pct || 50}%的中毒，最多1層，持續${d.procPoisonPct.dur || 6}秒）`);   // 🌅 毒鵺的黑尾
@@ -1901,6 +2043,7 @@ window.onload = () => {
                 if(_tg.includes('雙刀'))     _eff.push('雙刃 5%（傷害×2）');   // ⚔️ 雙刀內建特性
                 if(_tg.includes('鋼爪'))     _eff.push('重擊 +5%（重擊取武器最大傷害）');   // ⚔️ 鋼爪內建特性：一般攻擊額外 5% 重擊
             }
+            if(d.type === 'wpn' && typeof weaponPurposeLabels === 'function') _eff.push(...weaponPurposeLabels(d));
             if(d.relic && typeof relicPurposeLabels === 'function') _eff.push(...relicPurposeLabels(d));
             _eff = [...new Set(_eff)];
             _eff = filterClassicEffLabels(_eff, d);   // 🎮 經典模式：移除已停用特效字樣（classicOk 物品不過濾）
@@ -1929,6 +2072,7 @@ window.onload = () => {
         let tSkill = host.getAttribute('data-tip-skill');
         let tUid = host.getAttribute('data-tip-uid');
         let tId = host.getAttribute('data-tip-id');
+        let tCraft = host.getAttribute('data-tip-craft');
         if(tSkill){
             // 技能頁：依技能 ID 顯示能力
             if(el._id !== 'SK:'+tSkill){ let h = buildSkillTipHTML(tSkill); if(!h){ hideTip(); return; } el.innerHTML = h; el._id = 'SK:'+tSkill; }
@@ -1944,8 +2088,20 @@ window.onload = () => {
                 el._id = key;
             }
         } else if(tId){
-            // 🗡️ 收集冊：依基底物品 ID 顯示資訊（已收集裝備）
-            if(el._id !== ('BID:'+tId)){ let h = buildItemTipHTML(tId, true); if(!h){ hideTip(); return; } el.innerHTML = h; el._id = 'BID:'+tId; }   // 🗡️ 收集冊隱藏售價
+            if(tCraft){
+                // ⚒️ 製作成品：直接綁定 result ID，不再以 icon 反查（共用圖片不會抓錯物品）；沿用背包／裝備欄完整 tooltip，含寵物裝備能力。
+                let key = 'CRAFT:' + tId;
+                if(el._id !== key){
+                    let d = DB.items[tId]; if(!d){ hideTip(); return; }
+                    let it = { id:tId, uid:'craft-tip', cnt:1, en:0, bless:false, anc:false, attr:false, seteff:false };
+                    el.innerHTML = `<div class="font-bold text-base ${getItemColor(it)}" style="margin-bottom:4px;">${getItemFullName(it)}</div>`
+                        + `<div class="text-slate-300" style="font-size:12px;line-height:1.5;">${buildItemDescHTML(it)}</div>`;
+                    el._id = key;
+                }
+            } else {
+                // 🗡️ 收集冊：依基底物品 ID 顯示資訊（已收集裝備）
+                if(el._id !== ('BID:'+tId)){ let h = buildItemTipHTML(tId, true); if(!h){ hideTip(); return; } el.innerHTML = h; el._id = 'BID:'+tId; }   // 🗡️ 收集冊隱藏售價
+            }
         } else {
             // 商店/製作圖示：依 icon → 基底物品 ID 顯示
             if(!ICON2ID) buildMap();

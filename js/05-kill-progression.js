@@ -297,7 +297,7 @@ function killMob(idx) {
     // 🗡️ 吉爾塔斯之劍：任意擊殺後獲得額外傷害+10，持續10秒（刷新制·持劍者各自計時；傷害端＝js/03 getPhysicalDmg／js/06 傭兵普攻）
     if (player.eq && player.eq.wpn && player.eq.wpn.id === 'wpn_giltas_sword') player._giltasFuryUntil = state.ticks + 100;
     if (player.allies && player.allies.length) player.allies.forEach(a => { if (a && !a._downed && a.eq && a.eq.wpn && a.eq.wpn.id === 'wpn_giltas_sword') a._giltasFuryUntil = state.ticks + 100; });
-    // 🪄 吉爾塔斯魔杖：任意擊殺後額外魔法點數+10，持續10秒；再次擊殺刷新時間。
+    // 🪄 吉爾塔斯魔杖：任意擊殺後額外魔法點數+20，持續10秒；再次擊殺刷新時間。
     let _giltasWandTriggered = [];
     if (player.eq && player.eq.wpn && player.eq.wpn.id === 'wpn_giltas_wand') { player._giltasWandFuryUntil = state.ticks + 100; _giltasWandTriggered.push(player); }
     if (player.allies && player.allies.length) player.allies.forEach(a => { if (a && !a._downed && a.eq && a.eq.wpn && a.eq.wpn.id === 'wpn_giltas_wand') { a._giltasWandFuryUntil = state.ticks + 100; _giltasWandTriggered.push(a); } });

@@ -219,7 +219,8 @@ function recomputeStats() {
     d.aspd = 1.0;
     d.hitstun = hitstunTicks(p);   // ⚔️ 天堂職業硬直（被直接命中→延遲下次攻擊的 tick·職業定·不隨武器）
     d.hitstunReduce = 0;           // 🏺 不動的鋼鐵堅壁：裝備硬直減免累加器（於變身速度覆蓋「之後」統一扣除·見下方變身區塊後）
-    d.castLock = castLockTicks(p); // 🔮 天堂職業施法冷卻下限（攻擊魔法自動施放間隔最小 tick·法師最快）
+    d.castLock = castLockTicks(p); // 🔮 天堂職業施法間隔（攻擊／治癒／淨化／轉換／手動共用速度公式·法師最快）
+    d.supportCastLock = d.castLock;
 
     // ===== Phase 3：非屬性加成（武器傷害 / 裝備防禦 / 套裝 / 增益 / 變身） =====
     // 武器：依遠近距離分別計入（w.str 已於 Phase 1 計入屬性）
@@ -243,7 +244,7 @@ function recomputeStats() {
         if(w.mhp) p.mhp += w.mhp;   // 🏛️ 武器 HP 上限加成（古代黑暗妖精之劍 HP+50；同步修正深紅長矛既有 HP+50 失效）
         if(w.mmp) p.mmp += w.mmp;   // 🏛️ 武器 MP 上限加成（聖晶魔杖 MP+50；防具/飾品 mmp 走另一迴圈·武器需此處）
         if(w.extraMp) d.extraMp += w.extraMp;   // 🏺 武器固定額外魔法點數（遺物 殭屍的小腿骨 +7；防具/飾品 extraMp 走另一迴圈·武器需此處）
-        if(p.eq.wpn.id === 'wpn_giltas_wand' && p._giltasWandFuryUntil > state.ticks) d.extraMp += 10;   // 🪄 吉爾塔斯魔杖：任意擊殺後 10 秒內額外魔法點數 +10（玩家／傭兵共用重算管線）
+        if(p.eq.wpn.id === 'wpn_giltas_wand' && p._giltasWandFuryUntil > state.ticks) d.extraMp += 20;   // 🪄 吉爾塔斯魔杖：任意擊殺後 10 秒內額外魔法點數 +20（玩家／傭兵共用重算管線）
         if(w.dr) d.dr += w.dr;   // 🏺 武器固定傷害減免（遺物 有彈性的肋骨 +2；防具/飾品 dr 走另一迴圈·武器需此處）
         if(w.extraDmg) d.extraDmg += w.extraDmg;   // 🏺 武器固定傷害（遺物 鼠人的烤肉叉/水靈的琴弦 固定傷害+N；防具/飾品 extraDmg 走另一迴圈·武器需此處）
         if(w.mcrit) d.meleeCrit += w.mcrit;   // 🏺 武器近距離爆擊率加成（遺物 蟹人的巨鉗 +5%）
@@ -529,21 +530,35 @@ d.mr += (baseMr + bonusMr);
         if(p.elfEle === 'wind')  d.resWind  += 50;
     }
 
+    // 變形卷軸變身依目前武器分流：遠距離武器只能使用遠距離變身，其餘（含空手）只能使用近距離變身。
+    // 換武器時 calcStats 會立即重抽相符類型；套裝／武器強制變身 _setPoly 仍保留原本專屬形態。
+    if(p === player && p.poly && p.buffs.poly > 0 && !polyFormMatchesEquippedWeapon(p.poly)) p.poly = getPolyState();
     // 變身：套裝變身（_setPoly，僅穿著套裝時生效、卸下立即消失）優先於藥水變身（buffs.poly 計時）
     let _polyForm = p._setPoly || ((p.buffs.poly > 0 && p.poly) ? p.poly : null);
     if(_polyForm) {
         let pf = _polyForm;
         // 🆕 v3.0.28 速度覆蓋（凡有 atk 者皆套用）：POLY_TIERS 速度型變身、及套裝變身 SET_POLY_FORMS（現在也帶 atk/wlk/cast/stun）。
         //   攻擊間隔＝動畫幀換算秒（APM=1440/幀），之後仍照常 ×spdMult（加速/勇敢/精通疊加）；移動速度 pf.wlk 於出怪排程（js/03）影響重生。
-        if(pf.apm != null) {   // 🌑 v3.4.67 逐武器種類 APM 攻速（冥皇執行劍/烈焰死騎變身）：依當前武器種類查表→6000/APM/100=秒（同 atkSpdBaseItv）；空手/缺項退單手劍
+        if(pf.atkApm != null) {   // 指定每分鐘攻擊次數：避免 85／88／90 等速度換算成百分秒後產生累積誤差
+            d.aspd = 60 / Math.max(1, pf.atkApm);
+            if(pf.castApm != null) d.castLock = d.supportCastLock = 600 / Math.max(1, pf.castApm);
+            else if(pf.cast != null) d.castLock = d.supportCastLock = pf.cast;
+            if(pf.stun != null) d.hitstun = pf.stun;
+        } else if((pf.shanna || pf.trueShanna) && typeof shannaSpeedForActor === 'function') {
+            let _ss = pf.trueShanna ? trueShannaSpeedForActor(p) : shannaSpeedForActor(p);   // 🧝 v3.5.21 真夏納：逐武器 APM 查表（值不同·可用家族形狀同夏納）
+            if(_ss.apm != null) d.aspd = 60 / Math.max(1, _ss.apm);
+            if(_ss.hitstun != null) d.hitstun = _ss.hitstun;
+            d.castLock = 600 / (pf.castApm || 80);              // 攻擊／自動施法（夏納80·真夏納85 次/分）
+            d.supportCastLock = 600 / (pf.supportCastApm || 72);   // 輔助施法（夏納72·真夏納75 次/分）
+        } else if(pf.apm != null) {   // 🌑 v3.4.67 逐武器種類 APM 攻速（冥皇執行劍/烈焰死騎變身）：依當前武器種類查表→6000/APM/100=秒（同 atkSpdBaseItv）；空手/缺項退單手劍
             let _fam = (p.eq && p.eq.wpn && typeof atkSpdFamily === 'function') ? atkSpdFamily(p.eq.wpn.id) : null;
             let _apm = (_fam && pf.apm[_fam]) || pf.apm['單手劍'] || 60;
             d.aspd = Math.round(6000 / Math.max(1, _apm)) / 100;
-            if(pf.cast != null) d.castLock = pf.cast;
+            if(pf.cast != null) d.castLock = d.supportCastLock = pf.cast;
             if(pf.stun != null) d.hitstun  = pf.stun;
         } else if(pf.atk != null) {
             d.aspd = Math.round(pf.atk * 6000 / 1440) / 100;         // 攻擊間隔（秒）
-            if(pf.cast != null) d.castLock = pf.cast;                // 施法冷卻下限（tick）
+            if(pf.cast != null) d.castLock = d.supportCastLock = pf.cast; // 施法冷卻下限（tick）
             if(pf.stun != null) d.hitstun  = pf.stun;               // 被擊硬直（tick）
         }
         // 屬性加成（純速度型 POLY_TIERS 無此欄＝+0；套裝變身保留傷害/命中/魔法等加成，與上方速度並存）
@@ -590,7 +605,7 @@ d.mr += (baseMr + bonusMr);
     let _rawIntSp = Math.max(0, getIntExtraMp(d.int));
     d.intSp = Math.min(33, _rawIntSp);
     d.itemSp = Math.max(0, (d.extraMp || 0) - _rawIntSp);
-    d.spdMult = spdMult;   // 速度倍率（受加速/勇敢藥水/精靈餅乾/變身影響），供自動施法間隔使用
+    d.spdMult = spdMult;   // 純攻擊速度倍率（加速/勇敢/餅乾/精通/裝備等）；施法改由 castIntervalTicks 只讀職業／變身 cast
     d.aspd = d.aspd * spdMult;
 
     // 🐾 馴獸師的飼料袋（allLures）：裝備時視為持有全部誘捕狀態；petCaptureOnKill 讀 player._allLures（不消耗、卸下即失效）
@@ -738,15 +753,15 @@ const POLY_TIERS = [
         { n:"重裝歐姆", lv:48, atk:45, wlk:40, cast:25, stun:6 },
     ]},
     { min:50, max:59, color:"text-yellow-200", forms:[
-        { n:"巴風特", lv:50, atk:19, wlk:12, cast:10, stun:5 },
-        { n:"賽尼斯", lv:50, atk:20, wlk:18, cast:11, stun:6 },
-        { n:"黑長者", lv:50, atk:22, wlk:16, cast:8, stun:6 },
+        { n:"巴風特", lv:50, atk:1440/85, atkApm:85, wlk:12, cast:10, stun:5 },
+        { n:"賽尼斯", lv:50, atk:16, atkApm:90, wlk:18, cast:600/84, castApm:84, stun:6 },
+        { n:"黑長者", lv:50, atk:18, atkApm:80, wlk:16, cast:8, stun:6 },
         { n:"克特", lv:51, atk:16, wlk:16, cast:9, stun:5 },
         { n:"死亡騎士", lv:52, atk:15, wlk:16, cast:10, stun:5 },
-        { n:"巴列斯", lv:53, atk:19, wlk:12, cast:10, stun:5 },
+        { n:"巴列斯", lv:53, atk:1440/88, atkApm:88, wlk:12, cast:10, stun:5 },
         { n:"艾莉絲", lv:55, atk:16, wlk:16, cast:9, stun:5 },
         { n:"炎魔", lv:56, atk:17, wlk:18, cast:9, stun:3 },
-        { n:"吸血鬼", lv:56, atk:19, wlk:24, cast:10, stun:6 },
+        { n:"吸血鬼", lv:56, atk:16, atkApm:90, wlk:24, cast:10, stun:6 },
         { n:"黑暗巡守", lv:57, atk:19, wlk:16, cast:12, stun:5 },
         { n:"黑暗騎士", lv:58, atk:14, wlk:16, cast:15, stun:5 },
         { n:"黑暗法師", lv:58, atk:17, wlk:16, cast:9, stun:6 },
@@ -757,19 +772,128 @@ const POLY_TIERS = [
         { n:"騎士范德", lv:60, atk:16, wlk:16, cast:9, stun:5 },
         { n:"銀光法師", lv:60, atk:17, wlk:16, cast:9, stun:6 },
         { n:"惡魔", lv:61, atk:18, wlk:16, cast:9, stun:4 },
-        { n:"黃金巡守", lv:61, atk:19, wlk:16, cast:11, stun:5 },
+        { n:"黃金巡守", lv:61, apm:{ '弓':80, '十字弓':80, '單手劍':80 }, wlk:16, cast:11, stun:5 },   // 🏹 v3.5.9 用戶指定弓箭間隔 0.75s（APM 80·原 atk:19=0.79）
         { n:"黃金騎士", lv:62, atk:14, wlk:16, cast:15, stun:4 },
         { n:"黃金法師", lv:62, atk:17, wlk:16, cast:9, stun:6 },
-        { n:"白金巡守", lv:63, atk:19, wlk:16, cast:10, stun:5 },
+        { n:"白金巡守", lv:63, apm:{ '弓':82, '十字弓':82, '單手劍':82 }, wlk:16, cast:10, stun:5 },   // 🏹 v3.5.9 用戶指定弓箭間隔 0.73s（APM 82·原 atk:19=0.79）
         { n:"白金騎士", lv:64, atk:14, wlk:16, cast:15, stun:4 },
         { n:"白金法師", lv:64, atk:17, wlk:16, cast:9, stun:5 },
     ]},
     { min:70, max:9999, color:"text-yellow-400", forms:[
         { n:"死亡", lv:70, atk:18, wlk:24, cast:10, stun:7 },
-        { n:"反王肯恩", lv:75, atk:20, wlk:18, cast:11, stun:6 },
+        { n:"反王肯恩", lv:75, atk:14.4, atkApm:100, wlk:18, cast:11, stun:6 },
         { n:"烈焰的死亡騎士", lv:80, apm:{ '單手劍':120,'單手鈍器':103,'雙手鈍器':103,'弓':90,'十字弓':90,'單手矛':111,'雙手矛':111,'魔杖':120,'匕首':131,'雙手劍':103,'雙刀':120,'鋼爪':120,'奇古獸':120,'鎖鏈劍':111,'雙斧':120 }, wlk:16, cast:7, stun:2 },   // 🌑 v3.4.67 逐武器種類 APM 攻速（用戶「變身速度」CSV·6000/APM/100=秒）
+        { n:"莉絲安", lv:80, apm:{ '弓':90, '十字弓':90, '單手劍':90 }, wlk:16, cast:7, stun:2 },   // 🏹 v3.5.7 Lv80 遠距離變身（用戶指定·持弓攻速90→0.67s／攻擊施法85→cast7／硬直0.21s→stun2／走90→wlk16 同烈焰死騎慣例；遠距閘只吃弓/十字弓·單手劍僅 apm fallback 鍵）
     ]},
 ];
+
+// Lv52 夏納：僅由變形控制戒指指定，不進入 POLY_TIERS，因此普通卷軸的隨機池永遠不會抽到。
+// 外觀保留職業動態，只依 CSV 覆蓋當前職業性別＋武器的攻擊／硬直及兩種施法速度。
+const SHANNA_FORM = {
+    n: "夏納", lv: 52, shanna: true, controlOnly: true, keepClassAppearance: true,
+    wlk: 16, castApm: 80, supportCastApm: 72, c: "text-yellow-400"
+};
+// 🧝 v3.5.21 Lv85 真夏納：僅由變形控制戒指指定（同夏納），但有 16 職業性別「專屬變身動態」（assets/classanim/真夏納<avatar>·js/09 classMorph 走職業式管線·逐武器動作變體）。
+// 速度依用戶 CSV：攻擊 APM 逐武器查表（TRUE_SHANNA_APM·可用武器家族形狀與夏納 profile 一致）、自動施法 85／輔助施法 75 次/分、
+// 硬直 0.21 秒（匕首長硬直職業＝夏納同名單→0.26 秒）、走速 單手劍 96/分→wlk15·其餘 90/分→wlk16（動態·見 playerMoveDelayMultiplier）。
+const TRUE_SHANNA_FORM = {
+    n: "真夏納", lv: 85, trueShanna: true, controlOnly: true, classMorph: true,
+    wlk: 16, castApm: 85, supportCastApm: 75, c: "text-yellow-400"
+};
+const CONTROL_ONLY_POLY_FORMS = [SHANNA_FORM, TRUE_SHANNA_FORM];
+const SHANNA_APM_PROFILES = {
+    full:   { '單手劍':96, '單手鈍器':84, '雙手鈍器':84, '弓':75, '十字弓':75, '單手矛':90, '雙手矛':90, '魔杖':96, '匕首':102, '雙手劍':84 },
+    six:    { '單手劍':96, '單手鈍器':84, '雙手鈍器':84, '弓':75, '十字弓':75, '單手矛':90, '雙手矛':90, '魔杖':96, '匕首':102 },
+    dark:   { '單手劍':96, '單手鈍器':84, '雙手鈍器':84, '弓':75, '十字弓':75, '匕首':102, '雙刀':96, '鋼爪':96 },
+    dragon: { '單手劍':96, '單手鈍器':84, '雙手鈍器':84, '單手矛':90, '雙手矛':90, '雙手劍':84, '鎖鏈劍':87 },
+    illu:   { '單手鈍器':84, '雙手鈍器':84, '弓':75, '十字弓':75, '魔杖':96, '奇古獸':96 },
+    warrior:{ '單手鈍器':84, '雙手鈍器':84, '單手矛':90, '雙手矛':90, '雙手劍':84, '雙斧':96 }
+};
+const SHANNA_PROFILE_BY_AVATAR = {
+    '王子':'full', '公主':'full', '男騎士':'full', '女騎士':'full',
+    '男妖精':'six', '女妖精':'six', '男法師':'six', '女法師':'six',
+    '男黑暗妖精':'dark', '女黑暗妖精':'dark',
+    '男龍騎士':'dragon', '女龍騎士':'dragon',
+    '男幻術士':'illu', '女幻術士':'illu',
+    '男戰士':'warrior', '女戰士':'warrior'
+};
+const SHANNA_DAGGER_LONG_HITSTUN = new Set(['王子', '女騎士', '女妖精', '男法師', '男黑暗妖精', '女黑暗妖精']);
+function shannaSpeedForActor(p) {
+    let av = (p && p.avatar) || ATK_AV_BY_CLS[(p && p.cls) || ''] || '王子';
+    let profile = SHANNA_APM_PROFILES[SHANNA_PROFILE_BY_AVATAR[av]] || SHANNA_APM_PROFILES.full;
+    let wid = p && p.eq && p.eq.wpn ? p.eq.wpn.id : null;
+    let fam = wid && typeof atkSpdFamily === 'function' ? atkSpdFamily(wid) : null;
+    if (p && p.eq && p.eq.offwpn) fam = '雙斧';
+    let apm = fam ? profile[fam] : null;
+    let hitstun = apm == null ? null : ((fam === '匕首' && SHANNA_DAGGER_LONG_HITSTUN.has(av)) ? 4.2 : 3.3);
+    return { avatar: av, family: fam, apm, hitstun };
+}
+// 🧝 v3.5.21 真夏納逐武器 APM（用戶 CSV·全職業共用值·可用與否沿夏納 profile 形狀）
+const TRUE_SHANNA_APM = { '單手劍':124, '單手鈍器':107, '雙手鈍器':107, '弓':93, '十字弓':93, '單手矛':115, '雙手矛':115, '魔杖':124, '匕首':135, '雙手劍':107, '雙刀':124, '鋼爪':124, '奇古獸':124, '鎖鏈劍':111, '雙斧':124 };
+function trueShannaSpeedForActor(p) {
+    let av = (p && p.avatar) || ATK_AV_BY_CLS[(p && p.cls) || ''] || '王子';
+    let allow = SHANNA_APM_PROFILES[SHANNA_PROFILE_BY_AVATAR[av]] || SHANNA_APM_PROFILES.full;   // 可用武器家族＝夏納同形狀（CSV 0 值欄位一致）·清單外（含武士刀/空手）不覆蓋→維持職業速度
+    let wid = p && p.eq && p.eq.wpn ? p.eq.wpn.id : null;
+    let fam = wid && typeof atkSpdFamily === 'function' ? atkSpdFamily(wid) : null;
+    if (p && p.eq && p.eq.offwpn) fam = '雙斧';
+    let apm = (fam && allow[fam] != null) ? (TRUE_SHANNA_APM[fam] || null) : null;
+    let hitstun = apm == null ? null : ((fam === '匕首' && SHANNA_DAGGER_LONG_HITSTUN.has(av)) ? 2.6 : 2.1);   // CSV 硬 0.21s·匕首長硬直職業 0.26s
+    let wlk = (apm != null && fam === '單手劍') ? 15 : 16;   // CSV 走：單手劍 96/分→wlk15·其餘 90/分＝基準 16
+    return { avatar: av, family: fam, apm, hitstun, wlk };
+}
+
+// 遠距離變身白名單；POLY_TIERS 內其餘形態一律視為近距離變身。
+const RANGED_POLY_FORMS = new Set([
+    "妖魔弓箭手", "妖魔巡守", "骷髏弓箭手", "黑暗精靈",
+    "黑暗巡守", "銀光巡守", "黃金巡守", "白金巡守",
+    "莉絲安"   // 🏹 v3.5.7 Lv80 遠距離變身
+]);
+function hasRangedPolyWeapon() {
+    let w = player.eq && player.eq.wpn ? DB.items[player.eq.wpn.id] : null;
+    return !!(w && (w.ranged || w.isBow));
+}
+function polyFormMatchesEquippedWeapon(form) {
+    if (form && (form.keepClassAppearance || form.classMorph)) return true;   // 🧝 真夏納：職業式變身含遠近全武器動態→不受遠/近距類型閘限制
+
+    return !!(form && RANGED_POLY_FORMS.has(form.n)) === hasRangedPolyWeapon();
+}
+function polyRandomCandidates() {
+    let lv = player.lv || 1;
+    // 🎲 v3.5.6 隨機變身（無戒指）：抽「自身等級（含）以下·全部相符類型形態」（同變形控制戒指可選範圍·不再限當前等級帶或斷層只取最高等）。
+    let pool = [];
+    for (const t of POLY_TIERS) for (const f of t.forms) {
+        if (f.lv <= lv && polyFormMatchesEquippedWeapon(f)) pool.push(f);
+    }
+    if (pool.length) return pool;
+
+    // Lv1 尚無正式解鎖形態時，取相符類型的最低需求形態，確保卷軸仍可使用。
+    let matching = [];
+    for (const t of POLY_TIERS) for (const f of t.forms) if (polyFormMatchesEquippedWeapon(f)) matching.push(f);
+    let firstLv = Math.min(...matching.map(f => f.lv));
+    return matching.filter(f => f.lv === firstLv);
+}
+
+// 玩家有效移動速度：未變身 wlk=16（90/分鐘）＝100%；回傳相對於基準 5 秒接敵／補怪時間的倍率。
+// 變身、加速、職業藥水、行走加速與裝備移速共用此換算，供生成排程與資訊面板使用，避免顯示和實際效果分離。
+function playerMoveDelayMultiplier() {
+    let p = player || {};
+    let buffs = p.buffs || {};
+    let pfW = (p._setPoly && p._setPoly.wlk) ? p._setPoly.wlk
+            : ((buffs.poly > 0 && p.poly && p.poly.wlk) ? p.poly.wlk : 16);
+    let _pfT = p._setPoly || ((buffs.poly > 0 && p.poly) ? p.poly : null);   // 🧝 v3.5.21 真夏納：走速依當前武器（單手劍96/分→wlk15·其餘90/分→wlk16）
+    if (_pfT && _pfT.trueShanna && typeof trueShannaSpeedForActor === 'function') pfW = trueShannaSpeedForActor(p).wlk;
+    let mult = pfW / 16;
+    if (buffs.haste > 0 || p._equipHaste) mult *= 0.67;       // 加速術／加速藥水／裝備加速
+    if (buffs.brave > 0) mult *= 0.67;                         // 勇敢藥水
+    if (buffs.elfcookie > 0) mult *= 0.85;                     // 精靈餅乾
+    if (buffs.sk_dark_walkhaste > 0) mult *= 0.85;             // 行走加速
+    let equipPct = p.d && p.d.moveSpeedPct ? Math.max(-95, p.d.moveSpeedPct) : 0;
+    if (equipPct) mult *= 1 / (1 + equipPct / 100);            // 裝備移動速度
+    return Math.max(0.001, mult);
+}
+function playerEffectiveMoveSpeedPct() {
+    return Math.round(100 / playerMoveDelayMultiplier());
+}
 
 function getPolyTier(lv) {
     for (const t of POLY_TIERS) if (lv >= t.min && lv <= t.max) return t;
@@ -777,6 +901,7 @@ function getPolyTier(lv) {
 }
 function findPolyForm(name) {
     for (const t of POLY_TIERS) for (const f of t.forms) if (f.n === name) return { form: f, color: t.color };
+    for (const f of CONTROL_ONLY_POLY_FORMS) if (f.n === name) return { form: f, color: f.c || "text-yellow-400" };
     return null;
 }
 function makePolyState(form, color) { return Object.assign({ c: color }, form); }
@@ -848,9 +973,10 @@ function playerTeleport() {
 function getPolyState(isDKSet=false, isKurtSet=false) {
     if (isDKSet)   { let r = findPolyForm("死亡騎士"); return makePolyState(r.form, r.color); }
     if (isKurtSet) { let r = findPolyForm("克特");     return makePolyState(r.form, r.color); }
-    let tier = getPolyTier(player.lv);
-    let form = tier.forms[Math.floor(Math.random() * tier.forms.length)];
-    return makePolyState(form, tier.color);
+    let pool = polyRandomCandidates();
+    let form = pool[Math.floor(Math.random() * pool.length)];
+    let found = findPolyForm(form.n);
+    return makePolyState(form, found ? found.color : getPolyTier(player.lv).color);
 }
 
 // 依名稱取得指定變身（變形控制戒指鎖定用）
@@ -865,20 +991,34 @@ function applyPolyForce(stateObj) {
     player.buffs.poly = 1800;
 }
 
-// 將變身能力整理成可讀文字（給選單顯示）
+// 將變身能力整理成統一格式（給選單顯示）：
+// 攻擊間隔／施法速度（取攻擊施法間隔）／受擊硬直／移動速度；wlk=16 視為基準 100%。
 function polyFormDesc(f) {
     let p = [];
-    if (f.apm != null) {   // 🌑 v3.4.67 逐武器 APM 變身：顯示單手劍代表值（實際依當前武器）
-        p.push(`攻擊間隔 ${(Math.round(6000 / Math.max(1, f.apm['單手劍'] || 60)) / 100).toFixed(2)}秒(依武器)`);
-        if (f.cast != null) p.push(`施法 ${(f.cast/10).toFixed(1)}秒`);
-        if (f.stun != null) p.push(`硬直 ${(f.stun/10).toFixed(1)}秒`);
-        if (f.wlk != null)  p.push(`重生 ${(5 * f.wlk / 16).toFixed(1)}秒`);
-    } else if (f.atk != null) {   // 🆕 v3.0.26 速度型變身：攻擊間隔/施法/硬直/重生（套裝變身另接傷害加成於後）
-        p.push(`攻擊間隔 ${(Math.round(f.atk * 6000 / 1440) / 100).toFixed(2)}秒`);
-        if (f.cast != null) p.push(`施法 ${(f.cast/10).toFixed(1)}秒`);
-        if (f.stun != null) p.push(`硬直 ${(f.stun/10).toFixed(1)}秒`);
-        if (f.wlk != null)  p.push(`重生 ${(5 * f.wlk / 16).toFixed(1)}秒`);
+    const fmtSec = v => Math.max(0, Number(v) || 0).toFixed(2);
+    const movePct = (f.wlk != null && f.wlk > 0) ? Math.round(100 * 16 / f.wlk) : null;
+    if (f.atkApm != null) {
+        p.push(`攻擊間隔 ${fmtSec(60 / Math.max(1, f.atkApm))}秒`);
+        if (f.castApm != null) p.push(`施法速度 ${fmtSec(60 / Math.max(1, f.castApm))}秒`);
+        else if (f.cast != null) p.push(`施法速度 ${fmtSec(f.cast / 10)}秒`);
+        if (f.stun != null) p.push(`受擊硬直 ${fmtSec(f.stun / 10)}秒`);
+    } else if (f.shanna || f.trueShanna) {
+        let s = f.trueShanna ? trueShannaSpeedForActor(player) : shannaSpeedForActor(player);   // 🧝 v3.5.21 真夏納：逐武器 APM 表不同·顯示邏輯共用
+        if (s.apm != null) p.push(`攻擊間隔 ${fmtSec(60 / Math.max(1, s.apm))}秒`);
+        p.push(`施法速度 ${fmtSec(60 / Math.max(1, f.castApm))}秒`);
+        if (s.hitstun != null) p.push(`受擊硬直 ${fmtSec(s.hitstun / 10)}秒`);
+        if (f.trueShanna && s.wlk) p.push(`移動速度 ${Math.round(100 * 16 / s.wlk)}%`);   // 走速依當前武器（單手劍 106%·其餘 100%）
+    } else if (f.apm != null) {   // 🌑 v3.4.67 逐武器 APM 變身：顯示單手劍代表值（實際依當前武器·v3.5.9 用戶要求不顯示「依武器」字樣）
+        p.push(`攻擊間隔 ${fmtSec(60 / Math.max(1, f.apm['單手劍'] || 60))}秒`);
+        if (f.cast != null) p.push(`施法速度 ${fmtSec(f.cast / 10)}秒`);
+        if (f.stun != null) p.push(`受擊硬直 ${fmtSec(f.stun / 10)}秒`);
+    } else if (f.atk != null) {   // 🆕 v3.0.26 速度型變身：統一顯示攻擊／施法間隔、受擊硬直與移動速度（套裝變身另接傷害加成於後）
+        p.push(`攻擊間隔 ${fmtSec(Math.round(f.atk * 6000 / 1440) / 100)}秒`);
+        if (f.cast != null) p.push(`施法速度 ${fmtSec(f.cast / 10)}秒`);
+        if (f.stun != null) p.push(`受擊硬直 ${fmtSec(f.stun / 10)}秒`);
     }
+    if (movePct != null && !f.trueShanna) p.push(`移動速度 ${movePct}%`);   // 真夏納已於上方依當前武器顯示動態值
+    if (f.shanna) p.push('保留原職業外觀');
     if (f.md)  p.push(`近距離傷害+${f.md}`);
     if (f.mh)  p.push(`近距離命中+${f.mh}`);
     if (f.rd)  p.push(`遠距離傷害+${f.rd}`);
@@ -914,8 +1054,13 @@ function openPolySelect(uid) {
     let listEl = modal.querySelector('#poly-modal-list');
     // 🆕 v3.0.31 變形控制戒指：可選「自己等級（含）以下」全部變身（不再限於當前等級帶）；高等在前、同等依攻擊快慢
     let avail = [];
-    for (const t of POLY_TIERS) for (const f of t.forms) if (player.lv >= f.lv) avail.push({ f, color: t.color });
-    avail.sort((a, b) => (b.f.lv - a.f.lv) || (a.f.atk - b.f.atk));
+    for (const t of POLY_TIERS) for (const f of t.forms) {
+        if (player.lv >= f.lv && polyFormMatchesEquippedWeapon(f)) avail.push({ f, color: t.color });
+    }
+    if (hasPolyRing()) for (const f of CONTROL_ONLY_POLY_FORMS) {
+        if (player.lv >= f.lv && polyFormMatchesEquippedWeapon(f)) avail.push({ f, color: f.c || "text-yellow-400" });
+    }
+    avail.sort((a, b) => (b.f.lv - a.f.lv) || ((a.f.atk || 0) - (b.f.atk || 0)) || a.f.n.localeCompare(b.f.n, 'zh-Hant'));
     listEl.innerHTML = avail.map(({ f, color }) =>
         '<button class="btn text-left !py-2 !px-3" onclick="confirmPolySelect(\'' + uid + '\',\'' + f.n + '\')">' +
             '<span class="' + color + ' font-bold"><span class="text-slate-400 text-xs mr-1">Lv' + f.lv + '</span>' + f.n + '</span>' +
@@ -932,6 +1077,12 @@ function closePolyModal() {
 function confirmPolySelect(uid, name) {
     let item = player.inv.find(i => i.uid === uid);
     if (!item) { closePolyModal(); return; }
+    let found = findPolyForm(name);
+    if (!found || player.lv < found.form.lv || (found.form.controlOnly && !hasPolyRing()) || !polyFormMatchesEquippedWeapon(found.form)) {
+        logSys(`<span class="text-red-300">目前裝備的武器無法使用此變身。</span>`);
+        closePolyModal();
+        return;
+    }
     let st = getPolyStateByName(name);
     player.poly = st;                             // 設為當前變身；之後自動使用會維持此狀態
     player.buffs.poly = DB.items[item.id].dur;

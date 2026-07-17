@@ -754,7 +754,7 @@
 // ===== 🔧 計時慣例（單一事實來源，新增任何計時效果前先讀這裡）=====
 // • player.statuses（異常狀態）：以 tick(0.1秒) 計，於 tick() 開頭的通用迴圈「統一」遞減，勿在他處再扣
 // • player.buffs（增益）：以「秒」計，於 tick() 的每秒區塊（state.ticks % 10）「統一」遞減，勿在他處再扣
-// • player.cds.atkSk / healSk / purifySk：以 tick 計（施法節奏需受攻速細緻影響）
+// • player.cds.atkSk / healSk / purifySk / convertSk：以 tick 計（施法節奏只看職業／變身 cast，不受攻擊速度影響）
 // • player.cds.pot / reviveScrollCd / magicShieldCd：以秒計（tick() 的每秒區塊遞減）
 // • player.blessings / player.siege（盟主祝福、攻城勝利8折、宣戰冷卻）：牆鐘 Date.now()，刻意設計為關閉遊戲仍流逝
 // • 召喚物 / 迷魅 endTick：絕對 tick，已隨存檔保存（saveGame 的 ticks 欄位），重載後仍有效
@@ -786,7 +786,7 @@ const SAVE_DEFAULTS = {
     manualCd: {}, blessings: {}, blessingAuto: {}, cardDex: {}, cardDexV: 0, equipDex: {}, miscDex: {},
     alloc:   { str:0, dex:0, con:0, int:0, wis:0, cha:0 },
     panacea: { str:0, dex:0, con:0, int:0, wis:0, cha:0 },
-    cds:     { pot:0, atkSk:0, healSk:0, purifySk:0 },
+    cds:     { pot:0, atkSk:0, healSk:0, purifySk:0, convertSk:0 },
     buffs:   { haste:0, brave:0, blue:0, cautious:0, elfcookie:0, poly:0, shield:0, sk_magic_shield:0 },
     statuses:{ stun:0, freeze:0, stone:0, poison:0, poisonDmg:0, poisonTick:0, burn:0, burnDmg:0, burnTick:0,
                scald:0, scaldDmg:0, scaldTick:0, bleed:0, bleedDmg:0, bleedTick:0, sleep:0, silence:0, paralyze:0, magicseal:0, armorBreak:0, slowAtk:0, cleave:0 },
@@ -1255,7 +1255,7 @@ let player = {
     inv: [], eq: { wpn: null, arrow: null, helm: null, armor: null, shin: null, shield: null, cloak: null, tshirt: null, gloves: null, boots: null, ring1: null, ring2: null, ring3: null, ring4: null, amulet: null, ear1: null, ear2: null, belt: null, pet: null, doll: null },
     skills: [], buffs: { haste: 0, brave: 0, blue: 0, cautious: 0, elfcookie: 0, poly: 0, shield: 0, sk_magic_shield: 0 }, poly: null, allies: [],
     summon: null, charmed: null, manualCd: {}, elfEle: null, hot: null,
-    cds: { pot: 0, atkSk: 0, healSk: 0, purifySk: 0 }, dead: false, statuses: { stun: 0, freeze: 0, stone: 0, poison: 0, poisonDmg: 0, poisonTick: 0, burn: 0, burnDmg: 0, burnTick: 0, scald: 0, scaldDmg: 0, scaldTick: 0, bleed: 0, bleedDmg: 0, bleedTick: 0, sleep: 0, silence: 0, paralyze: 0, magicseal: 0, armorBreak: 0, slowAtk: 0, cleave: 0 },
+    cds: { pot: 0, atkSk: 0, healSk: 0, purifySk: 0, convertSk: 0 }, dead: false, statuses: { stun: 0, freeze: 0, stone: 0, poison: 0, poisonDmg: 0, poisonTick: 0, burn: 0, burnDmg: 0, burnTick: 0, scald: 0, scaldDmg: 0, scaldTick: 0, bleed: 0, bleedDmg: 0, bleedTick: 0, sleep: 0, silence: 0, paralyze: 0, magicseal: 0, armorBreak: 0, slowAtk: 0, cleave: 0 },
     d: { str:0, dex:0, con:0, int:0, wis:0, cha:8,
          meleeDmg: 0, meleeHit: 0, meleeCrit: 0,           // 近距離（力量）
          rangedDmg: 0, rangedHit: 0, rangedCrit: 0,         // 遠距離（敏捷）
@@ -1891,14 +1891,14 @@ const ATK_APM = {
 };
 // ⚔️ 硬直：被直接命中時延遲下次攻擊的 tick 數（天堂 damage 動作幀 ÷2.4·帶職業）
 const HITSTUN_TICKS = { '王子':6, '公主':6, '男騎士':5, '女騎士':6, '男妖精':5, '女妖精':5, '男法師':5, '女法師':5, '男黑暗妖精':5, '女黑暗妖精':5, '男龍騎士':5, '女龍騎士':6, '男戰士':6, '女戰士':6, '男幻術士':5, '女幻術士':5 };
-// 🔮 施法：攻擊魔法自動施放的職業冷卻下限 tick 數（天堂 spell 動作幀 ÷2.4·法師最快10、黑妖/王族最慢14）
+// 🔮 施法：攻擊、治癒、淨化、轉換與手動法術共用的職業基礎間隔 tick（天堂 spell 動作幀 ÷2.4·法師最快10、黑妖/王族最慢14）
 const CAST_TICKS = { '王子':14, '公主':14, '男騎士':13, '女騎士':13, '男妖精':12, '女妖精':12, '男法師':10, '女法師':10, '男黑暗妖精':14, '女黑暗妖精':14, '男龍騎士':13, '女龍騎士':13, '男戰士':14, '女戰士':14, '男幻術士':10, '女幻術士':10 };
 const ATK_APM_DEFAULT = { '單手劍':72, '單手鈍器':65, '弓':60, '十字弓':60, '單手矛':68, '雙手矛':66, '魔杖':72, '匕首':75, '雙手劍':65, '雙手鈍器':65, '雙刀':72, '鋼爪':72, '鎖鏈劍':68, '雙斧':72, '奇古獸':72 };   // 表A基準（未知頭像後備）
 const ATK_AV_BY_CLS = { royal:'王子', knight:'男騎士', elf:'男妖精', mage:'男法師', dark:'男黑暗妖精', dragon:'男龍騎士', warrior:'男戰士', illusion:'男幻術士' };   // 舊檔缺 avatar → 依職業取男性列
 // 🗂️ 武器 → 攻速種類：WEAPON_TAGS 優先，再依旗標（isBow/qigu/chainsword/isWandWeapon），最後名稱後備；結果快取於 def._spdFam
 function atkSpdFamily(id) {
     let d = DB.items[id]; if (!d || d.type !== 'wpn') return null;
-    if (d.isArrow || /箭$/.test(d.n || '')) return null;   // 箭矢（箭/銀箭/米索莉箭/沙哈之箭／🏺 改造便利箭筒 isArrow·type:wpn 但裝於箭矢欄·非揮擊武器）
+    if (d.isArrow || (!d.isBow && /箭$/.test(d.n || ''))) return null;   // 箭矢（箭/銀箭/米索莉箭/沙哈之箭／🏺 改造便利箭筒 isArrow·type:wpn 但裝於箭矢欄·非揮擊武器）；🏹 v3.5.8 isBow 放行：隱藏的魔族弓箭/艾庫尤卡的吹箭是弓非箭矢·原被「箭」字尾誤殺→動態變空手、攻速/tooltip 掉單手劍 fallback
     if (d._spdFam) return d._spdFam;
     let tg = (typeof getWeaponTags === 'function') ? getWeaponTags(id) : [], n = d.n || '', fam = null;
     if (tg.includes('雙刀')) fam = '雙刀';
@@ -1932,6 +1932,18 @@ function atkSpdApm(p, id) {
 function atkSpdBaseItv(p) { return Math.round(6000 / Math.max(1, atkSpdApm(p))) / 100; }   // 基礎攻擊間隔（秒·2位小數·未含加速/精通等倍率）
 function hitstunTicks(p) { let av = (p && p.avatar && HITSTUN_TICKS[p.avatar]) ? p.avatar : ATK_AV_BY_CLS[(p && p.cls) || '']; return HITSTUN_TICKS[av] != null ? HITSTUN_TICKS[av] : 5; }   // ⚔️ 職業硬直 tick（被擊時延遲攻擊）
 function castLockTicks(p) { let av = (p && p.avatar && CAST_TICKS[p.avatar]) ? p.avatar : ATK_AV_BY_CLS[(p && p.cls) || '']; return CAST_TICKS[av] != null ? CAST_TICKS[av] : 12; }   // 🔮 職業施法冷卻下限 tick
+function castIntervalTicks(p, support) {
+    let key = support ? 'supportCastLock' : 'castLock';
+    let v = (p && p.d && p.d[key] != null) ? p.d[key]
+          : ((p && p.d && p.d.castLock != null) ? p.d.castLock : castLockTicks(p));
+    return Math.max(1, Number(v) || 12);
+}   // 🔮 施法間隔：攻擊／輔助可分流；保留小數 tick 才能準確呈現 CSV 的每分鐘次數，攻擊速度增減不介入。
+function nextCastCooldown(current, p, support) {
+    let carry = Number(current);
+    carry = Number.isFinite(carry) && carry < 0 ? Math.max(-0.999999, carry) : 0;
+    let next = Math.round((castIntervalTicks(p, support) + carry) * 1000000) / 1000000;
+    return Math.max(0.000001, next);
+}   // 🔮 小數施法間隔補差：例如 7.5 tick 會交替 8/7 tick，長期維持 80 次／分。
 // 防具強化 → AC 減免量（值越大防禦越好）：v3.0.69 用戶要求改「線性·每 +1 固定 AC−1」（原 +11~+15 每階多給 +2 已取消→ +11 以上不再大幅提升，每階仍只 −1；+15＝AC−15）。
 function enhanceArmAc(en) {
     return Math.max(0, Number(en) || 0);   // 每 +1 固定 AC−1

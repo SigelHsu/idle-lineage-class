@@ -283,6 +283,15 @@ function _initMobListGuard() {   // 在 #mob-list(穩定父節點·只換其 inn
     document.addEventListener('pointerup', release);
     document.addEventListener('pointercancel', release);
 }
+// 玩家一般攻擊間隔保留小數 tick，避免 0.19 秒被向下取整成 0.1 秒。
+// 0.1 秒主迴圈仍維持每 tick 最多攻擊一次，因此技術上限為 600 次／分鐘。
+function playerAttackIntervalTicks(includeTemporarySlow) {
+    let aspd = (player && player.d) ? Number(player.d.aspd) : 0.1;
+    if (!Number.isFinite(aspd) || aspd <= 0) aspd = 0.1;
+    let ticks = Math.max(1, aspd * 10);
+    if (includeTemporarySlow !== false && player.statuses && player.statuses.slowAtk > 0) ticks *= 2;
+    return ticks;
+}
 // ⚔️ 天堂職業硬直：玩家被「直接命中」（物理/魔法·非 DoT）時，延遲下次一般攻擊 d.hitstun 個 tick。每個攻擊週期最多硬直一次（不無限疊加·避免被群毆時完全鎖死）。
 function applyPlayerHitstun() {
     if (!state || state._pStunCycle || player.dead) return;
@@ -391,11 +400,12 @@ function tick() {
         renderStatusEffects(); // 每個 tick 即時刷新「狀態」欄的增益/減益顯示
     }
     
-    // 法術自動施放冷卻：改以 tick(0.1秒) 遞減，讓施法間隔能受攻速效果細緻影響
+    // 法術自動施放冷卻：以 tick(0.1秒) 遞減；間隔統一由職業／變身 cast 決定，不讀攻擊速度
     if(player.cds.atkSk > 0) player.cds.atkSk--;
     if(player.cds.healSk > 0) player.cds.healSk--;
     if(player.cds.healSkillCds) for (let _hk in player.cds.healSkillCds) { if (player.cds.healSkillCds[_hk] > 0) player.cds.healSkillCds[_hk]--; }
     if((player.cds.purifySk || 0) > 0) player.cds.purifySk--;   // 🔧 淨化技獨立冷卻
+    if((player.cds.convertSk || 0) > 0) player.cds.convertSk--;   // 🔄 轉換技獨立冷卻（與攻擊／治癒共用相同施法速度公式）
     if((player.cds.castLock || 0) > 0) player.cds.castLock--;   // 🔮 天堂職業施法冷卻下限（法師快·王族/黑妖慢）·autoCastSpells 依此節流攻擊魔法
     if(canAct) autoCastSpells();   // 每 tick 嘗試自動施法，實際間隔由上方冷卻控制
 
@@ -446,21 +456,16 @@ function tick() {
                 } else if(KING_ROOMS[mapState.current]) {
                     delay = 50;                                                 // 🔧 軍王之室：固定 5 秒復活，不受日光術/席琳的世界加速影響
                 } else {
-                    // 🐾 v3.0.27 重生延遲＝基準 50 tick(5秒) × 變身移動速度(pf.wlk·16=基準·越小越快) × 移動加速倍率(加速/勇敢/精靈餅乾)
+                    // 🐾 重生延遲＝基準 50 tick(5秒) × 玩家有效移動延遲倍率。
+                    // 變身(wlk·16=100%)、加速、勇敢／餅乾、行走加速、裝備移速與資訊面板共用 playerMoveDelayMultiplier()。
                     // ⚡ v3.4.26 日光術／席琳的世界由「固定 −1 秒(−10 tick)」改為【乘算 ×0.8】（用戶要求）：
                     //    基準 5 秒下 ×0.8＝4 秒（與舊制 −1 秒等值·手感不變）；但在已被加速到很快時只按比例縮短，
                     //    不再像減法那樣把結果打成負數 → 舊制可觸底 0.1 秒(1 tick)＝怪一死立刻補位，已修正。
                     //    全項目相乘故所有加速一律「按比例」疊加；下限 5 tick＝0.5 秒（全加成極限約 6 tick／0.6 秒，此 clamp 為安全底線）。
-                    let _pfW = (player._setPoly && player._setPoly.wlk) ? player._setPoly.wlk          // 套裝變身優先（與 js/02 變身套用同優先序）
-                             : ((player.buffs.poly > 0 && player.poly && player.poly.wlk) ? player.poly.wlk : 16);   // 卷軸變身移動速度；未變身＝16
-                    let _mv = 1;   // 加速/勇敢/餅乾也加快「移動速度」→加快重生（與攻速同倍率·相乘疊加）
-                    if (player.buffs.haste > 0 || player._equipHaste) _mv *= 0.67;   // 加速術/裝備常駐加速 +33%
-                    if (player.buffs.brave > 0) _mv *= 0.67;                          // 勇敢藥水 +33%
-                    if (player.buffs.elfcookie > 0) _mv *= 0.85;                      // 精靈餅乾 +15%
-                    if (player.d && player.d.moveSpeedPct) _mv *= (1 / (1 + Math.max(-95, player.d.moveSpeedPct) / 100));   // 🏺 遺物 寄居蟹背殼：移動速度%（負=變慢→重生延遲變長·-50%→×2=10秒；下限-95%防除零）
+                    let _mv = playerMoveDelayMultiplier();
                     if (player.buffs.sk_sunlight > 0) _mv *= 0.8;                     // ☀️ v3.4.26 日光術：重生延遲 ×0.8（原「固定 −1 秒」→乘算）
                     if (sherineWorldActive() && !isSiegeArea(mapState.current)) _mv *= 0.8;   // 🔮 v3.4.26 席琳的世界：重生延遲 ×0.8（與日光術相乘疊加）
-                    delay = Math.max(5, Math.round(50 * (_pfW / 16) * _mv));          // 🚧 v3.4.26 下限 5 tick＝0.5 秒（原為 1 tick＝0.1 秒）
+                    delay = Math.max(5, Math.round(50 * _mv));                       // 🚧 下限 5 tick＝0.5 秒
                 }
                 if(mapState.spawnAt[i] == null) mapState.spawnAt[i] = nowT + delay; // 空格剛出現：排程 delay 後（一般／純BOSS房／軍王之室皆 5 秒）
                 if(nowT >= mapState.spawnAt[i]) {
@@ -477,12 +482,19 @@ function tick() {
     
     // 🔧 slowAtk / cleave 的遞減已由上方 statuses 通用迴圈處理（先前此處第二次遞減導致持續時間減半：寒冰吐息 8 秒變 4 秒、切割 2 秒變 1 秒）
     if(canAct) {
-        state.pDmgTick++;
-        let aspdTicks = Math.max(1, Math.floor(player.d.aspd * 10));
-        if(player.statuses && player.statuses.slowAtk > 0) aspdTicks *= 2;            // 攻擊速度減慢100%（間隔翻倍）
+        let aspdTicks = playerAttackIntervalTicks(true);
+        let attackProgress = Number(state.pDmgTick);
+        if (!Number.isFinite(attackProgress)) attackProgress = 0;
+        let previousInterval = Number(state._pAtkIntervalTicks);
+        // 攻速在週期中變更時保留已完成的比例；受擊硬直造成的負進度仍維持固定 tick 延遲。
+        if (attackProgress > 0 && Number.isFinite(previousInterval) && previousInterval > 0 && previousInterval !== aspdTicks) {
+            attackProgress = Math.min(1, attackProgress / previousInterval) * aspdTicks;
+        }
+        state._pAtkIntervalTicks = aspdTicks;
+        state.pDmgTick = attackProgress + 1;
         if(state.pDmgTick >= aspdTicks) {
             playerAttack();
-            state.pDmgTick = 0;
+            state.pDmgTick = Math.max(0, state.pDmgTick - aspdTicks);   // 保留小數餘額，長期平均攻速才正確
             state._pStunCycle = false;   // ⚔️ 硬直：每次攻擊後重置「本週期已硬直」旗標（下週期被擊可再延遲一次）
         }
     }

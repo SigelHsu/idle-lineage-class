@@ -306,7 +306,7 @@ function manualCast(skId) {
     }
     player.mp -= cost;
     if (player.mastery === 'i_mana' && player.mp < _mpBeforeManual) manaMasteryRefund(_mpBeforeManual - player.mp);   // 🔮 魔力精通：手動施法消耗MP→傭兵回饋10%
-    player.manualCd[skId] = (sk.mEff === 'barrier') ? (sk.dur * 10 + 120) : 10;   // 🛡️ 絕對屏障：效果(dur秒)結束後再等 12 秒；其餘手動技 1 秒冷卻
+    player.manualCd[skId] = (sk.mEff === 'barrier') ? (sk.dur * 10 + 120) : getAutoCastInterval(player, isSupportSkill(sk), player.manualCd[skId]);   // 🛡️ 絕對屏障保留專屬長冷卻；其餘手動施法套用攻擊／輔助施法速度
     calcStats(); updateUI();
 }
 
@@ -392,7 +392,7 @@ function castSkillInner(skId) {
         logCombat(`<span class="font-bold" style="color:#f0abfc;text-shadow:0 0 8px #d946ef;">【會心一擊】</span>對 <span class="${getMobColor(_t.lv)}">${_t.n}</span> 造成 ${dmg} 點致命傷害！`, 'player-crit');
         let _i = mapState.mobs.findIndex(m => m && m.uid === _t.uid);
         if (_t.curHp <= 0) { if (_i !== -1) killMob(_i); } else renderMobs();
-        player.cds.atkSk = getAutoCastInterval();   // ⚔️ v3.1.77 稽核中#11：施放後進入攻擊技冷卻（比照其他 atk 技）
+        player.cds.atkSk = getAutoCastInterval(player, false, player.cds.atkSk);   // ⚔️ v3.1.77 稽核中#11：施放後進入攻擊技冷卻（比照其他 atk 技）
         calcStats(); updateUI(); return true;
     }
 
@@ -419,6 +419,7 @@ function castSkillInner(skId) {
     }
 
     if(sk.type === 'convert') {
+        if((player.cds.convertSk || 0) > 0) return false;   // 🔄 轉換與攻擊／治癒使用相同施法間隔公式，但保留獨立欄位避免彼此餓死
         // 🔧 魔力奪取（drain）：消耗 HP，必須對怪物施展；以異常魔法命中（abnormalMagicHit，與迷魅術一致，
         //    吃魔法命中/怪物MR/等級差）判定，命中才吸取 MP＝怪物等級/2。其餘機制（自動施放條件、不佔冷卻）比照魂體轉換。
         if(sk.drain) {
@@ -433,12 +434,14 @@ function castSkillInner(skId) {
             } else {
                 logCombat(`${sk.n} 未能命中 <span class="${getMobColor(_t.lv)}">${_t.n}</span>。`, 'miss');
             }
+            player.cds.convertSk = getAutoCastInterval(player, true, player.cds.convertSk);
             calcStats(); updateUI(); return true;
         }
         // 心靈轉換 / 魂體轉換（輔助類）：消耗 HP 換取 MP，不佔用攻擊/治癒冷卻
         player.mp -= cost;
         player.hp = Math.max(1, player.hp - (sk.hpCost || 0));
         player.mp = Math.min(player.mmp, player.mp + sk.mpGain);
+        player.cds.convertSk = getAutoCastInterval(player, true, player.cds.convertSk);
         logCombat(`施放 ${sk.n}，消耗 ${sk.hpCost} HP，恢復了 ${sk.mpGain} 點 MP。`, 'heal');
         calcStats(); updateUI(); return true;
     }
@@ -451,12 +454,12 @@ function castSkillInner(skId) {
         let _dk = (skId === 'sk_antidote') ? ['poison']
             : (skId === 'sk_holy_light') ? ['stone', 'paralyze']
             : (skId === 'sk_cancel') ? ['freeze', 'stone', 'poison', 'paralyze', 'burn', 'scald', 'weaken', 'disease', 'blind', 'potionFrost'] : null;   // 🌅 審查修：魔法相消術可解日出之國四新異常
-        if(!_dk) { player.mp -= cost; player.cds.purifySk = getAutoCastInterval(); logCombat(`施放 ${sk.n}。${sk.msg || ''}`, 'heal'); return true; }   // 非淨化 heal（保底·理論上無此類）
+        if(!_dk) { player.mp -= cost; player.cds.purifySk = getAutoCastInterval(player, true, player.cds.purifySk); logCombat(`施放 ${sk.n}。${sk.msg || ''}`, 'heal'); return true; }   // 非淨化 heal（保底·理論上無此類）
         if(dispelCasterBlocked(player.statuses)) return false;   // 🆕 自己硬控/沉默/魔封→無法使用
         let _tgt = teamCleanseOne(_dk);   // 🆕 v2.6.29 一次只解一人·優先主要玩家
         if(!_tgt) return false;           // 隊伍(含自己)無對應可解狀態：不施放、不耗 MP
         player.mp -= cost;
-        player.cds.purifySk = getAutoCastInterval();
+        player.cds.purifySk = getAutoCastInterval(player, true, player.cds.purifySk);
         logCombat(`施放 ${sk.n}，解除了 ${_dispelTargetName(_tgt)} 的負面狀態。${sk.msg || ''}`, 'heal');
         return true;
     }
@@ -468,7 +471,7 @@ function castSkillInner(skId) {
             if(player.hots && player.hots[skId] && player.hots[skId].ticksLeft > 0) return false;  // 🍃 該技能團隊 HoT 已在持續中→不重複(防自動施放洗版/耗MP)；不同技能(生命的祝福/體力回復術)可並存、同技能後放取代先放
             player.mp -= cost;
             applyTeamHot(skId, sk, player.d, player);   // 🍃 施放時全隊(玩家＋全體傭兵)持續回復；🏺 v3.1.80 傳施放者供 hotHealMult 快照
-            player.cds.healSk = getAutoCastInterval();  // 🔧 HoT 不再把共用治癒冷卻鎖到結束：重複施放已由上方守衛擋住；長鎖會餓死其他自動治癒（高級治癒術/生命之泉等）
+            player.cds.healSk = getAutoCastInterval(player, true, player.cds.healSk);  // 🔧 HoT 不再把共用治癒冷卻鎖到結束：重複施放已由上方守衛擋住；長鎖會餓死其他自動治癒（高級治癒術/生命之泉等）
             logCombat(`施放 ${sk.n}，全隊開始持續回復 HP。`, 'heal');
             return true;
         }
@@ -480,7 +483,7 @@ function castSkillInner(skId) {
         _cands.forEach(c => { let _mx = (typeof _supMhp === 'function') ? _supMhp(c) : (c.mhp || 1); if (_mx > 0) { let _p2 = ((typeof _supHp === 'function') ? _supHp(c) : (c === player ? player.hp : c.curHp) || 0) / _mx; if (_p2 < _hPct) { _hPct = _p2; _hTgt = c; } } });
         player.mp -= cost;
         _lastHealFxTarget = _hTgt;   // 🩹 記錄受益者→castSkill 把治癒特效疊在其身上（寵物/召喚物 _partyMemberRect 回 null→退預設錨點）
-        player.cds.healSk = getAutoCastInterval();
+        player.cds.healSk = getAutoCastInterval(player, true, player.cds.healSk);
         if (sk.healCooldownTicks) { if (!player.cds.healSkillCds) player.cds.healSkillCds = {}; player.cds.healSkillCds[skId] = sk.healCooldownTicks; }
         if (sk.groupHeal) {
             let _total = 0, _hit = 0;
@@ -511,7 +514,7 @@ function castSkillInner(skId) {
             let t = getTarget(); if (!t || t.curHp <= 0) return false;
             let wpn = player.eq.wpn ? DB.items[player.eq.wpn.id] : null;
             if (!wpn || wpn.isBow || wpn.ranged) return false;   // 需近距離武器
-            player.mp -= cost; player.cds.atkSk = getAutoCastInterval();
+            player.mp -= cost; player.cds.atkSk = getAutoCastInterval(player, false, player.cds.atkSk);
             if (sk.hpCost) player.hp = Math.max(1, player.hp - effHpCost(sk));
             let layers = t.weakExpose || 0, bonus = layers > 0 ? 10 * layers : 0;
             let consume = layers > 0 && !hasMastery('k_weakness');   // 🏅 弱點精通：屠宰者不消耗弱點曝光
@@ -540,7 +543,7 @@ function castSkillInner(skId) {
             let targets = mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead);
             if (!targets.length) return false;
             if (player.mp < cost) return false;
-            player.mp -= cost; player.cds.atkSk = getAutoCastInterval();
+            player.mp -= cost; player.cds.atkSk = getAutoCastInterval(player, false, player.cds.atkSk);
             if (sk.hpCost) player.hp = Math.max(1, player.hp - effHpCost(sk));
             let base = 50 + Math.max(0, (player.lv || 1) - 30);
             targets.forEach(m => { if (!m || m.curHp <= 0 || m._dead) return; let dmg = Math.max(1, Math.floor(base * fragileMult(m))); m.curHp -= dmg; m.justHit = 'magic'; m._spellHurt = true; mobWake(m); if (typeof reflectWallOnDamage === 'function') reflectWallOnDamage(m, dmg, 'magic', null); });   // 🎬 v3.0.14 _spellHurt：法術傷害→hurt 動畫(含頭目)；🌑 v3.3.33 血壁空間魔法反射
@@ -555,7 +558,7 @@ function castSkillInner(skId) {
             let allies = (player.allies || []).filter(a => a && a.curHp > 0);
             if (!allies.length) return false;
             if (player.mp < cost) return false;
-            player.mp -= cost; player.cds.atkSk = getAutoCastInterval();
+            player.mp -= cost; player.cds.atkSk = getAutoCastInterval(player, false, player.cds.atkSk);
             logCombat(`<span class="text-amber-300 font-bold">${sk.n}！</span>你號召盟友一同出擊。`, 'player');
             allies.forEach(a => { try { allyAttackOnce(a); } catch(e){} });
             return true;
@@ -565,7 +568,7 @@ function castSkillInner(skId) {
             let t = getTarget(); if (!t || t.curHp <= 0) return false;
             let fs = sk.fixedStatus;
             if (sk.noRecastStatus && t.st && t.st[sk.noRecastStatus] > 0) return false;   // 已有狀態：不重複（不耗 HP/CD）
-            player.mp -= cost; player.cds.atkSk = getAutoCastInterval();
+            player.mp -= cost; player.cds.atkSk = getAutoCastInterval(player, false, player.cds.atkSk);
             if (sk.hpCost) player.hp = Math.max(1, player.hp - effHpCost(sk));
             if (Math.random() < fs.chance) {
                 if (!t.st) t.st = newMobStatus();
@@ -583,7 +586,7 @@ function castSkillInner(skId) {
             if (sk.tagReq && !mobHasTag(t, sk.tagReq)) return false;   // 骷髏毀壞：只能對不死
             let spend = cost;
             if (sk.mpDmgPct) { spend = Math.max(1, Math.floor((player.mmp || 0) * sk.mpDmgPct)); if (player.mp < spend) return false; }
-            player.mp -= spend; player.cds.atkSk = getAutoCastInterval();
+            player.mp -= spend; player.cds.atkSk = getAutoCastInterval(player, false, player.cds.atkSk);
             if (sk.instakill && tryInstakill(t, sk.instakill, sk.n, mapState.targetIdx)) return true;   // 🦴 骷髏毀壞：先即死判定（起死回生式·vs不死非BOSS）；成功即死、不再造成傷害
             let dmg;
             if (sk.weaponDmg) {
@@ -631,7 +634,7 @@ function castSkillInner(skId) {
                 if (!arrowData) return false;
             }
             player.mp -= cost;
-            player.cds.atkSk = getAutoCastInterval();
+            player.cds.atkSk = getAutoCastInterval(player, false, player.cds.atkSk);
 
             let dice = wpn ? (t.s === 'L' ? wpn.dmgL : wpn.dmgS) : 2;
             if (arrowData) {
@@ -699,7 +702,7 @@ function castSkillInner(skId) {
             }
             
             player.mp -= cost;
-            player.cds.atkSk = getAutoCastInterval();
+            player.cds.atkSk = getAutoCastInterval(player, false, player.cds.atkSk);
             if(sk.hpCost && !_echoFree) player.hp = Math.max(1, player.hp - effHpCost(sk));   // 🔮 混亂/幻想/恐慌：扣除 HP 消耗（迴響連發那次免費；🐉 龍血精通減半）
 
             let totalDmgText = [];
@@ -969,31 +972,21 @@ function autoActions() {
     // 🤝 v3.4.45 單體輔助共享：玩家有清單內 buff→幫缺的隊友(傭兵)補（負重過重時與 buff 迴圈一致不施放）
     if((player.d.loadTier||0) < 2) { try { if (typeof shareTeamBuffs === 'function') shareTeamBuffs(player); } catch(e){} }
 
-    // 轉換魔法（妖精/法師下拉，單選）：每 3 秒一次；安全區(村莊)暫停；MP 達 90% 以上不轉換；
-    // 僅在 HP 高於玩家自訂門檻時施放（避免把 HP 轉到危險值；單選天然避免兩個同時使用）
-    // 魔力奪取：另需場上有存活目標（castSkill 內判定，無目標不施放、不耗 HP）
-    if((player.d.loadTier||0) < 2 && state.ticks % 30 === 0 && !mapState.current.startsWith('town_')) {
-        let convSel = document.getElementById('sel-convert-skill');
-        let convId = convSel ? convSel.value : '';
-        if(convId && player.skills.includes(convId) && DB.skills[convId] && DB.skills[convId].type === 'convert') {
-            let thEl = document.getElementById('set-hp-convert');
-            let th = thEl ? (parseFloat(thEl.value) || 0) : 0;
-            if(hpPct > th && player.mp < player.mmp * 0.9) castSkill(convId);
-        }
-    }
+    // 轉換魔法已移至 autoCastSpells 每 tick 檢查，實際頻率由 convertSk＋職業／變身 cast 控制。
 }
 
 // 🆕 v2.6.28 移除「行動不能中自救淨化」（tryEmergencyDispel）：改為硬控(石化/冰凍/暈眩/麻痺/沉睡)中無法施放淨化，由自由隊員(玩家/傭兵)幫全隊解除（見 castSkillInner heal 分支 + allyTryDispel + teamCleanseStatus）。
 
-// 自動施放攻擊/治癒法術的基礎間隔：2 秒(20 tick)，並受攻速倍率(加速/勇敢藥水/精靈餅乾/變身)影響
-function getAutoCastInterval() {
-    return Math.max(1, Math.round(20 * (player.d.spdMult || 1)));
+// 攻擊／輔助施法各自讀取職業／變身速度；current 用來承接小數 tick 的超時餘數。
+function getAutoCastInterval(actor, support, current) {
+    let who = actor || player;
+    return arguments.length >= 3 ? nextCastCooldown(current, who, !!support) : castIntervalTicks(who, !!support);
 }
 
 // 🐍 艾庫艾托的枯竭魔杖：自動施放的傷害技能 消耗MP×2、傷害×1.5（僅 auto 施放路徑；手動施放不受影響）
 let _autoCastNow = false;
 function _equipWpnField(f) { let w = (player.eq && player.eq.wpn) ? DB.items[player.eq.wpn.id] : null; return (w && w[f]) || 0; }
-// 自動施放攻擊/治癒法術：每個 tick 呼叫一次，實際施放間隔由 player.cds.atkSk / healSk 控制
+// 自動施放攻擊／治癒／轉換法術：每個 tick 呼叫一次，各欄位獨立冷卻但共用 castIntervalTicks 速度公式
 function autoCastSpells() {
     if(!state.running || player.dead) return;
     if((player.d.loadTier||0) >= 2) return;   // 🔧 負重 82%+：暫停所有技能自動施放
@@ -1015,7 +1008,7 @@ function autoCastSpells() {
         let needTag = (skDef && skDef.tagReq) || null;   // 🔮 一般 tag 需求（骷髏毀壞=不死；BOSS 亦可，僅暈眩對 BOSS 無效）
         let _noRecast = skDef && skDef.noRecastStatus && atkTarget.st && atkTarget.st[skDef.noRecastStatus] > 0;   // 🔮 混亂/恐慌：目標已有該狀態則不重複施放
         let _tagOk = (!ikTag || (!atkTarget.boss && mobHasTag(atkTarget, ikTag))) && (!needTag || mobHasTag(atkTarget, needTag));
-        if(!_noRecast && _tagOk) { let _mpB = player.mp; _autoCastNow = true; try { castSkill(atkSk); } finally { _autoCastNow = false; } if(player.mp < _mpB) player.cds.castLock = (player.d && player.d.castLock) || 12; }   // 🔮 實際施放(耗MP)才設施法鎖·職業定；🐍 _autoCastNow：枯竭魔杖 auto 施放 MP×2/傷害×1.5
+        if(!_noRecast && _tagOk) { let _castOk = false; _autoCastNow = true; try { _castOk = castSkill(atkSk); } finally { _autoCastNow = false; } if(_castOk) player.cds.castLock = getAutoCastInterval(player, false, player.cds.castLock); }   // 🔮 實際施放成功才設攻擊施法鎖（含零MP／耗HP技）；🐍 _autoCastNow：枯竭魔杖 auto 施放 MP×2/傷害×1.5
     }
 
     let healSk = document.getElementById('sel-heal-skill').value;
@@ -1029,6 +1022,16 @@ function autoCastSpells() {
         (player.allies || []).forEach(a => { if (a && !a._downed && (a.curHp || 0) > 0 && (a.mhp || 0) > 0) { let _p2 = (a.curHp / a.mhp) * 100; if (_p2 < _teamLowPct) _teamLowPct = _p2; } });
     }
     if(healSk && _teamLowPct <= healThr) castSkill(healSk);
+
+    // 轉換魔法（妖精／法師下拉，單選）：安全區暫停、MP 達 90% 以上不轉換；
+    // 實際頻率由 convertSk 控制，與攻擊／治癒套用相同職業／變身 cast，不再固定每 3 秒。
+    let convSel = document.getElementById('sel-convert-skill');
+    let convId = convSel ? convSel.value : '';
+    if((player.d.loadTier||0) < 2 && !mapState.current.startsWith('town_') && convId && player.skills.includes(convId) && DB.skills[convId] && DB.skills[convId].type === 'convert') {
+        let thEl = document.getElementById('set-hp-convert');
+        let th = thEl ? (parseFloat(thEl.value) || 0) : 0;
+        if(hpPct > th && player.mp < player.mmp * 0.9) castSkill(convId);
+    }
 }
 
 // 詞綴抽取（新制）：掉落/製作/潘朵拉/血盟 等管道只會隨機產生「祝福的」(bless) 1%；不再有單/雙/三詞綴或屬性/遠古的隨機掉落。

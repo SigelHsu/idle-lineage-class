@@ -612,11 +612,13 @@ function formatBonus(val) {
 const WEAPON_TAGS = {
     wpn_katana: ['單手劍','武士刀'], wpn_siruge: ['單手劍','武士刀'], wpn_golden_scepter: ['單手劍','武士刀'],   // 👑 黃金權杖：反擊＋居合（雙標籤·裝真盾→反擊、無盾→居合）
     wpn_dagger2: ['匕首'], wpn_dagger1: ['匕首'], wpn_11: ['匕首'], wpn_33: ['匕首'],
-    wpn_longsword: ['單手劍'], wpn_9: ['單手劍'], wpn_scimitar: ['單手劍'], wpn_26: ['單手劍'],
+    wpn_longsword: ['單手劍'], wpn_9: ['單手劍'], wpn_scimitar: ['單手劍'], wpn_26: ['單手劍'], wpn_damascus: ['單手劍'],
     wpn_elfsword: ['單手劍'], wpn_27: ['單手劍'], wpn_shortsword: ['單手劍'], wpn_redknight: ['單手劍'],
     wpn_invader: ['單手劍'], wpn_34: ['單手劍'], wpn_35: ['單手劍'],
     wpn_36: ['單手劍'], wpn_rapier: ['單手劍'], wpn_mailbreaker: ['單手劍'], wpn_silversword: ['單手劍'], wpn_37: ['單手劍'],
     wpn_21: ['矛'], wpn_24: ['矛'], wpn_25: ['矛'], wpn_28: ['矛'], wpn_39: ['矛'], wpn_40: ['矛'], wpn_41: ['矛'], wpn_17: ['矛'], wpn_4: ['矛'], wpn_halberd: ['矛'],   // 🔱 法丘：雙手矛（w2h＋穿透80%）
+    wpn_6: ['矛'], wpn_7: ['矛'], wpn_12: ['矛'], wpn_15: ['矛'], wpn_18: ['矛'],   // 🔱 v3.5.8 補齊天堂槍類漏標：巴迪須/柴刀/貝卡合金/吉薩原掉「雙手劍」fallback、露西錘被「錘」字誤歸雙手鈍器→動態/攻速/出血全錯（穿透 eff＝矛系標配可佐證）
+    wpn_14: ['矛'], wpn_16: ['矛'], wpn_demonking_spear: ['矛'], wpn_ancient_spear: ['矛'],   // 🔱 v3.5.8 闊矛/戟/惡魔王矛/古代神之槍：家族原靠名稱 regex 已對·補 tag 讓 weaponHasBleed 一致取得矛系出血
     wpn_20: ['單手鈍器'], wpn_10: ['單手鈍器'], wpn_13: ['單手鈍器'], wpn_alien: ['單手鈍器'], wpn_1: ['單手鈍器'], wpn_2: ['單手鈍器'], wpn_ancient_axe: ['單手鈍器'], wpn_warrior_trial_axe: ['單手鈍器'], wpn_master_axe: ['單手鈍器'], wpn_demon_axehead: ['單手鈍器'], wpn_iron_axehead: ['單手鈍器'], wpn_giant_axehead: ['單手鈍器'],   // 🔧 古代神之斧／試煉斧頭／大匠的斧頭／魔物的斧頭／鐵斧頭／巨人的斧頭：單手鈍器（鈍擊）
     wpn_2hsword: ['雙手劍'], wpn_dragonslayer: ['雙手劍'], wpn_official_2h: ['雙手劍'],   // 🔧 雙手劍類型標註
     // 🔧 重擊特效武器標註為「雙手鈍器」
@@ -713,7 +715,32 @@ Object.keys(DB.items).forEach(function(id){ let d = DB.items[id]; if (d && d.eff
 // 🎮 經典模式：tooltip 不顯示已被停用的武器/盾牌特效字樣（共鳴/魔爆/連射/反擊/出血/穿透/切割/居合/魔擊/鈍擊/重擊/格檔）；連擊/月光爆裂/即死等未停用者照常顯示
 const CLASSIC_HIDDEN_EFF_LABELS = ['共鳴','魔爆','連射','反擊','出血','穿透','切割','居合','魔擊','鈍擊','重擊','格檔','雙刃'];   // ⚔️ 雙刃＝雙刀 5% 傷害×2（經典停用）；鋼爪額外重擊以「重擊」開頭已涵蓋
 function filterClassicEffLabels(effArr, d){ return (player && player.classicMode && !(d && d.classicOk)) ? effArr.filter(e => !CLASSIC_HIDDEN_EFF_LABELS.some(h => e.startsWith(h))) : effArr; }   // ⚔️ v3.2.38 classicOk 特例（黑虎的雙尾鞭）：經典模式特效照常顯示
-function weaponHasBleed(id){ let d = DB.items[id]; if (d && d.noBleed) return false; let t = getWeaponTags(id); return t.includes('匕首') || t.includes('矛'); }   // 匕首與矛皆帶出血特效（noBleed 旗標可個別停用，如提卡爾雙手矛）
+function weaponHasBleed(id){ let d = DB.items[id]; if (d && d.noBleed) return false; let t = getWeaponTags(id); return t.includes('匕首') || (t.includes('矛') && !(d && d.w2h)); }   // 🩸 匕首與「單手矛」帶出血；雙手矛只有穿透不出血（用戶規則：雙手矛=穿透無出血／單手矛=出血無穿透）·noBleed 旗標仍可個別停用
+
+// ⚔️ 武器資料欄位補充說明：集中處理「戰鬥中實際生效、但一般特效列沒有對應項目」的機制。
+// 背包、裝備欄、圖鑑與潘朵拉市場 tooltip 共用，避免只在物品背景文字中含糊帶過。
+function weaponPurposeLabels(d) {
+    if (!d || d.type !== 'wpn') return [];
+    const out = [];
+    if (d.qigu) out.push('奇古獸攻擊（一般攻擊必定命中並視為魔法傷害，受MR減免；奇古獸精通時無視MR）');
+    if (d.qiguProc === 'phantom') out.push('幻影衝擊 1%＋每強化1%（造成基礎80～160的無屬性魔法傷害，不受MR減免）');
+    if (d.qiguProc === 'mindbreak') out.push('心靈破壞 1%＋每強化1%（以自身最大MP 5%為基礎魔法傷害，不消耗MP；奇古獸精通時無視MR）');
+    if (d.mpRPerEn) out.push(`MP自然恢復每強化+${d.mpRPerEn}`);
+    if (d.mdmgEnFrom7Max3) out.push('魔法傷害成長（+7起魔法傷害+1，之後每強化+1，最高+3）');
+    if (d.equipHaste) out.push('裝備加速（常駐加速，與加速術／自我加速藥水不重疊）');
+    if (d.dragonStrike) out.push(`龍的一擊 ${d.dragonStrike}%（每次一般攻擊皆判定且不論命中；對全體造成1D力量+25固定物理傷害）`);
+    if (d.procBurstPoison) {
+        let p = d.procBurstPoison;
+        out.push(`猛爆劇毒 ${p.rateBase == null ? 1 : p.rateBase}%＋每強化${p.ratePerEn == null ? 1 : p.ratePerEn}%（每秒100點真實傷害，持續5秒，最多1層）`);
+    }
+    if (d.hardWear) out.push(`碎甲（命中時額外削減${d.hardWear}點硬皮）`);
+    if (d.strawCurse) out.push(`稻草詛咒 ${d.strawCurse.rate}%（命中時附加${d.strawCurse.stacks || 3}層；後續每次受攻擊消耗1層並追加80點水屬性固定魔法傷害）`);
+    if (d.stunHitBonus) out.push(`衝擊之暈強化（暈眩命中率+${d.stunHitBonus}%）`);
+    if (d.vanderStunHit) out.push('范德劍術（施放衝擊之暈時，本次近距離命中+1）');
+    if (d.shahaBow) out.push('沙哈之箭（裝備時自動提供不會消耗的專用箭矢，卸下弓時消失）');
+    if (d.shahaArrow) out.push('無限箭矢（不會消耗；卸下沙哈之弓時消失）');
+    return out;
+}
 
 // 🏺 遺物用途摘要：補足舊遺物只有背景敘述、玩家看不出實際用途的問題。
 // 僅整理「一般特效列尚未涵蓋」的遺物專屬欄位；背包、裝備欄與圖鑑 tooltip 共用。
@@ -780,7 +807,6 @@ function relicPurposeLabels(d) {
     if (d.eleWpnMult) out.push(`${eleName(d.eleWpnMult.ele)}武器強化（對應屬性一般攻擊傷害×${d.eleWpnMult.mult}）`);
     if (d.hardSkinMult) out.push(`破甲專攻（攻擊有硬皮的敵人傷害×${d.hardSkinMult}）`);
     if (d.softMult) out.push(`柔軟專攻（攻擊無硬皮的敵人傷害×${d.softMult}）`);
-    if (d.hardWear) out.push(`碎甲（命中時額外削減${d.hardWear}點硬皮）`);
     if (d.heavyRatePct) out.push(`重擊率額外+${d.heavyRatePct}%`);
     if (d.heavyMult) out.push(`重擊威力（重擊傷害×${d.heavyMult}）`);
     if (d.heavyBonusDmg) out.push(`重擊時額外傷害+${d.heavyBonusDmg}`);
@@ -788,7 +814,6 @@ function relicPurposeLabels(d) {
     if (d.procPoisonPct) out.push(`附毒（一般攻擊命中附加每秒該次傷害${d.procPoisonPct.pct || 50}%的中毒，最多1層，持續${d.procPoisonPct.dur || 6}秒）`);
     if (d.statusHealHp) out.push(`受到異常狀態影響時，恢復${d.statusHealHp}HP`);
     if (d.potionBonus && !d.doll) out.push(`治癒藥水恢復量+${d.potionBonus}%`);
-    if (d.procSkill2 && d.procSkill2.skId) out.push(`攻擊時${d.procSkill2.rate || 5}%機率觸發${(DB.skills[d.procSkill2.skId] && DB.skills[d.procSkill2.skId].n) || '技能'}`);
     if (d.missGrazeRate) out.push(`擦傷補正（未命中時${d.missGrazeRate}%改判為擦傷，造成50%傷害且不會爆擊）`);
     if (d.hitEchoMagic) out.push(`元素爆破 ${d.hitEchoMagic.rate}%（命中後追加等同本次一般攻擊傷害的${eleName(d.hitEchoMagic.ele)}屬性魔法傷害）`);
     if (d.onHitWet) out.push('潮濕（命中後持續10秒；下一次風屬性傷害×2並解除）');
@@ -799,7 +824,6 @@ function relicPurposeLabels(d) {
     if (d.selfBreakProc) out.push(`易碎爆發（3%造成1.5倍傷害，但自身傷害降低${d.selfBreakProc.dur || 5}秒）`);
     if (d.stoneInstakill) out.push('石化斬殺（命中石化中的非首領敵人時即死）');
     if (d.instakillFull) out.push(`滿血斬殺 ${pctText(d.instakillFull)}（命中滿血非首領敵人時即死）`);
-    if (d.strawCurse) out.push(`稻草詛咒 ${d.strawCurse.rate}%（命中時附加${d.strawCurse.stacks || 3}層追加傷害）`);
     if (d.procFireSkillRate) out.push(`火焰法術 ${d.procFireSkillRate}%（攻擊時隨機施放火屬性傷害魔法）`);
     if (d.procHealFlat) out.push(`命中治癒 ${d.procHealFlat.rate}%（恢復${d.procHealFlat.hp}點HP）`);
     if (d.rapidMax) out.push('最大連射（連射發動時，固定射出目前可用的最大額外箭數）');
@@ -860,8 +884,11 @@ function buildItemDescHTML(item) {
         if (typeof atkSpdApm === 'function' && typeof player !== 'undefined' && player && player.cls && atkSpdFamily(item.id)) {   // 箭矢等非揮擊武器不顯示
             let _apm = atkSpdApm(player, item.id);
             if (_apm) desc += `<br><span class="text-orange-200">攻擊速度: 每分鐘 ${_apm} 次（${player.avatar || '依職業性別'}）</span>`;
-            // 🏛️ 天堂職業速度：硬直（被擊延遲攻擊）＋施法冷卻下限（皆隨職業·不隨此武器）
-            if (typeof hitstunTicks === 'function') desc += `<br><span class="text-slate-400 text-xs">硬直 ${(hitstunTicks(player)/10).toFixed(1)}秒 · 施法冷卻下限 ${(castLockTicks(player)/10).toFixed(1)}秒</span>`;
+            // 🏛️ 天堂動作速度：硬直依職業；施法速度依目前職業／變身 cast，與此武器及攻速加成無關。
+            if (typeof hitstunTicks === 'function' && typeof castIntervalTicks === 'function') {
+                let _castTicks = castIntervalTicks(player);
+                desc += `<br><span class="text-slate-400 text-xs">硬直 ${(hitstunTicks(player)/10).toFixed(1)}秒 · 施法速度每分鐘 ${(600/_castTicks).toFixed(1)} 次（間隔 ${(_castTicks/10).toFixed(1)}秒）</span>`;
+            }
         }
 
         // 瑪那魔杖等「命中恢復MP」武器：依此物品的強化等級(+N)動態顯示恢復量
@@ -966,7 +993,7 @@ function buildItemDescHTML(item) {
         if (d.procSkill) {
             let _procName = (DB.skills[d.procSkill] && DB.skills[d.procSkill].n) || '技能';
             let _procRate = (d.procRateBase || 1) + (d.procRatePerEn || 0) * capWpnEn(item.en || 0);
-            _eff.push(`攻擊施法 ${_procRate}%（觸發${_procName}）`);
+            _eff.push(`${d.procOnHit ? '命中施法' : '攻擊施法'} ${_procRate}%（觸發${_procName}）`);
         }
         if (d.procSkill2 && d.procSkill2.skId) _eff.push(`攻擊施法 ${d.procSkill2.rate || 5}%（觸發${(DB.skills[d.procSkill2.skId] && DB.skills[d.procSkill2.skId].n) || '技能'}）`);   // 🌅 九尾妖狐的怒火：第二觸發槽
         if (d.procPoisonPct) _eff.push(`附毒（命中附加每秒該次傷害${d.procPoisonPct.pct || 50}%的中毒，最多1層，持續${d.procPoisonPct.dur || 6}秒）`);   // 🌅 毒鵺的黑尾
@@ -1020,6 +1047,7 @@ function buildItemDescHTML(item) {
         if (typeof getWeaponTags === 'function' && getWeaponTags(item.id).includes('雙刀')) _eff.push('雙刃（有機率造成雙倍傷害）');
         if (typeof getWeaponTags === 'function' && getWeaponTags(item.id).includes('鋼爪')) _eff.push('重擊 +5%（重擊取武器最大傷害）');
         if (typeof WAND_LIGHTARROW_IDS !== 'undefined' && WAND_LIGHTARROW_IDS.includes(item.id)) _eff.push('共鳴（攻擊時依智力免費施放光箭）');
+        _eff.push(...weaponPurposeLabels(d));
         if (d.relic) _eff.push(...relicPurposeLabels(d));
         _eff = [...new Set(_eff)];
         _eff = filterClassicEffLabels(_eff, d);   // 🎮 經典模式：移除已停用特效字樣（classicOk 物品不過濾）
