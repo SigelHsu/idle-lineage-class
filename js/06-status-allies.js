@@ -1821,7 +1821,13 @@ function allyCubeTick(ally) {
         if (sid !== 'sk_illu_cube_harmony' && !_mercAutoOn(ally, sid)) return;   // 🔮 v2.7.96 燃燒/地裂/衝擊立方吃「來源有勾自動施放」閘（比照玩家 autoActions js/07:806·免 MP 但沒開→不展開；和諧另由轉換技能欄控制）
         if (sid === 'sk_illu_cube_harmony') {   // 🔮 v2.6.4：立方和諧改由「轉換技能」欄位選取才展開＋受「停耗HP技」門檻影響（有 hpCost）
             if (ally._convertSkill !== 'sk_illu_cube_harmony') return;   // 未在轉換技能欄選取→不展開
-            let _hs = allyHpSkillPct(ally); if (_hs > 0 && (ally.curHp || 0) <= (ally.mhp || 1) * _hs / 100) return;   // HP 低於停耗HP技門檻→暫停
+            let _cHpc = sk.hpCost || 0;
+            if (_cHpc > 0) {   // 🩸 v3.5.45 立方和諧有 hpCost：比照玩家「每次施放(dur 週期)付一次 HP」→常駐光環改成每 sk.dur 秒扣一次 hpCost·取 max(停耗HP技門檻,25%) 安全門檻，HP 低於此→本秒暫停光環讓 HP 回復(不自殺)
+                let _sp = Math.max(allyHpSkillPct(ally) || 0, 25);
+                if ((ally.curHp || 0) <= (ally.mhp || 1) * _sp / 100) return;
+                ally._cubeHpCd = ally._cubeHpCd || {};
+                if ((ally._cubeHpCd[sid] = (ally._cubeHpCd[sid] || 0) - 1) <= 0) { ally._cubeHpCd[sid] = (sk.dur || 20) * 10; ally.curHp = Math.max(1, (ally.curHp || 0) - _cHpc); }
+            } else { let _hs = allyHpSkillPct(ally); if (_hs > 0 && (ally.curHp || 0) <= (ally.mhp || 1) * _hs / 100) return; }   // 無 hpCost→保留原門檻語意
         }
         if ((ally._cubeCd[sid] = (ally._cubeCd[sid] || sk.cube.iv) - 1) > 0) return;
         ally._cubeCd[sid] = sk.cube.iv;
@@ -2260,8 +2266,12 @@ function allyMaintainBuffs(ally) {
             if (sk.haste && ((ally.buffs.haste || 0) > 0 || ally._equipHaste)) continue;
             let cost = (ally.d && typeof ally.d.getMpCost === 'function') ? ally.d.getMpCost(sk.mp, sk.tier) : (sk.mp || 0);
             if (ally._setIllusion3 && isSupportSkill(sk)) cost = Math.max(1, Math.ceil(cost / 2));   // 🔮 v3.1.77 幻覺3/5（傭兵）：輔助技能 MP 消耗 -50%（鏡像玩家 js/07:178/311）
-            if ((ally.mp || 0) < cost) continue;        // 只付 MP（傭兵不付 HP·比照既有設計）
+            if ((ally.mp || 0) < cost) continue;        // MP 不足→本次不施放（不重設·MP 回滿即補）
+            // 🩸 v3.5.45 用戶要求「傭兵輔助技也正常消耗 HP」：有 hpCost 的 buff 比照攻擊技(allyDragonAct)——取 max(停耗HP技門檻,25%) 安全門檻，HP 低於此→本秒不續放(讓 buff 到期自然掉落·改回血)避免自殺；門檻以上才付 HP。buff 多為 noRefresh+長 dur→到期才重付·扣血很緩·搭配下方 regen 全職 min-1 保底→不會慢性失血停擺。
+            let _hpc = sk.hpCost || 0;
+            if (_hpc > 0) { let _sp = Math.max(allyHpSkillPct(ally) || 0, 25); if ((ally.curHp || 0) <= (ally.mhp || 1) * _sp / 100) continue; }
             ally.mp -= cost; allyManaMasteryRefund(ally, cost);
+            if (_hpc > 0) ally.curHp = Math.max(1, (ally.curHp || 0) - _hpc);
             ally.buffs[sid] = sk.dur;
             if (sk.awaken && ally.mastery !== 'k_awaken') _MERC_AWAKENS.forEach(_ak => { if (_ak !== sid) ally.buffs[_ak] = 0; });
             if (sk.haste) ally.buffs.haste = Math.max(ally.buffs.haste || 0, sk.dur);
@@ -2370,7 +2380,7 @@ function allyTryDispel(ally) {
 // 傭兵一般行動間隔：使用完整 ally.d.aspd（職業/性別/武器＋常駐藥水＋變身/精通/負重），暫態切割與緩速在此補入。
 function allyAttackIntervalTicks(ally, st) {
     let itv = Math.max(1, ((ally.d && ally.d.aspd) ? ally.d.aspd : atkSpdBaseItv(ally)) * 10);
-    if (!ally.classicMode && ally._cleaveTicks > 0 && !allyHasMastery(ally, 'k_cleave')) itv = Math.max(1, itv * 0.8);
+    if (!ally.classicMode && ally._cleaveTicks > 0 && !allyHasMastery(ally, 'k_cleave')) itv = Math.max(1, itv * (1/1.2));
     if (st && st.slowAtk > 0) itv *= 2;
     return itv;
 }
@@ -2443,7 +2453,7 @@ function alliesTick() {
         if (state.ticks % _aHpIv === 0 && (ally.curHp||0) < (ally.mhp||0)) {
             let _hrMax = (ally.d && ally.d.hpRegenMax) || 0, _hrFlat = (ally.d && ally.d.hpR) || 0;
             let _hr = (_hrMax > 0 ? roll(1, _hrMax) : 0) + _hrFlat;
-            if (ally.cls === 'dragon') _hr = Math.max(_hr, 1);   // 🐉 v3.5.44 龍騎傭兵吃 HP 施技(屠宰者等)→直接套用傭兵自身 HP 自然恢復量(roll(1,hpRegenMax)+hpR)；若自然恢復為 0(低 CON)則保底最低 1，隨 CON 增長回復更快·搭配 allyDragonAct 25% 門檻→永不因屠宰者停擺
+            _hr = Math.max(_hr, 1);   // 🩸 v3.5.45 全職傭兵 HP 自然恢復保底最低 1（原 v3.5.44 僅龍騎屠宰者；今起輔助技(buff/立方)全職可耗 HP→回血保底擴及全職·自然恢復為 0(低 CON)者也每16s至少+1·搭配各處 25% 安全門檻→永不因耗 HP 技慢性失血停擺·隨 CON 增長回復更快）
             if (_hr > 0) ally.curHp = Math.min(ally.mhp, (ally.curHp||0) + _hr);
         }
         if (ally._cleaveTicks > 0) ally._cleaveTicks--;   // 🔧 切割（雙手劍重擊觸發）：攻速+20% 持續倒數

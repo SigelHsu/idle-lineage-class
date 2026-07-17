@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.5.44';
+const GAME_VERSION = 'v3.5.47';
 // ===== 💾 存檔壓縮（LZString compressToUTF16/decompressFromUTF16·MIT, Pieroxy）：localStorage 內部以 UTF-16 壓縮，省 ~89%，繞過 5MB 上限 =====
 //  ⚠️ 只壓 localStorage（存檔位/倉庫/共用桶/_bak）；匯出檔維持明文 JSON（可攜·importSave 用 JSON.parse 驗證）。_lzGet 相容舊明文存檔（無 'LZ1:' 前綴→原樣回傳）。
 var LZString = (function () {
@@ -105,8 +105,9 @@ function _lsSet(k, v) { try { if (_FS) return _FS.set(k, v); localStorage.setIte
 function _lsRemove(k) { try { if (_FS) { _FS.remove(k); return; } localStorage.removeItem(k); } catch (e) {} }
 
 // Web saves are written immediately, then compressed in a Worker so LZString cannot block
-// rendering or combat. A per-key revision prevents an older Worker result replacing a newer save.
-var _lzWorker = null, _lzWorkerSeq = 0, _lzWorkerRev = Object.create(null);
+// rendering or combat. A per-key revision plus raw-value guard prevents stale Worker output
+// from replacing a newer save, including writes made by another open tab/window.
+var _lzWorker = null, _lzWorkerSeq = 0, _lzWorkerRev = Object.create(null), _lzWorkerRaw = Object.create(null);
 // Direct raw replacements (backup restore / migration) must invalidate a queued compression
 // result for the same key, otherwise an older Worker reply can overwrite the restored value.
 function _lzSetStoredRaw(key, value) {
@@ -129,11 +130,13 @@ function _getLzWorker() {
     _lzWorker = new Worker(URL.createObjectURL(new Blob([source], { type: 'text/javascript' })));
     _lzWorker.onmessage = function(e) {
       var d = e.data || {};
-      if (d.error || _lzWorkerRev[d.key] !== d.rev) return;
-      // Revision matching is enough: every successful write increments this key before queueing.
+      var token = d.key + '@' + d.rev, raw = _lzWorkerRaw[token];
+      if (d.error || _lzWorkerRev[d.key] !== d.rev) { delete _lzWorkerRaw[token]; return; }
+      delete _lzWorkerRaw[token];
+      if (raw == null || _lsGet(d.key) !== raw) return;
       _lsSet(d.key, d.packed);
     };
-    _lzWorker.onerror = function() { try { _lzWorker.terminate(); } catch (e) {} _lzWorker = null; };
+    _lzWorker.onerror = function() { try { _lzWorker.terminate(); } catch (e) {} _lzWorker = null; _lzWorkerRaw = Object.create(null); };
   } catch (e) { _lzWorker = null; }
   return _lzWorker;
 }
@@ -141,7 +144,9 @@ function _queueLzCompression(key, value, rev) {
   if (_FS) return;
   var worker = _getLzWorker();
   if (!worker) return;
-  try { worker.postMessage({ id: ++_lzWorkerSeq, key: key, rev: rev, value: value }); } catch (e) {}
+  var token = key + '@' + rev;
+  _lzWorkerRaw[token] = value;
+  try { worker.postMessage({ id: ++_lzWorkerSeq, key: key, rev: rev, value: value }); } catch (e) { delete _lzWorkerRaw[token]; }
 }
 // 一次性遷移：打包版首次啟用檔案存檔時，把舊版存在 Chromium localStorage(userdata/Local Storage)的所有資料複製進檔案存檔，避免玩家存檔「消失」。
 (function _migrateToFileStore() {
