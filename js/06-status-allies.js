@@ -1740,20 +1740,24 @@ function allyRoyalAct(ally) {
     return false;
 }
 // 🐉 龍騎士協力一次行動：依設定攻擊技能施放——傷害魔法(岩漿噴吐/岩漿之箭/奪命之雷)、屠宰者(物理多段)、控制(護衛毀滅/恐懼無助/驚悚死神)；皆不適用則退回一般攻擊(含鎖鏈劍特效/弱點曝光/吸血)
-// ⚠️ 傭兵不付技能 HP 消耗（原始設計·v3.5.38 修復回歸）：傭兵無 HP 自然再生且不被攻擊(ally.hp 僅吸血會增)，若扣 HP 則龍騎士 mp:0 的技能(屠宰者)只能放數次後「永久停擺」——曾有版本改成扣 HP→用戶回報「設屠宰者後只放屠宰者·HP 耗盡就停在那不普攻」正是此故。故傭兵技能僅付各子函式的 MP(屠宰者 mp:0＝免費)、不扣 HP；技能冷卻(_atkSkillCd)仍節流→一般速度傭兵照常穿插普攻，慢速傭兵則等同連續以屠宰者(＝多段近攻)輸出，皆不會停擺。
+// 🐉 v3.5.42 龍騎士傭兵「正常消耗 HP 施技」（用戶要求·取代 v3.5.38 的完全免費暫解）：龍騎技扣 sk.hpCost（資源＝HP·比照玩家），配套三道防停擺→①安全門檻(_safePct·HP 低於此改普攻回血·避免自殘到 1 停擺)②龍騎傭兵 HP 自然恢復保底(alliesTick regen 段 5% mhp·低 CON hpRegenMax=0 也能回)③普攻階段不耗 HP→自然回血。結果：滿血時連續屠宰者→降到門檻→穿插普攻回血→再屠宰者，永不永久停擺。⚠️曾有版本無門檻+無回血保底→「設屠宰者後 HP 耗盡就停在那不普攻」(見 [[ally-skill-casting]] 1743 警告)。
 function allyDragonAct(ally) {
     let t = getTarget(); if (!t || t.curHp <= 0) { allyAttackOnce(ally); allyRapidfire(ally); return false; }   // 🏹 v3.1.77 稽核中#4：普攻後判定連射（allyRapidfire 自帶 isBow+rapidfire 武器閘·非弓=no-op·原僅妖精路徑觸發）
     let sk = DB.skills[ally._atkSkill];
     if (sk && sk.type === 'atk') {
-        // 🐉 v3.5.38 不再扣 HP（見上方註）：僅付子函式 MP；龍血3 觸發改看「技能本身為 HP 消耗技(sk.hpCost>0)」而非實際扣血。停耗HP技門檻(allyHpSkillPct)已無自殘可停→不再作為施放閘（保留 setter/欄位相容存檔·僅不影響龍騎行動）。
         let _hpCost = sk.hpCost || 0;
-        let _cast = false;
-        if (sk.dmgDice || sk.multiDmg) { allyCastMagic(ally, sk); _cast = true; }   // 岩漿噴吐/岩漿之箭/奪命之雷（傷害魔法；奪命之雷的暈由 allyCastMagic 套狀態）
-        else if (sk.slaughter) { _cast = allyCastSlaughter(ally, sk); }              // 屠宰者
-        else if (sk.fixedStatus) { _cast = allyCastFixedStatus(ally, sk); }          // 護衛毀滅/恐懼無助/驚悚死神
-        else if (sk.dmgType === 'physical') { _cast = allyCastPhysicalSkill(ally, sk); }
-        else if (sk.status || sk.instakill) { _cast = allyCastNonDamage(ally, sk); }
-        if (_cast) { if (ally._setDragonblood3 && _hpCost > 0) { if (!ally.buffs) ally.buffs = {}; ally.buffs.sk_set_dragonscion = 100; }   /* 🐉 v2.6.12 #5a 龍血3/5（傭兵）：施放 HP 消耗型技→獲得「龍裔」10秒（受傷-15%·由 allyBuffDmgReduceMult 讀取） */ return true; }
+        // 🛡️ 停耗HP技門檻：取「隊伍面板 allyHpSkillPct 設定」與「保底 25%」較高者→HP 低於此暫停消耗 HP 的技、改普攻回血；無 HP 消耗的技(_hpCost<=0)不受限。
+        let _safePct = Math.max(allyHpSkillPct(ally) || 0, 25);
+        let _aboveSafe = (_hpCost <= 0) || ((ally.curHp || 0) > (ally.mhp || 1) * _safePct / 100);
+        if (_aboveSafe) {
+            let _cast = false;
+            if (sk.dmgDice || sk.multiDmg) { allyCastMagic(ally, sk); _cast = true; }   // 岩漿噴吐/岩漿之箭/奪命之雷（傷害魔法；奪命之雷的暈由 allyCastMagic 套狀態）
+            else if (sk.slaughter) { _cast = allyCastSlaughter(ally, sk); }              // 屠宰者
+            else if (sk.fixedStatus) { _cast = allyCastFixedStatus(ally, sk); }          // 護衛毀滅/恐懼無助/驚悚死神
+            else if (sk.dmgType === 'physical') { _cast = allyCastPhysicalSkill(ally, sk); }
+            else if (sk.status || sk.instakill) { _cast = allyCastNonDamage(ally, sk); }
+            if (_cast) { if (_hpCost > 0) ally.curHp = Math.max(1, (ally.curHp || 0) - _hpCost); if (ally._setDragonblood3 && _hpCost > 0) { if (!ally.buffs) ally.buffs = {}; ally.buffs.sk_set_dragonscion = 100; }   /* 🐉 v2.6.12 #5a 龍血3/5（傭兵）：施放 HP 消耗型技→獲得「龍裔」10秒（受傷-15%·由 allyBuffDmgReduceMult 讀取） */ return true; }
+        }
     }
     allyAttackOnce(ally);
     allyRapidfire(ally);   // 🏹 v3.1.77 稽核中#4：連射（龍騎士傭兵持遺物連射弓·非弓 no-op）
@@ -2433,12 +2437,14 @@ function alliesTick() {
         if (state.ticks % 160 === 0 && (ally.mp||0) < (ally.mmp||0) && ((ally.d && ally.d.mpR) || 0) > 0) {   // 🔧 mpR 可能因套裝懲罰（黑暗妖精套裝 -7）為負 → 與玩家回魔一致，只在 >0 時回魔，避免扣傭兵MP
             ally.mp = Math.min(ally.mmp, (ally.mp||0) + ((ally.d && ally.d.mpR) || 0));
         }
-        // 🩸 HP 自然再生（v2.6.16 用戶要求：全職傭兵通用·比照玩家 regenTick）：每 160 ticks，HP<上限且「HP自然恢復為正」(hpRegenMax>0 或 hpR>0)→ +roll(1,hpRegenMax)+hpR（龍騎傭兵改吃HP尤需；移除舊龍騎專屬 5% 保底，改純自然恢復）
+        // 🩸 HP 自然再生（v2.6.16 用戶要求：全職傭兵通用·比照玩家 regenTick）：每 160 ticks，HP<上限且「HP自然恢復為正」(hpRegenMax>0 或 hpR>0)→ +roll(1,hpRegenMax)+hpR（龍騎傭兵改吃HP尤需→直接套用自身自然恢復量·若為 0 則保底最低 1，見下）
         // 🌀 v3.4.71 治癒能量風暴（TEAM_SHARE_BUFFS 共享而來）：維持中 HP 自然恢復間隔改 30 tick(3秒)·比照玩家 js/03 gameLoop _hpIv·MP 恢復不受影響
         let _aHpIv = (ally.buffs && (ally.buffs.sk_heal_energy_storm || 0) > 0) ? ((DB.skills.sk_heal_energy_storm && DB.skills.sk_heal_energy_storm.hpRegenIv) || 30) : 160;
         if (state.ticks % _aHpIv === 0 && (ally.curHp||0) < (ally.mhp||0)) {
             let _hrMax = (ally.d && ally.d.hpRegenMax) || 0, _hrFlat = (ally.d && ally.d.hpR) || 0;
-            if (_hrMax > 0 || _hrFlat > 0) { let _hr = (_hrMax > 0 ? roll(1, _hrMax) : 0) + _hrFlat; if (_hr > 0) ally.curHp = Math.min(ally.mhp, (ally.curHp||0) + _hr); }
+            let _hr = (_hrMax > 0 ? roll(1, _hrMax) : 0) + _hrFlat;
+            if (ally.cls === 'dragon') _hr = Math.max(_hr, 1);   // 🐉 v3.5.44 龍騎傭兵吃 HP 施技(屠宰者等)→直接套用傭兵自身 HP 自然恢復量(roll(1,hpRegenMax)+hpR)；若自然恢復為 0(低 CON)則保底最低 1，隨 CON 增長回復更快·搭配 allyDragonAct 25% 門檻→永不因屠宰者停擺
+            if (_hr > 0) ally.curHp = Math.min(ally.mhp, (ally.curHp||0) + _hr);
         }
         if (ally._cleaveTicks > 0) ally._cleaveTicks--;   // 🔧 切割（雙手劍重擊觸發）：攻速+20% 持續倒數
         let _atkCdBeforeTick = Number.isFinite(ally._atkCd) ? ally._atkCd : 0;

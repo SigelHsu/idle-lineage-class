@@ -1942,8 +1942,13 @@ window.onload = () => {
         if(sk.summon) eff.push('召喚協力單位');
         if(sk.mEff) eff.push(SK_MEFF[sk.mEff]||'特殊效果');
         if(sk.darkPoison) eff.push('一般攻擊命中 50% 機率使目標中毒：每秒該次攻擊 60% 傷害、持續 5 秒、最多 1 層（取較高傷害並刷新；劇毒精通→100%、每秒 200%）');
-        if(sk.moveSpeedMult) eff.push('移動速度+'+Math.round((sk.moveSpeedMult - 1) * 100)+'%（速度×'+sk.moveSpeedMult+'）');
-        if(sk.moveSpeedReplacesCookie) eff.push('取代精靈餅乾的移動速度提升');
+        if(sk.moveSpeedMult){
+            let moveSpeedText = '移動速度+'+Math.round((sk.moveSpeedMult - 1) * 100)+'%（速度×'+sk.moveSpeedMult;
+            if(sid === 'sk_holy_dash') moveSpeedText += '，與風之疾走互斥';
+            else if(sid === 'sk_elf_winddash') moveSpeedText += '，與神聖疾走互斥，取代精靈餅乾移速';
+            moveSpeedText += '）';
+            eff.push(moveSpeedText);
+        } else if(sk.moveSpeedReplacesCookie) eff.push('取代精靈餅乾的移動速度提升');
         if(sk.d && typeof sk.d==='object'){
             let dd = sk.d, s = [], _resK = ['resFire','resWater','resEarth','resWind'];
             if(dd.resFire && dd.resFire===dd.resWater && dd.resFire===dd.resEarth && dd.resFire===dd.resWind){
