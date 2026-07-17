@@ -483,10 +483,10 @@ d.mr += (baseMr + bonusMr);
     
     let spdMult = 1.0;
     let _mercPots = !!p._mercPermanentPotions;   // 🤝 傭兵預設常駐職業藥水效果（不消耗道具、不寫入一般 buff 計時）
-    if(p.buffs.haste > 0 || p._equipHaste || _mercPots) spdMult *= 0.67;   // 自我加速 / 加速 / 裝備常駐加速；傭兵全職常駐 +33%
-    if(p.buffs.brave > 0 || (_mercPots && ['knight','dragon','warrior','royal'].includes(p.cls))) spdMult *= 0.67;   // 勇敢藥水；可用職業傭兵常駐 +33%
-    if(p.buffs.elfcookie > 0 || (_mercPots && p.cls === 'elf')) spdMult *= 0.85; // 精靈餅乾；妖精傭兵常駐 +15%
-    if(p.buffs.sk_dark_walkhaste > 0) spdMult *= 0.85; // 🔧 行走加速：攻速+15%（與加速術等相乘疊加）
+    if(p.buffs.haste > 0 || p._equipHaste || _mercPots) spdMult *= (1/1.33);   // 加速術／加速藥水／裝備加速：攻速+33%（🔧 v3.5.37 名實相符：1/1.33＝速度×1.33，取代舊 0.67＝實際+49%）；傭兵全職常駐
+    if(p.buffs.brave > 0 || (_mercPots && ['knight','dragon','warrior','royal'].includes(p.cls))) spdMult *= (1/1.33);   // 勇敢藥水：攻速+33%（🔧 v3.5.37 1/1.33）；可用職業傭兵常駐
+    if(p.buffs.elfcookie > 0 || (_mercPots && p.cls === 'elf')) spdMult *= (1/1.15); // 精靈餅乾：攻速+15%（🔧 v3.5.37 1/1.15·取代舊 0.85＝實際+17.6%）；妖精傭兵常駐
+    if(p.buffs.sk_dark_walkhaste > 0) spdMult *= (1/1.15); // 🔧 行走加速：攻速+15%（v3.5.37 1/1.15）（與加速術等相乘疊加）
     { let _clvW = p.eq.wpn ? DB.items[p.eq.wpn.id] : null; let _clvOn = !p.classicMode && ((p.statuses && p.statuses.cleave > 0) || (p.mastery === 'k_cleave' && _clvW && _clvW.eff === 'cleave')); if(_clvOn) spdMult *= (p.mastery === 'k_cleave' ? 0.50 : 0.80); }   // 切割：攻速+20%（🏅 切割精通：+50%・持切割武器常駐），與其他加速相乘疊加；🎮 經典模式停用
     { let _swMelee = p.eq.wpn ? DB.items[p.eq.wpn.id] : null; if(p.mastery === 'e_sword' && _swMelee && !_swMelee.w2h && !_swMelee.isBow && !_swMelee.ranged) spdMult *= (1/1.5); }   // 🏅 劍術精通：持單手近戰武器攻速+50%（與加速/勇敢/餅乾/變身相乘疊加）
     { let _aw = p.eq.wpn ? getWeaponTags(p.eq.wpn.id) : []; let _ow = p.eq.offwpn ? getWeaponTags(p.eq.offwpn.id) : []; if(p.mastery === 'k_giantaxe' && (_aw.includes('雙手鈍器') || _ow.includes('雙手鈍器'))) spdMult *= (1/1.3); else if(p.mastery === 'k_dualaxe' && _aw.includes('單手鈍器') && p.eq.offwpn && _ow.includes('單手鈍器')) spdMult *= (1/1.3); }   // ⚔️ 巨斧精通(主手或副手任一持雙手鈍器·符合「持雙手鈍器+30%」描述·含混裝)／雙斧精通(主副手皆單手鈍器)：攻速+30%
@@ -879,7 +879,7 @@ function polyRandomCandidates() {
 }
 
 // 玩家有效移動速度：未變身 wlk=16（90/分鐘）＝100%；回傳相對於基準 5 秒接敵／補怪時間的倍率。
-// 變身、加速、職業藥水、行走加速與裝備移速共用此換算，供生成排程與資訊面板使用，避免顯示和實際效果分離。
+// 移動速度只依據主玩家；變身、加速、職業藥水、行走加速、移速技能與裝備移速共用此換算，供生成排程與資訊面板使用。
 function playerMoveDelayMultiplier() {
     let p = player || {};
     let buffs = p.buffs || {};
@@ -888,10 +888,13 @@ function playerMoveDelayMultiplier() {
     let _pfT = p._setPoly || ((buffs.poly > 0 && p.poly) ? p.poly : null);   // 🧝 v3.5.21 真夏納：走速依當前武器（單手劍96/分→wlk15·其餘90/分→wlk16）
     if (_pfT && _pfT.trueShanna && typeof trueShannaSpeedForActor === 'function') pfW = trueShannaSpeedForActor(p).wlk;
     let mult = pfW / 16;
-    if (buffs.haste > 0 || p._equipHaste) mult *= 0.67;       // 加速術／加速藥水／裝備加速
-    if (buffs.brave > 0) mult *= 0.67;                         // 勇敢藥水
-    if (buffs.elfcookie > 0) mult *= 0.85;                     // 精靈餅乾
-    if (buffs.sk_dark_walkhaste > 0) mult *= 0.85;             // 行走加速
+    if (buffs.haste > 0 || p._equipHaste) mult *= (1/1.33);   // 加速術／加速藥水／裝備加速：移速+33%（🔧 v3.5.37 名實相符 1/1.33＝速度×1.33·取代舊 0.67＝實際+49%→兩瓶疊加 223%→177%）
+    if (buffs.brave > 0) mult *= (1/1.33);                     // 勇敢藥水：移速+33%（🔧 v3.5.37 1/1.33）
+    let windDashOn = (buffs.sk_elf_winddash || 0) > 0;
+    let dashSid = windDashOn ? 'sk_elf_winddash' : (((buffs.sk_holy_dash || 0) > 0) ? 'sk_holy_dash' : null);
+    if (dashSid) mult *= 1 / ((DB.skills[dashSid] && DB.skills[dashSid].moveSpeedMult) || 1.33);   // 神聖疾走／風之疾走：移速+33%（速度×1.33）；若舊存檔同時殘留，風之疾走優先且不疊加
+    if (buffs.elfcookie > 0 && !windDashOn) mult *= (1/1.15);  // 精靈餅乾：移速+15%；風之疾走存在時只保留餅乾攻速，不疊加移速
+    if (buffs.sk_dark_walkhaste > 0) mult *= (1/1.15);         // 行走加速：移速+15%（🔧 v3.5.37 1/1.15）
     let equipPct = p.d && p.d.moveSpeedPct ? Math.max(-95, p.d.moveSpeedPct) : 0;
     if (equipPct) mult *= 1 / (1 + equipPct / 100);            // 裝備移動速度
     return Math.max(0.001, mult);

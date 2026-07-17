@@ -349,6 +349,11 @@ function _fireballMorphId(skId) {
     if (a && DB.items[a.id] && DB.items[a.id].fireballBurst && player.skills && player.skills.includes('sk_fireball')) return 'sk_fireball_burst';
     return skId;
 }
+function applyMoveDashBuffMutex(owner, sid) {
+    if (!owner || !owner.buffs || (sid !== 'sk_holy_dash' && sid !== 'sk_elf_winddash')) return;
+    owner.buffs[sid === 'sk_holy_dash' ? 'sk_elf_winddash' : 'sk_holy_dash'] = 0;
+}
+
 function castSkillInner(skId) {
     skId = _fireballMorphId(skId);   // 🏺 烈焰巫師的正式長袍：燃燒的火球→爆裂的火球
     let sk = DB.skills[skId];
@@ -853,6 +858,7 @@ function castSkillInner(skId) {
         }
         // 🧹 v3.1.79 大掃除：移除不可達的舊版淨化分支（sk_antidote/sk_holy_light/sk_cancel 的 type 皆為 'heal'→一律在上方 heal 淨化分支處理並 return·永遠到不了本 buff 分支；現行規則＝teamCleanseOne 一次只解一人·舊分支「只解玩家自身」語意已過時）
         player.buffs[skId] = sk.dur;
+        applyMoveDashBuffMutex(player, skId);
         if(sk.awaken && player.mastery !== 'k_awaken') { ['sk_dragon_awaken_antares','sk_dragon_awaken_falion','sk_dragon_awaken_baraka'].forEach(_ak => { if(_ak !== skId) player.buffs[_ak] = 0; }); }   // 🐉 覺醒互斥：非覺醒精通時同時只能維持一種覺醒
         if(sk.haste) player.buffs.haste = Math.max(player.buffs.haste || 0, sk.dur); // 加速術 → 套用 haste 效果
         player.mp -= cost;

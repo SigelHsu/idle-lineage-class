@@ -509,7 +509,15 @@ function endAutoBuffNow(sid) {
 // 一般 buff/HoT 勾選框（auto-sk-*，非召喚/覺醒/淨化）的 onchange：取消打勾即立即結束
 function onAutoBuffToggle(sid) {
     let c = document.getElementById('auto-sk-' + sid);
-    if (c && !c.checked) endAutoBuffNow(sid);
+    if (!c) return;
+    if (c.checked && (sid === 'sk_holy_dash' || sid === 'sk_elf_winddash')) {
+        let other = sid === 'sk_holy_dash' ? 'sk_elf_winddash' : 'sk_holy_dash';
+        let o = document.getElementById('auto-sk-' + other);
+        if (o) o.checked = false;
+        endAutoBuffNow(other);
+    } else if (!c.checked) {
+        endAutoBuffNow(sid);
+    }
 }
 // 🔧 藥水/卷軸類維持型增益（靜態勾選框 set-*）：取消打勾即立即結束對應 buff（不等自然倒數）。於 window.onload 掛一次（勾選框是靜態 DOM、持久存在）。
 const POTION_BUFF_ENDERS = [['set-haste','haste'],['set-brave','brave'],['set-blue','blue'],['set-cautious','cautious'],['set-elfcookie','elfcookie'],['set-poly','poly'],['set-magicbarrier','sk_magic_shield']];
