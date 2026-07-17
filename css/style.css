@@ -521,6 +521,7 @@
         .party-sprite img { position: absolute; left: 0; bottom: 0; image-rendering: crisp-edges; image-rendering: pixelated; }
         .party-sprite .pm-shadow { mix-blend-mode: multiply; }
         #player-morph-sprite .pm-weapon { mix-blend-mode: screen; }
+        .party-sprite .pm-weapon { mix-blend-mode: screen; }   /* 🧝 v3.5.23 傭兵變身特效層（_w）＝同玩家 screen 加亮混合（容器同樣不用 transform 防隔離群組毀 blend） */
         /* 🌑 v2.7.17 真實影子 sprite 圖層：絕對定位、底部置中、與本體同 native 尺寸(同世界錨定畫布)→像素級疊合。DOM 順序影子在前→本體(在後)自然疊於其上；影子沿用上方 .mob-anim img 的 native/pixelated 規則。 */
         #battle-view .mob-img-inner.mob-anim .mob-anim-shadow { position: absolute !important; left: 50%; bottom: 0; transform: translateX(-50%); pointer-events: none; mix-blend-mode: multiply; }   /* 🌑 v2.7.43 影子灰階當「濃淡遮罩」multiply(白→透明/黑→濃/灰→淡)：修自帶光源怪(不死鳥/伊弗利特)淺灰影子顯示成一塊灰·改成淡影子·一般近黑怪→濃影子 */
         /* ⚔️ v2.7.22 武器揮動特效層：與影子同定位(絕對·底部置中·native)但疊在本體「前」(DOM 順序在本體 img 之後)＋screen 加亮(金色刀光弧發光) */
@@ -2417,6 +2418,212 @@ button.classic-skill-cell { cursor:pointer; }
 #interaction-content [class*="bg-slate-"] { background-color: #282730 !important; }
 #interaction-content .list-item { border-color: #514138 !important; }
 
+/* 潘朵拉黑市：桌面固定 3 欄 × 8 列，卡片與收購列保留足夠寬度，避免內容擠成一團。 */
+.pandora-market-panel { padding: 6px 8px 8px; gap: 7px; }
+.pandora-market-title { font-size: 18px; margin-bottom: 1px; }
+.pandora-market-title > span { display: inline-block; margin-left: 5px; font-size: 11px; line-height: 1.45; }
+.pandora-buy-box {
+    padding: 7px 9px;
+    border: 1px solid #805839;
+    border-radius: 7px;
+    background: linear-gradient(180deg, rgba(54,47,48,.96), rgba(30,27,31,.96));
+    box-shadow: inset 0 1px rgba(222,176,112,.10);
+}
+.pandora-buybar {
+    display: grid;
+    grid-template-columns: auto minmax(180px,1fr) auto minmax(120px,.52fr) auto auto;
+    align-items: center;
+    gap: 7px;
+}
+.pandora-buybar input {
+    min-width: 0;
+    height: 34px;
+    padding: 5px 9px !important;
+    color: #eee7dc !important;
+    border: 1px solid #6e5845 !important;
+    border-radius: 5px !important;
+    background: #17161a !important;
+    font-size: 13px !important;
+}
+.pandora-buy-name-wrap { position: relative; min-width: 0; }
+.pandora-buy-name-wrap > input { width: 100%; }
+.pandora-buy-suggestions {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 4px);
+    z-index: 90;
+    max-height: 216px;
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid #8d6846;
+    border-radius: 6px;
+    background: rgba(20,18,21,.985);
+    box-shadow: 0 10px 25px rgba(0,0,0,.75), inset 0 1px rgba(224,178,112,.10);
+}
+.pandora-buy-suggestion {
+    display: block;
+    width: 100%;
+    min-height: 27px !important;
+    padding: 4px 7px !important;
+    border: 0 !important;
+    border-radius: 3px !important;
+    color: #e8dfd5 !important;
+    background: transparent !important;
+    text-align: left;
+    font-size: 12px !important;
+    line-height: 1.25 !important;
+}
+.pandora-buy-suggestion:hover,
+.pandora-buy-suggestion:focus { color: #fff3c4 !important; background: #4a382a !important; outline: none; }
+.pandora-buy-suggestion-empty { padding: 6px 7px; color: #918982; font-size: 11px; }
+.pandora-buy-word { color: #e7d2a7; font-weight: 700; font-size: 15px; white-space: nowrap; }
+.pandora-buy-comma { color: #9d948a; font-size: 16px; }
+.pandora-buy-submit { min-height: 34px; padding: 5px 13px !important; font-size: 12px !important; white-space: nowrap; }
+.pandora-buy-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    min-height: 20px;
+    margin-top: 5px;
+    color: #aaa19a;
+    font-size: 11px;
+}
+.pandora-buy-cancel { flex: none; color: #d6a5a5; text-decoration: underline; font-size: 11px !important; }
+.pandora-market-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.pandora-market-card { min-width: 0; min-height: 39px; gap: 7px; padding: 4px 6px; }
+.pandora-card-icon { width: 29px; height: 29px; }
+.pandora-card-name { font-size: 12px; line-height: 1.15; }
+.pandora-card-price { margin-top: 3px; font-size: 11px; }
+.pandora-card-price span { font-size: 9px; }
+.pandora-card-buy { min-width: 42px; padding: 4px 8px !important; font-size: 11px !important; }
+.pandora-order-tag {
+    display: inline-block;
+    margin-left: 5px;
+    padding: 1px 4px;
+    border: 1px solid #8d6b42;
+    border-radius: 3px;
+    color: #f5d78d;
+    font-size: 8px;
+    vertical-align: 1px;
+}
+#pandora-msg { min-height: 18px; margin-top: 1px; font-size: 12px; }
+.pandora-diamond-count {
+    color: #80e5ff;
+    font-weight: 700;
+    text-shadow: 0 0 5px rgba(74,201,255,.35);
+}
+.pandora-relic-suggestion {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+.pandora-relic-suggestion span { color: #7dd3fc; font-size: 10px; }
+.pandora-buybar input:disabled {
+    color: #7dd3fc !important;
+    opacity: 1 !important;
+    cursor: default;
+}
+.pandora-relic-board {
+    flex: none;
+    padding: 7px 8px 8px;
+    border: 1px solid #6f573d;
+    border-radius: 7px;
+    background: linear-gradient(180deg, rgba(31,27,32,.98), rgba(19,17,21,.98));
+    box-shadow: inset 0 1px rgba(226,183,115,.08);
+}
+.pandora-relic-board-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 6px;
+    color: #d8c2a1;
+}
+.pandora-relic-board-head b { color: #d8b4fe; font-size: 14px; }
+.pandora-relic-board-head span { color: #8f8781; font-size: 10px; text-align: right; }
+.pandora-relic-grid {
+    display: grid;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 7px;
+}
+.pandora-relic-slot {
+    position: relative;
+    min-width: 0;
+    min-height: 126px;
+    padding: 8px;
+    border: 1px solid #51463f;
+    border-radius: 6px;
+    color: #cfc8c1;
+    background: rgba(14,13,16,.82);
+}
+.pandora-relic-slot.active { border-color: #755793; box-shadow: inset 0 0 18px rgba(107,70,142,.12); }
+.pandora-relic-slot.empty,
+.pandora-relic-slot.cooling {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    color: #928a84;
+    text-align: center;
+}
+.pandora-relic-slot-no {
+    position: absolute;
+    top: 5px;
+    left: 7px;
+    color: #a9988a;
+    font-size: 9px;
+    letter-spacing: .04em;
+}
+.pandora-relic-empty-icon { color: #796b82; font-size: 24px; line-height: 1; }
+.pandora-relic-slot small { color: #756e69; font-size: 9px; line-height: 1.35; }
+.pandora-relic-target {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    margin: 13px 0 6px;
+}
+.pandora-relic-target img { width: 31px; height: 31px; flex: none; object-fit: contain; }
+.pandora-relic-target b { min-width: 0; overflow: hidden; font-size: 11px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.pandora-relic-reqs { display: grid; gap: 3px; }
+.pandora-relic-req {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    padding: 3px 4px;
+    border-radius: 3px;
+    background: rgba(255,255,255,.025);
+    font-size: 10px;
+}
+.pandora-relic-req > img { width: 24px; height: 24px; flex: none; object-fit: contain; }
+.pandora-relic-req > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pandora-relic-req.has > span { color: #86d69b; }
+.pandora-relic-req.missing > span { color: #d98f8f; }
+.pandora-relic-actions { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-top: 6px; }
+.pandora-relic-exchange { min-height: 25px !important; padding: 3px 12px !important; font-size: 10px !important; }
+.pandora-relic-cancel { color: #b58b8b; font-size: 9px !important; text-decoration: underline; }
+.pandora-relic-cd { color: #d6b46f !important; font-size: 10px !important; }
+
+@media (max-width: 720px) {
+    .pandora-market-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .pandora-relic-grid { grid-template-columns: minmax(0,1fr); }
+    .pandora-buybar { grid-template-columns: auto minmax(0,1fr) auto; }
+    .pandora-buybar #pandora-buy-price { grid-column: 2; }
+    .pandora-buybar .pandora-buy-submit { grid-column: 2 / 4; }
+    .pandora-buy-comma { display: none; }
+    .pandora-relic-board-head { display: block; }
+    .pandora-relic-board-head span { display: block; margin-top: 3px; text-align: left; }
+}
+@media (max-width: 430px) {
+    .pandora-market-grid { grid-template-columns: minmax(0,1fr); }
+    .pandora-market-title > span { display: block; margin: 5px 0 0; }
+}
+
 #tab-audit { color: #ddd8d2; background: #292832 !important; }
 #tab-audit > div > div,
 #tab-audit [class*="bg-slate-800"] {
@@ -2476,6 +2683,97 @@ button.classic-skill-cell { cursor:pointer; }
 .town-npc:hover .tn-label { z-index: 61; }
 .town-npc .tn-label .tn-name { color: #fde68a; font-weight: bold; font-size: 14px; }
 .town-npc .tn-label .tn-title { color: #94a3b8; font-size: 11px; margin-left: 5px; }
+.town-npc.wandering-player .tn-label {
+    border-color: #8a6bb2;
+    background: rgba(29,19,39,.95);
+    box-shadow: 0 0 10px rgba(168,85,247,.34), 0 2px 8px rgba(0,0,0,.55);
+}
+.town-npc.wandering-player .tn-label .tn-name { color: #e9d5ff; }
+.town-npc.wandering-player .tn-label .tn-title { color: #7dd3fc; }
+.town-npc.wandering-player .tn-body { filter: drop-shadow(0 0 3px rgba(168,85,247,.28)); }
+.wandering-buyer-dialog { display: grid; gap: 14px; padding: 18px; }
+.wandering-buyer-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #54463d;
+}
+.wandering-buyer-avatar {
+    flex: none;
+    padding: 6px 9px;
+    border: 1px solid #765b8d;
+    border-radius: 5px;
+    color: #e9d5ff;
+    background: #241b2b;
+    font-size: 11px;
+}
+.wandering-buyer-line { color: #e8dfd5; font-size: 16px; }
+.wandering-buyer-line b { color: #f8d889; }
+.wandering-buyer-meta { margin-top: 4px; color: #928a84; font-size: 11px; }
+.wandering-buyer-offer {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    padding: 12px;
+    border: 1px solid #59483c;
+    border-radius: 7px;
+    background: rgba(17,15,19,.86);
+}
+.wandering-buyer-offer > img { width: 52px; height: 52px; flex: none; object-fit: contain; }
+.wandering-buyer-offer-main { min-width: 0; flex: 1; font-weight: 700; }
+.wandering-buyer-reward { margin-top: 5px; color: #7dd3fc; font-size: 13px; }
+.wandering-buyer-note { margin-top: 5px; color: #8f8781; font-size: 10px; font-weight: 400; }
+.wandering-buyer-state { flex: none; font-size: 11px; font-weight: 700; }
+.wandering-buyer-submit { justify-self: center; min-width: 180px; }
+#wandering-buyer-msg { min-height: 18px; text-align: center; font-size: 12px; }
+.wander-broadcast-name {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #a9d7ee;
+    font: inherit;
+    font-weight: 700;
+    line-height: inherit;
+    cursor: pointer;
+}
+.wander-broadcast-name:hover {
+    color: #ead39c;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.wander-broadcast-text { color: #d8d2ca; }
+.wandering-shout-menu {
+    position: fixed;
+    z-index: 260;
+    min-width: 116px;
+    padding: 4px;
+    border: 1px solid #b7923e;
+    border-radius: 3px;
+    background: rgba(36, 34, 37, .98);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .72);
+}
+.wandering-shout-menu button {
+    width: 100%;
+    padding: 7px 14px;
+    border: 0;
+    background: transparent;
+    color: #e4ded4;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+.wandering-shout-menu button:hover {
+    background: rgba(183, 146, 62, .18);
+    color: #f4df9e;
+}
+.wander-chat-out { color: #d3cec6; }
+.wander-chat-arrow { color: #bdb7ac; font-weight: 700; }
+.wander-chat-target { color: #d8c79e; font-weight: 700; }
+.wander-chat-in { color: #ddd6d0; }
+.wander-chat-speaker { color: #c8b9ee; font-weight: 700; }
 /* 🏘️ v3.2.88 NPC 功能改成與倉庫相同的「浮動視窗」：position:fixed 脫離會塌陷的 town-view(不再點了沒顯示)·z-index 73 高於動態 sprite 圖層(map z:1) 與倉庫(72) */
 #town-interaction-container:not(.hidden) {
     position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);

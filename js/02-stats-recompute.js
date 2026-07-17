@@ -38,6 +38,7 @@ function recomputeStats() {
     d.resFire = 0; d.resWater = 0; d.resEarth = 0; d.resWind = 0;
     d.immStone = false;      // 免疫石化（紅騎士盾牌）
     d.immPoison = false;     // 免疫中毒/猛毒/麻痺（潔尼斯戒指）
+    d.immSilence = false;    // 🏺 v3.5.27 免疫沉默（被敲爛的半邊頭盔·js/04 怪物沉默魔法攔截）
     d.resNone = 0;           // 🛡️ v3.3.29 無屬性抗性（取代舊「無屬性魔法傷害減少%」magicDrNonEle）：只作用於魔法傷害·減免公式同屬性抗性(effResistPct)
 
     // ===== Phase 1：先把所有「屬性(STR/DEX/INT/CON/WIS)」來源加總完畢 =====
@@ -321,6 +322,7 @@ d.mr += (baseMr + bonusMr);
         if(ed.extraAtk)  d.equipExtraAtk += ed.extraAtk;      // 🐉 裝備額外一般攻擊次數（龍鱗臂甲 +1）
         if(ed.immStone) d.immStone = true;                    // 紅騎士盾牌：免疫石化
         if(ed.immPoison) d.immPoison = true;                  // 潔尼斯戒指：免疫中毒/猛毒/麻痺
+        if(ed.immSilence) d.immSilence = true;                // 🏺 v3.5.27 被敲爛的半邊頭盔：免疫沉默
         if(ed.resNone) d.resNone += ed.resNone;               // 🛡️ v3.3.29 無屬性抗性（紅騎士盾牌/反射之盾/阿茲特的反光石·只對魔法）
         if(ed.dr) d.dr += ed.dr;   // 🛡️ 防具/飾品固定傷害減免（信念之盾 +2、巴風特盔甲 +2）
         if(ed.hitstunReduce) d.hitstunReduce += ed.hitstunReduce;   // 🏺 不動的鋼鐵堅壁：受傷硬直 -0.5 秒（-5 tick）→先累加·於變身速度覆蓋後統一扣（v3.1.30 審查修：原本直接扣會被 POLY_TIERS 的 d.hitstun=pf.stun 蓋掉）
@@ -529,6 +531,9 @@ d.mr += (baseMr + bonusMr);
         if(p.elfEle === 'earth') d.resEarth += 50;
         if(p.elfEle === 'wind')  d.resWind  += 50;
     }
+
+    // 🏺 v3.5.27 黑騎士的精銳長槍＋鎧衛隊的漆黑塔盾 同時裝備：近距離傷害 +15（格檔100%／經典模式亦可格檔＝js/04 受擊路徑）
+    if (p.eq && p.eq.wpn && p.eq.wpn.id === 'relic_bk_lance' && p.eq.shield && p.eq.shield.id === 'relic_guard_towershield') d.meleeDmg += 15;
 
     // 變形卷軸變身依目前武器分流：遠距離武器只能使用遠距離變身，其餘（含空手）只能使用近距離變身。
     // 換武器時 calcStats 會立即重抽相符類型；套裝／武器強制變身 _setPoly 仍保留原本專屬形態。

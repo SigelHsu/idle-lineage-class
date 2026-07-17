@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.5.26';
+const GAME_VERSION = 'v3.5.35';
 // ===== 💾 存檔壓縮（LZString compressToUTF16/decompressFromUTF16·MIT, Pieroxy）：localStorage 內部以 UTF-16 壓縮，省 ~89%，繞過 5MB 上限 =====
 //  ⚠️ 只壓 localStorage（存檔位/倉庫/共用桶/_bak）；匯出檔維持明文 JSON（可攜·importSave 用 JSON.parse 驗證）。_lzGet 相容舊明文存檔（無 'LZ1:' 前綴→原樣回傳）。
 var LZString = (function () {
@@ -856,6 +856,12 @@ const DB = {
         "relic_sr_ushioni_horn": { n: "牛鬼的斷角",         type: "wpn", w2h: true, noBleed: true, relic: true, noEnhance: true, eff: "pierce", pierceChance: 100, ignHardSkin: true, procStatusSkill: { skId: "sk_disease", rate: 15 }, heavyBonusDmg: 20, dmgS: 25, dmgL: 25, hit: 17, dmgBonus: 18, req: "royal,knight", p: 10000, gachaWeight: 0, d: "【遺物】牛鬼折斷的巨角削成的長矛，帶著瘴癘之氣貫穿一切。" },
         "relic_sr_child_ring":   { n: "牛鬼之子的黑戒",     type: "acc", slot: "ring", relic: true, noEnhance: true, ac: 0, statusHealHp: 50, req: "all", p: 10000, gachaWeight: 0, d: "【遺物】牛鬼之子甲殼磨成的黑戒，受到異常狀態侵襲時反而激發生機，恢復 50 點 HP。" },
         "relic_sr_gasha_skull":  { n: "巨大骷髏的頭骨",     type: "arm", slot: "armor", relic: true, noEnhance: true, ac: 20, mr: 10, resNone: 10, req: "royal,knight,dragon,warrior", p: 10000, gachaWeight: 0, d: "【遺物】巨大骷髏的頭骨鑿成的胸鎧，怨念的殘響替穿戴者擋下詛咒。" },
+        // ===== 🏺 遺物 第十八批（v3.5.27·5 件）：黑騎士的精銳長槍／水靈的魔力珠／被敲爛的半邊頭盔／黝黑的烈火皮囊／食屍鬼的啃食面容 =====
+        "relic_bk_lance":        { n: "黑騎士的精銳長槍", type: "wpn", relic: true, noEnhance: true, dmgS: 8, dmgL: 10, hit: 15, dmgBonus: 15, req: "royal,knight,warrior", p: 10000, gachaWeight: 0, d: "【遺物】暗黑黑騎士精銳部隊的長槍，槍鋒撕裂之處鮮血難止。與鎧衛隊的漆黑塔盾同時裝備時：格檔機率提升至 100%（經典模式亦可觸發格檔），並額外獲得近距離傷害 +15。" },
+        "relic_water_orb":       { n: "水靈的魔力珠", type: "wpn", isWand: true, relic: true, noEnhance: true, frozenBonusDmg: 50, waterFreezeProc: { pct: 3, dur: 4 }, dmgS: 2, dmgL: 2, hit: 13, dmgBonus: 13, req: "mage", p: 10000, gachaWeight: 0, d: "【遺物】水靈之主的魔力凝成的珠球，寒流隨法術奔湧（共鳴）。施放原本不具冰凍效果的水屬性傷害魔法時，3% 機率附加冰凍 4 秒；一般攻擊命中冰凍中的敵人時，追加 50 點固定傷害。" },
+        "relic_broken_halfhelm": { n: "被敲爛的半邊頭盔", type: "arm", slot: "helm", relic: true, noEnhance: true, ac: 3, immSilence: true, req: "all", p: 10000, gachaWeight: 0, d: "【遺物】被敲爛只剩半邊的頭盔，罩不住頭顱卻護住了心神——免疫沉默。" },
+        "relic_fire_hide":       { n: "黝黑的烈火皮囊", type: "arm", slot: "armor", relic: true, noEnhance: true, ac: 6, firePrisonMult: 2, req: "mage", p: 10000, gachaWeight: 0, d: "【遺物】被烈焰燻得黝黑的皮囊護甲，餘燼與咒火共鳴，使「火牢」造成的傷害加倍。" },
+        "relic_ghoul_visage":    { n: "食屍鬼的啃食面容", type: "arm", slot: "helm", relic: true, noEnhance: true, ac: 10, mhp: 30, killHealHp: 30, req: "all", p: 10000, gachaWeight: 0, d: "【遺物】深淵食屍鬼猙獰面容鑄成的頭盔，HP +30；擊殺敵人時吞噬其殘存的生氣，恢復 30 點 HP。" },
         "clk_elf": { n: "精靈斗篷", type: "arm", slot: "cloak", ac: 1, req: "all", safe: 6, p: 900, gachaWeight: 100 },
         "clk_oasis": { n: "歐西斯斗篷", type: "arm", slot: "cloak", ac: 0, req: "all", safe: 4, p: 15, gachaWeight: 100 },
         "arm_86": { n: "侏儒斗篷", type: "arm", slot: "cloak", ac: 0, req: "all", safe: 4, p: 18, gachaWeight: 100 },

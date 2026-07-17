@@ -1606,6 +1606,16 @@ function arkataBuyback(i) {
     updateUI(); saveGame();
     renderArkataBuyback(document.getElementById('interaction-content'));
 }
+
+// 🏴 潘朵拉黑市快捷鍵：不切換地圖，直接沿用村莊 NPC 的同一個浮動視窗與市場狀態。
+// 浮動視窗原本位於 #town-view；狩獵中父層會隱藏，因此首次使用時移至 body，之後所有 NPC 互動仍共用此視窗。
+function openPandoraShortcut() {
+    let panel = document.getElementById('town-interaction-container');
+    if (!panel) return;
+    if (panel.parentElement && panel.parentElement.id === 'town-view') document.body.appendChild(panel);
+    interactNPC('npc_pandora', 'town_talking');
+}
+
 function interactNPC(npcId, townId) {
     let npc = DB.towns[townId].npcs.find(n => n.id === npcId);
     if(!npc) return;
@@ -1973,6 +1983,13 @@ function renderTownNPCMap(townId) {
     // 🗼🌀 v3.2.89 傲慢之塔／時空裂痕：入口告示改成地圖上的可點 NPC（_spr 專屬圖·_float 專屬點擊→浮動視窗）
     if (townId === 'town_pride') vis.push({ id: '_pride_entrance', n: '傲慢之塔', title: '入口', _spr: '1148', _float: 'pride' });
     if (townId === 'town_rift') vis.push({ id: '_rift_entrance', n: '時空裂痕', title: '入口', _spr: '1149', _float: 'rift' });
+    // 🏴 潘朵拉玩家 NPC：每個符合條件的安全區各自最多一名，並沿用玩家職業站立動畫。
+    try {
+        if (typeof getWanderingBuyerForTown === 'function') {
+            let wandering = getWanderingBuyerForTown(townId);
+            if (wandering) vis.push(wandering);
+        }
+    } catch (e) {}
     if (!vis.length) return;
     let pos = _townNpcLayout(vis.length, townId);
     let ovr = TOWN_NPC_POS_OVERRIDE[townId] || {};
@@ -1981,10 +1998,37 @@ function renderTownNPCMap(townId) {
     //   （例：肯特城堡 奧貝勒固定 1049，若 伊賽馬利 先抽到 1049 就會撞臉；先預留固定圖 → 池分配自動避開）
     vis.forEach(npc => { let fk = npc._spr || NPC_SPR_FIXED[npc.id] || NPC_SPR_ROLE[npc.type]; if (fk) used.add(fk); });
     vis.forEach((npc, i) => {
-        let key = npc._spr || _npcSpriteKey(npc, used); used.add(key);
-        let cat = NPC_SPR[key] || NPC_SPR['1256'];
         let ov = ovr[npc.id];
         let p = ov ? { x: ov[0], y: ov[1] } : (pos[i] || { x: 50, y: 60 });
+        // 玩家 NPC 使用 classanim 的無武器正面 idle，本體與影子各自同步播放。
+        if (npc._wanderer && typeof wanderingBuyerSpriteData === 'function') {
+            let spr = wanderingBuyerSpriteData(npc);
+            let body0 = spr.frames && spr.frames[0] ? spr.frames[0].src : '';
+            let shadow0 = spr.shadows && spr.shadows[0] ? spr.shadows[0].src : '';
+            let el = document.createElement('div');
+            el.className = 'town-npc wandering-player';
+            el.style.left = p.x + '%'; el.style.top = p.y + '%'; el.style.zIndex = Math.round(p.y * 10);
+            el.innerHTML =
+                '<div class="tn-label"><span class="tn-name">' + npc.n + '</span><span class="tn-title">[玩家收購]</span></div>' +
+                '<img class="tn-shadow" src="' + shadow0 + '" alt="" onload="this.parentElement.classList.add(\'has-tn-shadow\')" onerror="this.remove()">' +
+                '<img class="tn-body" src="' + body0 + '" alt="">';
+            el.onclick = () => openWanderingBuyerDialog(npc.id);
+            map.appendChild(el);
+            let bodyImg = el.querySelector('.tn-body');
+            let shadowImg = el.querySelector('.tn-shadow');
+            bodyImg.addEventListener('load', _scheduleTownLabelResolve, { once: true });
+            _townNpcSprites.push({
+                img: bodyImg,
+                wimg: shadowImg,
+                wframes: spr.shadows || null,
+                frames: spr.frames || [],
+                phase: (i * 3) % 8,
+                last: -1
+            });
+            return;
+        }
+        let key = npc._spr || _npcSpriteKey(npc, used); used.add(key);
+        let cat = NPC_SPR[key] || NPC_SPR['1256'];
         let el = document.createElement('div');
         el.className = 'town-npc';
         el.style.left = p.x + '%'; el.style.top = p.y + '%'; el.style.zIndex = Math.round(p.y * 10);

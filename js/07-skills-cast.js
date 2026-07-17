@@ -771,6 +771,14 @@ function castSkillInner(skId) {
                 if(sk.lifesteal) { let h = Math.min(totalDmg, player.mhp - player.hp); if(h > 0){ player.hp += h; logCombat(`你吸取了 ${h} 點生命。`, 'heal'); } }
                 if(sk.freeze) applyMobStatus(t, { kind:'freeze', pbase:sk.freeze, dur:6 }, sk.n);
                 if(sk.status) applyMobStatus(t, sk.status, sk.n, spCoef);
+                // 🏺 v3.5.27 水靈的魔力珠：原本不具冰凍效果的水屬性傷害魔法 → pct% 機率附加冰凍 dur 秒（頭目免疫冰凍照舊·經典模式停用特效）
+                { let _wfW = player.eq.wpn ? DB.items[player.eq.wpn.id] : null;
+                  if (_wfW && _wfW.waterFreezeProc && sk.ele === 'water' && dmgArray.length > 0 && !sk.freeze && !(sk.status && sk.status.kind === 'freeze') && !player.classicMode
+                      && t.curHp > 0 && !(t.boss && BOSS_IMMUNE.includes('freeze')) && Math.random() * 100 < _wfW.waterFreezeProc.pct) {
+                      if (!t.st) t.st = newMobStatus();
+                      t.st.freeze = (_wfW.waterFreezeProc.dur || 4) * 10;
+                      logCombat(`<span class="font-bold text-sky-300">【${_wfW.n}】</span><span class="${getMobColor(t.lv)}">${t.n}</span> 被寒流冰凍了！`, 'player-special');
+                  } }
                 if(t.curHp > 0 && sk.instakill) tryInstakill(t, sk.instakill, sk.n, mapState.mobs.findIndex(m => m && m.uid === t.uid));
             });
             

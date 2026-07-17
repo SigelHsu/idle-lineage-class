@@ -40,6 +40,11 @@ const CARD_REGIONS = [
 ];
 const CARD_STAT_LABEL = { mhp: 'HP', mmp: 'MP', mpR: 'MP自動恢復量', hpR: 'HP自動恢復量', dr: '傷害減免', weight: '負重上限', extraMp: '額外魔法點數', extraDmg: '額外傷害', extraHit: '額外命中', mr: 'MR', resFire: '火屬性抗性', resWater: '水屬性抗性', resWind: '風屬性抗性', resEarth: '地屬性抗性' };
 
+// ---- 特殊刷出怪：不在任何 DB.maps 出怪池（掃圖建索引抓不到）→ 手動歸入指定卡片地區（同時開通掉卡＋圖鑑）----
+//  怪id → { region: CARD_REGIONS key, mapLabel: 金卡「出沒」顯示文字 }
+//  🐉 v3.5.35 風龍林德拜爾：持有頑皮幼龍蛋於野外 1% 特殊刷出（js/03）·歸入亞丁地區（完成加成 resWind·風龍對味）。
+const CARD_SPECIAL_MOBS = { lindvior: { region: 'aden', mapLabel: '野外（持有頑皮幼龍蛋時極低機率遭遇）' } };
+
 // ---- 地圖 key → 中文名（供金卡「出沒地圖」顯示）----
 const _CARD_MAP_NAMES = {};
 (function () {
@@ -49,6 +54,7 @@ const _CARD_MAP_NAMES = {};
 })();
 function _cardMapName(k) {
     if (_CARD_MAP_NAMES[k]) return _CARD_MAP_NAMES[k];
+    let sp = k.match(/^__special_(.+)$/); if (sp && CARD_SPECIAL_MOBS[sp[1]]) return CARD_SPECIAL_MOBS[sp[1]].mapLabel;   // 🐉 特殊刷出怪：顯示自訂出沒說明
     let m = k.match(/^pride_f(\d+)$/); if (m) return '傲慢之塔' + m[1] + '樓';
     m = k.match(/^pride_(\d+)_(\d+)$/); if (m) return '傲慢之塔' + m[1] + '~' + m[2] + '樓';
     return k;
@@ -84,6 +90,8 @@ const CARD_MOB_MAPS = {};      // mobName -> [mapKey,...]
                 while (t && DB.mobs[t] && DB.mobs[t].n && !seen[t]) { seen[t] = 1; regMob(t, DB.mobs[t], mk); t = DB.mobs[t].transformTo; }
             });
         });
+        // 🐉 特殊刷出怪（CARD_SPECIAL_MOBS）：歸入指定地區——入 CARD_MOB_INFO 後 killMob 的掉卡閘（rollCardDrops）自動放行
+        for (let sid in CARD_SPECIAL_MOBS) { let sp = CARD_SPECIAL_MOBS[sid]; if (sp.region === reg.key && DB.mobs[sid] && DB.mobs[sid].n) regMob(sid, DB.mobs[sid], '__special_' + sid); }
         names.sort((a, b) => (CARD_MOB_INFO[a].mob.lv || 0) - (CARD_MOB_INFO[b].mob.lv || 0));
         CARD_REGION_MOBS[reg.key] = names;
     });

@@ -619,6 +619,7 @@ const WEAPON_TAGS = {
     wpn_21: ['矛'], wpn_24: ['矛'], wpn_25: ['矛'], wpn_28: ['矛'], wpn_39: ['矛'], wpn_40: ['矛'], wpn_41: ['矛'], wpn_17: ['矛'], wpn_4: ['矛'], wpn_halberd: ['矛'],   // 🔱 法丘：雙手矛（w2h＋穿透80%）
     wpn_6: ['矛'], wpn_7: ['矛'], wpn_12: ['矛'], wpn_15: ['矛'], wpn_18: ['矛'],   // 🔱 v3.5.8 補齊天堂槍類漏標：巴迪須/柴刀/貝卡合金/吉薩原掉「雙手劍」fallback、露西錘被「錘」字誤歸雙手鈍器→動態/攻速/出血全錯（穿透 eff＝矛系標配可佐證）
     wpn_14: ['矛'], wpn_16: ['矛'], wpn_demonking_spear: ['矛'], wpn_ancient_spear: ['矛'],   // 🔱 v3.5.8 闊矛/戟/惡魔王矛/古代神之槍：家族原靠名稱 regex 已對·補 tag 讓 weaponHasBleed 一致取得矛系出血
+    relic_bk_lance: ['矛'],   // 🏺 v3.5.27 黑騎士的精銳長槍：單手矛（無 w2h→矛系出血·無穿透·符合 v3.5.20 規則）
     wpn_20: ['單手鈍器'], wpn_10: ['單手鈍器'], wpn_13: ['單手鈍器'], wpn_alien: ['單手鈍器'], wpn_1: ['單手鈍器'], wpn_2: ['單手鈍器'], wpn_ancient_axe: ['單手鈍器'], wpn_warrior_trial_axe: ['單手鈍器'], wpn_master_axe: ['單手鈍器'], wpn_demon_axehead: ['單手鈍器'], wpn_iron_axehead: ['單手鈍器'], wpn_giant_axehead: ['單手鈍器'],   // 🔧 古代神之斧／試煉斧頭／大匠的斧頭／魔物的斧頭／鐵斧頭／巨人的斧頭：單手鈍器（鈍擊）
     wpn_2hsword: ['雙手劍'], wpn_dragonslayer: ['雙手劍'], wpn_official_2h: ['雙手劍'],   // 🔧 雙手劍類型標註
     // 🔧 重擊特效武器標註為「雙手鈍器」

@@ -1306,7 +1306,19 @@ function pandoraSuggestBuyItems(value) {
     let box = document.getElementById('pandora-buy-suggestions');
     if (!box) return;
     let q = String(value || '').trim();
+    try { if (typeof pandoraRelicOnSearchInput === 'function') pandoraRelicOnSearchInput(q); } catch (e) {}
     if (q.length < 2) { box.innerHTML = ''; box.classList.add('hidden'); return; }
+    // 輸入「遺物」時改列三種遺物搜尋，不與一般金幣收購混用。
+    try {
+        if (typeof pandoraRelicSuggestionHTML === 'function') {
+            let relicSuggestions = pandoraRelicSuggestionHTML(q);
+            if (relicSuggestions) {
+                box.innerHTML = relicSuggestions;
+                box.classList.remove('hidden');
+                return;
+            }
+        }
+    } catch (e) {}
     let seen = new Set();
     let names = Object.keys(DB.items).map(id => DB.items[id]).filter(d => {
         if (!d || !d.n || (d.gachaWeight || 0) <= 0 || !d.n.includes(q) || seen.has(d.n)) return false;
@@ -1329,6 +1341,7 @@ function pandoraSuggestBuyItems(value) {
 function pandoraChooseBuyItem(name) {
     let el = document.getElementById('pandora-buy-name');
     let box = document.getElementById('pandora-buy-suggestions');
+    try { if (typeof pandoraClearRelicSearchChoice === 'function') pandoraClearRelicSearchChoice(); } catch (e) {}
     if (el) { el.value = String(name || ''); el.focus(); }
     if (box) { box.innerHTML = ''; box.classList.add('hidden'); }
 }
@@ -1337,6 +1350,9 @@ function pandoraChooseBuyItem(name) {
 function pandoraSetBuyOrder() {
     let m = player && player.pandoraMarket2;
     if (!m) return;
+    try {
+        if (typeof pandoraTryRelicSearchFromInputs === 'function' && pandoraTryRelicSearchFromInputs()) return;
+    } catch (e) {}
     let nameEl = document.getElementById('pandora-buy-name');
     let priceEl = document.getElementById('pandora-buy-price');
     let name = nameEl ? nameEl.value.trim() : '';
@@ -1514,6 +1530,12 @@ function pandoraRenderMarket(div) {
     let orderItem = order && DB.items[order.id];
     let orderName = orderItem ? orderItem.n : '';
     let orderPrice = order && Number.isSafeInteger(order.price) ? String(order.price) : '';
+    let relicBalance = '';
+    let relicBoard = '';
+    try {
+        if (typeof pandoraRelicBalanceHTML === 'function') relicBalance = pandoraRelicBalanceHTML();
+        if (typeof pandoraRelicBoardHTML === 'function') relicBoard = pandoraRelicBoardHTML();
+    } catch (e) {}
     let cards = m.slots.map((s, i) => {
         let d = s && DB.items[s.id]; if (!d) return '';
         let inst = { id: s.id };
@@ -1537,7 +1559,7 @@ function pandoraRenderMarket(div) {
     div.innerHTML = `
     <div class="pandora-market-panel flex flex-col h-full w-full overflow-y-auto">
         <h3 class="pandora-market-title text-center font-bold text-purple-400 drop-shadow-md leading-none shrink-0">潘朵拉黑市
-            <span class="text-slate-400 font-normal">每 10 分鐘輪換 1 件·單件持續 240 分鐘·約 ${nextMin} 分鐘後輪換｜金幣 <span class="text-yellow-300 font-bold">${(player.gold || 0).toLocaleString()}</span></span>
+            <span class="text-slate-400 font-normal">每 10 分鐘輪換 1 件·單件持續 240 分鐘·約 ${nextMin} 分鐘後輪換｜金幣 <span class="text-yellow-300 font-bold">${(player.gold || 0).toLocaleString()}</span>${relicBalance}</span>
         </h3>
         <div class="pandora-buy-box shrink-0">
             <div class="pandora-buybar">
@@ -1559,8 +1581,10 @@ function pandoraRenderMarket(div) {
             </div>
         </div>
         <div class="pandora-market-grid">${cards}</div>
+        ${relicBoard}
         <p id="pandora-msg" class="font-bold text-center shrink-0 empty:hidden">${_pandoraNoticeHTML(m)}</p>
     </div>`;
+    try { if (typeof pandoraRelicBindBoardCountdowns === 'function') pandoraRelicBindBoardCountdowns(); } catch (e) {}
 }
 
 // 購買指定格商品（即所見、不附帶詞綴；售出格保持「已售出」直到該格輪換）
