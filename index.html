@@ -31,7 +31,7 @@
     <title>放置天堂 - 日出之國</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">   <!-- 🖼️ 瀏覽器分頁圖示(favicon)：把你的圖放到 assets/favicon.png 即生效；可改 href 路徑或副檔名(.ico/.svg) -->
 
-    <link rel="stylesheet" href="css/style.css?v=v3.5.69-pvp-alignment">
+    <link rel="stylesheet" href="css/style.css?v=v3.5.77-syslog-pin">
     <link rel="stylesheet" href="css/floating-ui.css?v=20260714-weight-colors">
     <link rel="stylesheet" href="css/tailwind-built.css"><!-- 🔧 預編譯 Tailwind（取代執行期 JIT tailwind.js）：只含實際用到的 class，省 407KB runtime + 移除持續掃描 DOM 的成本。置於 style.css 之後以保留原 cascade（utility 平手時勝過自訂 class，與舊 JIT 注入順序一致） -->
 </head>
@@ -303,6 +303,8 @@
                     <span class="shrink-0">系統與物品日誌</span>
                     <span id="syslog-pandora" class="text-sm font-normal truncate text-right min-w-0"></span>
                 </div>
+                <!-- 📌 v3.5.77 NPC 叫賣釘選列：最多兩條常駐於日誌頂端，不會被其他訊息推走；空的時候由 CSS :empty 自動收起 -->
+                <div id="sys-log-pins"></div>
                 <div id="sys-log" class="flex-1 p-4 overflow-y-auto log-bg rounded-b-xl shadow-inner text-base"></div>
                 <!-- 🔒 系統與物品日誌捲動鎖定提示（同戰鬥日誌：向上捲動鎖定刷新、捲回底部自動解除） -->
                 <button id="sys-log-unlock" onclick="sysLogToBottom()" class="hidden absolute left-1/2 -translate-x-1/2 bottom-2 z-10 px-3 py-1 text-xs font-bold rounded-full shadow-lg bg-amber-700/90 hover:bg-amber-600 border border-amber-400 text-amber-50">🔒 已鎖定捲動 ▾ 回到最新</button>
@@ -548,22 +550,22 @@
     </script>
 
     <script src="js/anim-manifest.js?v=v3.5.64-player-class-anim"></script>
-    <script src="js/00-data.js?v=v3.5.75-justice-spells"></script>
+    <script src="js/00-data.js?v=v3.5.77-syslog-pin"></script>
 <script src="js/01-drops-config.js?v=v3.5.69-pvp-alignment"></script>
 <script src="js/02-stats-recompute.js?v=v3.5.69-pvp-alignment"></script>
     <script src="js/03-combat-core.js?v=v3.5.76-merc-alignment"></script>
     <script src="js/04-combat-attack.js?v=v3.5.75-justice-spells"></script>
-<script src="js/05-kill-progression.js?v=v3.5.69-pvp-alignment"></script>
+<script src="js/05-kill-progression.js?v=v3.5.78-troll-red-endings"></script>
     <script src="js/06-status-allies.js?v=v3.5.76-merc-alignment"></script>
     <script src="js/07-skills-cast.js?v=v3.5.75-justice-spells"></script>
-<script src="js/08-items-equip.js?v=v3.5.71-pvp-color-ui"></script>
+<script src="js/08-items-equip.js?v=v3.5.80-doll-batch-snapshot"></script>
 <script src="js/09-vfx-render.js?v=v3.5.69-pvp-alignment"></script>
 <script src="js/10-ui-tabs.js?v=v3.5.77-pvp-stat-tone"></script>
-<script src="js/11-world-map.js?v=v3.5.71-pvp-color-ui"></script>
+<script src="js/11-world-map.js?v=v3.5.79-kent-npc-spread"></script>
 <script src="js/12-npc-quests.js?v=v3.5.49-ticket-item-purge"></script>
-<script src="js/13-shop-save.js?v=v3.5.69-pvp-alignment"></script>
+<script src="js/13-shop-save.js?v=v3.5.77-portable-save"></script>
 <script src="js/14-craft-pandora.js?v=v3.5.75-justice-spells"></script>
-<script src="js/15-cards.js?v=v3.5.35-lindvior-card"></script>
+<script src="js/15-cards.js?v=v3.5.80-doll-batch-snapshot"></script>
 <script src="js/16-equip-book.js?v=v3.2.37-petgear"></script>
 <script src="js/18-misc-book.js?v=v3.2.13-bless-cleanup"></script>
 <script src="js/17-audio.js?v=v3.5.18-morphfx-fix"></script>
@@ -572,6 +574,6 @@
 <script src="js/21-relic-book.js?v=v3.1.7"></script>
     <script src="js/23-summons.js?v=v3.4.101-terror-types"></script>
     <script src="js/22-pets.js?v=v3.5.2-party-debuffs"></script>
-    <script src="js/24-pandora-relic-market.js?v=v3.5.72-trash-channel-text"></script>
+    <script src="js/24-pandora-relic-market.js?v=v3.5.79-wanderer-schedule"></script>
 </body>
 </html>

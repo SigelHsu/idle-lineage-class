@@ -1,4 +1,4 @@
-function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false) {
+function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, deferUi=false) {
     // 卷軸變祝福／詛咒機率：各 1%（互斥）
     if (!forceNormal && (id === 'scroll_weapon' || id === 'scroll_armor')) {
         let _r = lootRng('scrollvar');   // 🎲 committed RNG（防 SL 重抽卷軸祝福/詛咒變體）
@@ -62,12 +62,12 @@ function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false) {
             logSys(`<span class="sys-item-gain">獲得物品: <span class="font-bold">${getItemFullName(itemInfo)}</span></span>`);
         }
     }
-    renderTabs();
+    if (!deferUi) renderTabs();
     if(DB.items[id] && DB.items[id].grantSkills) { calcStats(); renderSkillSelects(); }   // 取得授予技能的頭盔：立即生效
     
     if(typeof auditTrackGain === 'function') auditTrackGain(itemInfo);   // 統計：掉落計數
     try { if (_vfxLootCtx && d && d.gachaWeight === 1 && typeof vfxRareDrop === 'function') vfxRareDrop(d.n); } catch(e){}   // ✨ VFX：潘朵拉權重=1 的稀有掉落金色閃光
-    try { if (typeof autoSortInventory === 'function') autoSortInventory(); } catch (e) {}   // 🔧 v2.6.73 獲得物品時自動排列背包（每 10 秒最多 1 次·節流在函式內）
+    try { if (!deferUi && typeof autoSortInventory === 'function') autoSortInventory(); } catch (e) {}   // 🔧 v2.6.73 獲得物品時自動排列背包（每 10 秒最多 1 次·節流在函式內）；批次發放可延後至交易完成再統一重繪
     return itemInfo; // 👈 讓拉霸機可以讀取最終產生的物品
 }
 

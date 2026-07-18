@@ -8,6 +8,69 @@ function saveAuditWatch() { try { localStorage.setItem(AUDIT_WATCH_KEY, JSON.str
         if (Array.isArray(arr)) { _audit.watch = arr.filter(x => typeof x === 'string'); _audit.watch.forEach(t => { _audit.watchCnt[t] = 0; }); }
     } catch(e) {}
 })();
+const TROLL_DEFEAT_ENDINGS = [
+    '對方悻悻然地下線了。',
+    '對方抱頭鼠竄地躲回村。',
+    '對方怒拔線，畫面直接斷線了。',
+    '對方開始對你客氣，連買藥水都先問好。',
+    '對方默默把剛剛的狠話全刪了。',
+    '對方裝作沒事，轉身就按了回卷。',
+    '對方在頻道打到一半突然安靜了。',
+    '對方說剛剛只是測試你的傷害。',
+    '對方改口說大家都是朋友。',
+    '對方的氣勢當場掉到負重超過 100%。',
+    '對方把 PK 宣言收回倉庫了。',
+    '對方嘴上說還好，腳步已經往村莊跑。',
+    '對方開始研究和平相處的可能性。',
+    '對方承認今天鍵盤比較滑。',
+    '對方一邊退後一邊說有話好說。',
+    '對方突然想起自己還有村莊任務要解。',
+    '對方把你加入了「先不要惹」名單。',
+    '對方的狠話被你的最後一擊打散了。',
+    '對方假裝剛剛不是本人操作。',
+    '對方說網路延遲，但大家都看見了。',
+    '對方立刻改名想重新做人。',
+    '對方開始檢討為什麼要嘴那麼快。',
+    '對方回村後默默補滿紅水。',
+    '對方從此學會先看裝備再說話。',
+    '對方輸到開始稱讚你的操作。',
+    '對方表示剛剛只是友情切磋。',
+    '對方嘴硬三秒後選擇沉默。',
+    '對方的戰意被打成未鑑定狀態。',
+    '對方把剛剛的挑釁當成誤會。',
+    '對方開始用敬語跟你講話。',
+    '對方說下次一定，但先回村整理背包。',
+    '對方的勇氣藥水效果像是提前結束了。',
+    '對方在地上留下了一句「我只是路過」。',
+    '對方很快學會什麼叫頻道禮貌。',
+    '對方的自信被你打到需要修理。',
+    '對方表示今天手感不好，明天再兇。',
+    '對方開始懷疑剛剛是不是不該那麼嗆。',
+    '對方回村後把廣播音量調小了。',
+    '對方說要叫人，結果先叫了傳送師。',
+    '對方的嘴砲冷卻時間被延長了。',
+    '對方把「來 PK」改成「先不要」。',
+    '對方裝忙，說剛好要下線吃飯。',
+    '對方從戰鬥頻道消失得非常自然。',
+    '對方的囂張被打成稀有掉落。',
+    '對方開始覺得安靜也是一種美德。',
+    '對方說剛剛那句不是對你講的。',
+    '對方回村後站在倉庫前思考人生。',
+    '對方把你尊稱為大哥，語氣非常真誠。',
+    '對方的下一句垃圾話卡在輸入框裡。',
+    '對方決定暫時當個有禮貌的玩家。',
+    '對方留下敗者的背影，消失在傳送光裡。'
+];
+function _killLogEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+function _trollDefeatNameHtml(mob) {
+    if (typeof pvpNameHtml === 'function') return pvpNameHtml(mob.n, mob._pvpAlignment || 0, 'font-bold');
+    return `<span class="font-bold">${_killLogEsc(mob && mob.n)}</span>`;
+}
+function _trollDefeatEnding() {
+    return TROLL_DEFEAT_ENDINGS[Math.floor(Math.random() * TROLL_DEFEAT_ENDINGS.length)] || '對方悻悻然地下線了。';
+}
 function auditReset() {
     _audit.start = Date.now();
     _audit.gold0 = (typeof player !== 'undefined' && player) ? (player.gold || 0) : 0;
@@ -350,7 +413,7 @@ function killMob(idx) {
     if ((mob.wild && mob.race === '血盟') || mob.siegeEnemy) pledgeBonusDrop(mob);   // 野外血盟 或 攻城敵人：擊殺特殊掉寶
     if (mob.trollPlayer) {   // 😤 v3.5.59 白目玩家：擊殺→仇恨解除；10% 裝備掉落（同血盟掉寶池·王族搜索狀 gachaWeight 0 不會出·經驗/金幣 0）
         if (player.trollPlayers) player.trollPlayers = player.trollPlayers.filter(t => t && t.n !== mob.n);
-        logSys(`<span class="text-amber-300 font-bold">你擊敗了白目玩家 ${mob.n}，對方悻悻然地下線了。</span>`);
+        logSys(`<span class="text-amber-300 font-bold">你擊敗了 ${_trollDefeatNameHtml(mob)}，${_trollDefeatEnding()}</span>`);
         pledgeBonusDrop(mob, 0.10);
     }
 
