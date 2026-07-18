@@ -2163,7 +2163,7 @@ function updatePvpButtonTone() {
     if (!btn) return;
     let align = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(player && player.alignmentValue) : Math.max(-32767, Math.min(32767, Math.round(Number(player && player.alignmentValue) || 0)));
     let kind = (typeof pvpAlignmentKind === 'function') ? pvpAlignmentKind(align) : (align >= 1000 ? 'justice' : (align <= -1000 ? 'evil' : 'neutral'));
-    let bg = '#2f3745', border = '#566174', fg = '#f8fafc';
+    let bg = '#4b5563', border = '#6b7280', fg = '#f1f5f9';
     if (kind === 'justice') {
         let t = Math.max(0, Math.min(1, (align - 1000) / (32767 - 1000)));
         bg = _pvpTabMix('#1e3a8a', '#3b82f6', t);
@@ -2175,12 +2175,17 @@ function updatePvpButtonTone() {
         border = _pvpTabMix('#b91c1c', '#fecaca', t);
         fg = '#fff1f2';
     }
-    let hi = _pvpTabMix(bg, '#ffffff', 0.12);
-    let lo = _pvpTabMix(bg, '#000000', 0.18);
-    btn.style.background = `linear-gradient(135deg, ${hi} 0%, ${bg} 42%, ${lo} 100%)`;
+    let top = _pvpTabMix(bg, '#e2e8f0', 0.14);
+    let shine = _pvpTabMix(bg, '#f8fafc', 0.24);
+    let notch = _pvpTabMix(bg, '#020617', 0.26);
+    let lower = _pvpTabMix(bg, '#f8fafc', 0.10);
+    let bottom = _pvpTabMix(bg, '#020617', 0.34);
+    btn.style.background = (kind === 'neutral')
+        ? 'linear-gradient(135deg, #565d68 0%, #6b7280 26%, #3f4651 48%, #5a6270 72%, #313740 100%)'
+        : `linear-gradient(135deg, ${top} 0%, ${shine} 26%, ${notch} 48%, ${lower} 72%, ${bottom} 100%)`;
     btn.style.color = fg;
     btn.style.borderColor = border;
-    btn.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,.14)';
+    btn.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.22), 0 1px 2px rgba(0,0,0,.35)';
 }
 function renderPvpTab() {
     let div = document.getElementById('tab-pvp');
