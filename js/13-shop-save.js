@@ -450,28 +450,29 @@ function slotBackToMenu(){
 // ===== 存檔 匯出 / 匯入 =====
 // 匯出：先儲存當前進度，再把該角色存檔寫成 .json 檔。優先用檔案系統 API（可自選資料夾），
 //       不支援時退回瀏覽器下載（落在預設下載資料夾）。
-async function exportSave(){
-    saveGame();   // 先儲存，確保匯出的是最新進度
-    let data = _saveUnwrap(_lzGet('lineage_idle_save_' + currentSlot)).payload;   // 💾 解壓並解簽 → 取出明文 JSON payload
+async function exportSave(slot){
+    let slotNo = Math.max(1, Math.floor(Number(slot || currentSlot) || 1));
+    if (slotNo === currentSlot && player && player.cls) saveGame();   // 遊戲中匯出目前角色時才先儲存
+    let data = _saveUnwrap(_lzGet('lineage_idle_save_' + slotNo)).payload;   // 💾 解壓並解簽 → 取出明文 JSON payload
     if(!data){ alert('目前沒有可匯出的存檔。'); return; }
     // 🔧 一併收錄共用倉庫（依角色的經典/非經典模式取對應倉庫）；匯入時可選擇是否還原
     try {
         let _obj = JSON.parse(data);
-        let _whRaw = _lzGet(whKey());   // 🎮 目前角色（經典/非經典）對應的倉庫（💾 解壓成明文）
+        let _p = _obj && _obj.p ? _obj.p : (slotNo === currentSlot ? player : null);
+        let _whRaw = _lzGet(whKey(_p));   // 🎮 指定角色（經典/非經典）對應的倉庫（💾 解壓成明文）
         if(_whRaw) _obj.wh = JSON.parse(_whRaw);
         // 🐾 v3.2.75 一併收錄共用寵物名冊（依角色模式取對應桶·匯入時可選還原）。桶內為 _saveWrap 簽章格式→先解簽取出陣列存明文。saveGame() 已於上方 flush petRosterSave→桶為最新。
         try {
-            if (typeof _petBucketKey === 'function') {
-                let _petRaw = _lzGet(_petBucketKey());
-                if (_petRaw != null) { let _pu = _saveUnwrap(_petRaw); if (_pu && _pu.ok) { let _arr = JSON.parse(_pu.payload); if (Array.isArray(_arr)) _obj.pets = _arr; } }
-            }
+            let _petKey = (typeof PET_ROSTER_KEY !== 'undefined' ? PET_ROSTER_KEY : 'fb5_pet_roster') + (typeof modeSuffix === 'function' ? modeSuffix(!!(_p && _p.classicMode), false) : '');
+            let _petRaw = _lzGet(_petKey);
+            if (_petRaw != null) { let _pu = _saveUnwrap(_petRaw); if (_pu && _pu.ok) { let _arr = JSON.parse(_pu.payload); if (Array.isArray(_arr)) _obj.pets = _arr; } }
         } catch(e){}
         data = JSON.stringify(_obj);
     } catch(e){}
     data = _saveWrap(data);   // 🛡️ 匯出檔加完整性簽章（前綴 'SIG1:'，匯入時驗章；payload 仍為明文 JSON）
-    let sum = slotSummary(currentSlot);
-    let cname = (sum && sum.name) ? sum.name : ('slot' + currentSlot);   // 未命名 → 用 slotN 當檔名
-    let fname = `fable5_save_${currentSlot}_${cname}.json`;
+    let sum = slotSummary(slotNo);
+    let cname = (sum && sum.name) ? sum.name : ('slot' + slotNo);   // 未命名 → 用 slotN 當檔名
+    let fname = `fable5_save_${slotNo}_${cname}.json`;
     if(window.showSaveFilePicker){
         try {
             let handle = await window.showSaveFilePicker({
@@ -701,10 +702,12 @@ function updateLoadInfo(){
     const create = document.getElementById('load-btn-create');
     const importBtn = document.getElementById('load-btn-import');
     const enter = document.getElementById('load-btn-enter');
+    const exportBtn = document.getElementById('load-btn-export');
     const del = document.getElementById('load-btn-delete');
     if(create) create.classList.toggle('hidden', !empty);
     if(importBtn) importBtn.classList.toggle('hidden', !empty);
     if(enter) enter.classList.toggle('hidden', empty);
+    if(exportBtn) exportBtn.classList.toggle('hidden', empty);
     if(del) del.classList.toggle('hidden', empty);
 }
 function loadSelectSlot(n){
@@ -737,6 +740,7 @@ function loadEnterSelected(){
     loadGame();
 }
 function loadImportSelected(){ importSave(_loadSelectedSlot); }
+function loadExportSelected(){ exportSave(_loadSelectedSlot); }
 function loadRestoreSelected(){ restoreBackup(_loadSelectedSlot); }
 function loadDeleteSelected(){
     const slot = _loadSelectedSlot, sum = slotSummary(slot);

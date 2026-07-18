@@ -1217,6 +1217,7 @@ function pandoraBuyOrderAllowed(id) {
     if (pandoraIsEarring(id, d)) return false;
     if (/^item_pride_dom_/.test(String(id || '')) || String(d.n || '').includes('支配符')) return false;
     if (d.type === 'skillbk') return true;
+    if (d.eff === 'panacea') return true;   // 💊 v3.5.67 萬能藥（六屬性）開放喊價收購：唯一獲准的消耗品例外
     return pandoraIsPlayerWearableEquip(id, d);
 }
 
@@ -1275,7 +1276,7 @@ function _pandoraNoticeHTML(m) {
     return `<span class="${c}">${_pandoraEsc(n.text)}</span>`;
 }
 
-// 收購名稱自動提示：輸入至少 2 個連續字元後，搜尋可指定收購的魔法書與一般穿著裝備。
+// 收購名稱自動提示：輸入至少 2 個連續字元後，搜尋可指定收購的魔法書、一般穿著裝備與萬能藥。
 function pandoraSuggestBuyItems(value) {
     let box = document.getElementById('pandora-buy-suggestions');
     if (!box) return;
@@ -1321,7 +1322,7 @@ function pandoraChooseBuyItem(name) {
     if (box) { box.innerHTML = ''; box.classList.add('hidden'); }
 }
 
-// 設定單一收購單：物品名稱必須完全吻合，且僅限魔法書與耳環以外的一般穿著裝備。
+// 設定單一收購單：物品名稱必須完全吻合，且僅限魔法書、耳環以外的一般穿著裝備與萬能藥。
 function pandoraSetBuyOrder() {
     let m = player && player.pandoraMarket2;
     if (!m) return;
@@ -1339,7 +1340,7 @@ function pandoraSetBuyOrder() {
     } else {
         let orderable = matches.filter(id => pandoraBuyOrderAllowed(id));
         if (!orderable.length) {
-            _pandoraSetNotice(m, 'error', '此物品不可指定收購；耳環、消耗品、材料、支配符等無法指定。');
+            _pandoraSetNotice(m, 'error', '此物品不可指定收購；耳環、材料、支配符與萬能藥以外的消耗品無法指定。');
         } else if (!Number.isSafeInteger(price) || price <= 0) {
             _pandoraSetNotice(m, 'error', '請輸入正確的正整數收購價格。');
         } else {
@@ -1660,6 +1661,8 @@ window.onload = () => {
         else if(sk.classicHeal) { let ch=sk.classicHeal; eff.push((sk.groupHeal?'全隊':'單體')+'治療 ('+ch.baseDice+'＋INT治癒加成)d'+ch.sides+' ×2'+(ch.mult&&ch.mult!==1?(' ×'+ch.mult):'')); }
         else if(sk.healBase || sk.healDice) eff.push('治療 '+(sk.healBase||0)+(sk.healDice?('＋'+sk.healDice[0]+'d'+sk.healDice[1]):''));
         if(sk.healCooldownTicks) eff.push('冷卻 '+(sk.healCooldownTicks/10)+' 秒');
+        if(sk.justiceHeal) eff.push('受施法者性向影響：正義值越高恢復量越高（滿正義 +20%・中立/邪惡無提升）');   // 💙 v3.5.75 正義治癒加成
+        if(sk.reqJustice) eff.push('限正義性向施放（性向值 ≥ 1000）');   // 💙 v3.5.75 究極光裂術門檻
         if(sk.lifesteal) eff.push('吸取生命');
         if(sk.instakill) eff.push('即死（不死系）');
         // 🛡️ v2.6.69 審計#15：補渲染 reqWpn/skillAddDmg/stun(Chance)——衝擊之暈等技能的機制原本在唯一說明面完全隱形

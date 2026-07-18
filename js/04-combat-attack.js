@@ -496,6 +496,7 @@ function equipSkillDmgMult(sk, skId, who) {
 function procFreeMagicSkill(t, skId, en, areaHit, sourceItem, illusionRecoverMp) {
     let sk = DB.skills[skId];
     if (!sk || !t || t.curHp <= 0) return;
+    if (sk.reqJustice && typeof pvpIsJustice === 'function' && !pvpIsJustice()) return;   // 💙 v3.5.75 究極光裂術：限正義性向（免費 proc 施放亦擋·靜默）
     if (sk.target === 'all' && !areaHit) {
         let uids = mapState.mobs.filter(m => m && m.curHp > 0 && !m._dead).map(m => m.uid);
         uids.forEach((uid, i) => {
@@ -1274,12 +1275,55 @@ function enemyAttackAlly(mob, ally) {
     if (ally.curHp <= 0) { ally.curHp = 0; ally._downed = true; ally._reviveCd = 150; logCombat(`<span class="text-amber-400 font-bold">協力傭兵 ${ally._allyName} 倒下了！（可用返生術立即復活，或 15 秒後自動使用復活卷軸，或回村免費復活）</span>`, 'enemy', 'enemy'); try { renderSquadPanel(); } catch (e) {} }
 }
 
+function pvpChaoticDeathItemLoss() {
+    if (!player || !player.eq || !Array.isArray(player.inv)) return;
+    if (typeof pvpClampAlignment === 'function' && pvpClampAlignment(player.alignmentValue) >= -10000) return;
+    if (typeof pvpClampAlignment !== 'function' && (Number(player.alignmentValue) || 0) >= -10000) return;
+    if (Math.random() >= 0.01) return;
+    let candidates = [];
+    for (let slot in player.eq) {
+        let it = player.eq[slot];
+        if (it && it.id && DB.items[it.id]) candidates.push({ kind: 'eq', slot: slot, item: it });
+    }
+    player.inv.forEach((it, index) => {
+        if (it && it.id && DB.items[it.id]) candidates.push({ kind: 'inv', index: index, item: it });
+    });
+    if (!candidates.length) return;
+    let pick = candidates[Math.floor(Math.random() * candidates.length)];
+    let name = (typeof getItemFullName === 'function') ? getItemFullName(pick.item) : (DB.items[pick.item.id] ? DB.items[pick.item.id].n : pick.item.id);
+    // 🗃️ v3.5.74 遺失紀錄（用戶拍板）：系統背後保存完整物品快照 player.pvpLostItems（含強化/詞綴/屬性·上限 50 筆·目前無 UI·供未來復原機制使用）
+    try {
+        if (!Array.isArray(player.pvpLostItems)) player.pvpLostItems = [];
+        player.pvpLostItems.push({ t: Date.now(), from: pick.kind, slot: pick.kind === 'eq' ? pick.slot : null, item: JSON.parse(JSON.stringify(Object.assign({}, pick.item, { cnt: 1 }))) });
+        if (player.pvpLostItems.length > 50) player.pvpLostItems = player.pvpLostItems.slice(-50);
+    } catch (e) {}
+    if (pick.kind === 'eq') {
+        if ((pick.item.cnt || 1) > 1) pick.item.cnt -= 1;
+        else player.eq[pick.slot] = null;
+    } else {
+        let live = player.inv[pick.index];
+        if (!live || live !== pick.item) live = player.inv.find(it => it === pick.item || (pick.item.uid && it && it.uid === pick.item.uid));
+        if (live) {
+            if ((live.cnt || 1) > 1) live.cnt -= 1;
+            else player.inv = player.inv.filter(it => it !== live);
+        }
+    }
+    logSys(`<span class="text-red-400 font-bold">邪惡值過低，死亡時遺失了 ${name}。</span>`);
+    try { calcStats(); renderTabs(true); updateUI(); } catch (e) {}
+}
+
 function killPlayer() {
     player.hp = 0;
     player.dead = true; // 保持死亡狀態，停止遊戲計時
-    if (player.trollPlayers && player.trollPlayers.length) {   // 😤 被白目玩家擊殺(場上有白目即視為其戰果)：仇恨解除·離場
+    let _pvpKillers = mapState.mobs.filter(m => m && m.trollPlayer);
+    if (_pvpKillers.length && typeof pvpOnPlayerDeath === 'function') pvpOnPlayerDeath(_pvpKillers);
+    if (player.trollPlayers && player.trollPlayers.length) {   // 😤 被白目玩家擊殺(場上有白目即視為其戰果)：仇恨解除·離場；🐛 v3.5.74 稽核修#3：付費復仇追殺(pvpRevenge/noExpire)不因死亡解除（10 萬不蒸發·之後仍會遭遇）
         let _tn = mapState.mobs.filter(m => m && m.trollPlayer).map(m => m.n);
-        if (_tn.length) { player.trollPlayers = player.trollPlayers.filter(t => t && !_tn.includes(t.n)); logSys("<span class=\"text-rose-300\">白目玩家心滿意足地離開了……</span>"); }
+        if (_tn.length) {
+            let _n0 = player.trollPlayers.length;
+            player.trollPlayers = player.trollPlayers.filter(t => t && (t.pvpRevenge || t.noExpire || !_tn.includes(t.n)));
+            if (player.trollPlayers.length !== _n0) logSys("<span class=\"text-rose-300\">白目玩家心滿意足地離開了……</span>");
+        }
     }
     // 死亡時清除所有召喚物與召喚 buff（迷魅術/造屍術/召喚屬性精靈/召喚強力屬性精靈一致處理），
     // 與復活流程同步，避免狀態殘留；復活後由自動施放重新召喚。
@@ -1307,6 +1351,7 @@ function killPlayer() {
         saveGame();
         return;
     }
+    pvpChaoticDeathItemLoss();
     // 🔧 盟主祝福不再因死亡清空：只有時間到才會消失（亦不受攻城影響）
     let msg = "你的角色已經死亡。（死亡不損失經驗值。）";
     // 🎮 經典模式：死亡損失「該等級最大經驗」的 5%（v3.0.15 由 10% 調降·per-level 進度，最多扣到該等級 0% → 不會降等）

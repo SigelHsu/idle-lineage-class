@@ -1192,6 +1192,7 @@ function _updateUIImpl() {
     if(state.ff) return; // 補跑期間不刷新畫面
     updatePrideFloorIndicator();   // 🗼 攀登中右上角顯示目前樓層（背景補跑後回到前景時同步）
     try { renderPandoraBanner(); } catch (e) {}   // 🔧 潘朵拉黑市稀有商品公告橫幅
+    try { if (typeof updatePvpButtonTone === 'function') updatePvpButtonTone(); } catch (e) {}
     try { renderSyslogPandora(); } catch (e) {}   // 🔧 系統日誌標題列右側：黑市拍賣中商品
     document.getElementById('st-lv').innerText = player.lv;
     { let _inTown = mapState.current.startsWith('town_');   // 🔧 村莊→藍色「出發」一鍵回上一張戰鬥地圖；戰鬥地圖→綠色回村/回城
@@ -1219,7 +1220,14 @@ function _updateUIImpl() {
     else if (player.cls === 'warrior') clsDisplayName = '戰士';   // ⚔️ 戰士職業名
     else if (player.cls === 'royal') clsDisplayName = '王族';   // 👑 王族職業名
     if(document.getElementById('st-classname')) document.getElementById('st-classname').innerText = clsDisplayName;   // 🏅 精通徽記已移除，僅顯示職業名
-    if(!window._editingName) document.getElementById('st-class').innerText = (player.name || '');   // 未取名則不顯示任何文字（仍可點擊命名）
+    let _nameEl = document.getElementById('st-class');
+    if(_nameEl) {
+        if(!window._editingName) _nameEl.innerText = (player.name || '');   // 未取名則不顯示任何文字（仍可點擊命名）
+        if (typeof pvpAlignmentColor === 'function') {
+            _nameEl.style.color = pvpAlignmentColor(player.alignmentValue);
+            _nameEl.style.textShadow = '0 0 6px rgba(0,0,0,.75)';
+        }
+    }
 
     // 處理背景圖片：全部職業／性別頭像統一使用 assets/character 對應的 PNG。
     let bgImageName = player.avatar || clsDisplayName;

@@ -2008,8 +2008,10 @@ function renderTownNPCMap(townId) {
             let el = document.createElement('div');
             el.className = 'town-npc wandering-player';
             el.style.left = p.x + '%'; el.style.top = p.y + '%'; el.style.zIndex = Math.round(p.y * 10);
+            let align = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(npc.alignmentValue) : Math.max(-32767, Math.min(32767, Math.round(Number(npc.alignmentValue) || 0)));
+            let nameHtml = (typeof pvpNameHtml === 'function') ? pvpNameHtml(npc.n, align, 'tn-name') : '<span class="tn-name">' + npc.n + '</span>';
             el.innerHTML =
-                '<div class="tn-label"><span class="tn-name">' + npc.n + '</span><span class="tn-title">[玩家收購]</span></div>' +
+                '<div class="tn-label">' + nameHtml + '<span class="tn-title">[玩家收購]</span></div>' +
                 '<img class="tn-shadow" src="' + shadow0 + '" alt="" onload="this.parentElement.classList.add(\'has-tn-shadow\')" onerror="this.remove()">' +
                 '<img class="tn-body" src="' + body0 + '" alt="">';
             el.onclick = () => openWanderingBuyerDialog(npc.id);
