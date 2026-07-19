@@ -2272,7 +2272,8 @@ function pvpRevenge(i) {
     if (player.trollPlayers && player.trollPlayers.some(t => t && t.n === r.n && (t.pvpRevenge || t.noExpire))) { renderPvpTab(); return; }   // 🐛 v3.5.74 稽核修#1：追殺中不重複扣款（雙保險·UI 已 disable）
     player.gold -= cost;
     if (typeof pvpMarkForChase === 'function') pvpMarkForChase(r);
-    if (typeof logTrollEncounterTrashTalk === 'function') logTrollEncounterTrashTalk(r.n);
+    if (typeof logPvpRevengeTrashTalk === 'function') logPvpRevengeTrashTalk(r);
+    else if (typeof logTrollEncounterTrashTalk === 'function') logTrollEncounterTrashTalk(r.n);
     logSys(`<span class="text-red-300 font-bold">你花費 ${cost.toLocaleString()} 金幣，對 ${_pvpTabEsc(r.n)} 發起復仇追殺。</span>`);
     saveGame();
     updateUI();

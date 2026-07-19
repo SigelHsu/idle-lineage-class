@@ -1200,6 +1200,15 @@ function logTrollEncounterTrashTalk(name) {
     logSys(`<span class="wander-chat-out"><span class="wander-chat-arrow">-&gt;</span> <span class="wander-chat-target">[${_name}]</span> ${_trollEncounterEsc(_trollEncounterPick(TROLL_ENCOUNTER_PLAYER_TAUNTS))}</span>`);
     logSys(`<span class="wander-chat-in"><span class="wander-chat-speaker">[${_name}]</span> ${_trollEncounterEsc(_trollEncounterPick(TROLL_ENCOUNTER_NPC_TAUNTS))}</span>`);
 }
+function logPvpRevengeTrashTalk(entry) {
+    if (typeof logSys !== 'function') return;
+    let name = entry && entry.n ? entry.n : entry;
+    if (!name) return;
+    let align = entry && entry.alignmentValue != null ? pvpClampAlignment(entry.alignmentValue) : 0;
+    let nameHtml = pvpNameHtml(name, align, 'font-bold');
+    logSys(`<span class="wander-chat-out"><span class="wander-chat-arrow">-&gt;</span> <span class="wander-chat-target">[${nameHtml}]</span> ${_trollEncounterEsc(_trollEncounterPick(PVP_KILL_WHISPER_PLAYER_REPLIES))}</span>`);
+    logSys(`<span class="wander-chat-in"><span class="wander-chat-speaker">[${nameHtml}]</span> ${_trollEncounterEsc(_trollEncounterPick(PVP_KILL_WHISPER_REVENGE_REPLIES))}</span>`);
+}
 function _pvpKillWhisperRecord(name) {
     pvpEnsureState();
     return (player.pvpKillWhispers || []).find(rec => rec && rec.n === name) || null;

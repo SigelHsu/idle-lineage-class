@@ -390,6 +390,8 @@
         if (old && Number.isFinite(Number(old.levelOffset))) chase.levelOffset = old.levelOffset;
         player.trollPlayers = player.trollPlayers.filter(t => t && t.n !== w.name);
         player.trollPlayers.push(chase);
+        let quietResult = _stopWanderingBroadcast(w.id);
+        if (quietResult && !quietResult.gone) _lastBroadcastCycles[w.id] = 'quiet';
         try { if (typeof saveGame === 'function') saveGame(); } catch (e) {}
         return true;
     }
