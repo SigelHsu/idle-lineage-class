@@ -756,7 +756,11 @@ function endSiege(result) {
         logSys(`🏰 <span class="text-slate-300 font-bold">攻城失敗…</span>時間到，未能攻下${_cfg.tower}。`);
     }
     { let timer = document.getElementById('siege-timer'); if (timer) timer.classList.add('hidden'); }   // 結束隱藏倒數
-    setMapSelectors(getHomeTown());
+    // 🏰 v3.6.32 獲勝→直接傳送到「奪下的城堡」（用戶拍板）；敗北或城堡共用資料寫入失敗→照舊回家鄉村莊。
+    //    用 siegeVictoryActive/victoryCityCfg 判定（clanSetCastle 剛寫入·寫入失敗時 victory 不成立自動走 fallback）；
+    //    changeMap 的城堡把關（持有時效）同一組函式，不會被彈回。
+    let _dest = (result === 'win' && siegeVictoryActive() && victoryCityCfg().castle) ? victoryCityCfg().castle : getHomeTown();
+    setMapSelectors(_dest);
     changeMap(true);
     updateUI();
     saveGame();   // 攻城戰結束時自動存檔
@@ -1197,6 +1201,7 @@ function changeMap(force) {
         player.hp = player.mhp;
         player.mp = player.mmp;
         try { if (typeof reviveDownedMercsAtTown === 'function') reviveDownedMercsAtTown(); } catch (e) {}   // 🤝 Phase 3：回村/回城免費復活全體倒地傭兵
+        try { if (typeof petsReviveAtTown === 'function') petsReviveAtTown(); } catch (e) {}   // 🐾 v3.6.29 回村：出戰寵物倒地復活＋補滿 HP/MP＋清異常（比照傭兵·js/22）
         try { if (typeof mercBankAlliesAtTown === 'function') mercBankAlliesAtTown(); } catch (e) {}   // 🤝 v2.6.68 隊長回村：上場傭兵各記一筆待領經驗（不解散·不改來源存檔）
         try { if (typeof mercExpClaimPending === 'function') mercExpClaimPending(); } catch (e) {}     // 🤝 v2.6.68 本角色回村/載入（loadGame 一律回家鄉村莊）：自動領取自己的待領經驗
         // 🏰 城堡護衛：回城/回村補滿血並解除力竭

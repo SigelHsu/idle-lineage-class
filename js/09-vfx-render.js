@@ -2039,10 +2039,11 @@ function _playerCastleCrownOn() {
     } catch (e) { return false; }
 }
 let _playerBattleCrownBoxCache = {};
-function _playerBattleCrownBox(img) {
+function _playerBattleCrownBox(img, opt) {
     if (!img || !img.complete || !(img.naturalWidth > 0) || !(img.naturalHeight > 0)) return null;
     let src = img.currentSrc || img.src || '';
-    if (src && _playerBattleCrownBoxCache[src]) return _playerBattleCrownBoxCache[src];
+    let cacheKey = src ? (src + (opt && opt.classCenter ? '#classCenter' : '')) : '';
+    if (cacheKey && _playerBattleCrownBoxCache[cacheKey]) return _playerBattleCrownBoxCache[cacheKey];
     let w = img.naturalWidth, h = img.naturalHeight;
     let box = { x: Math.round(w / 2), bottom: Math.round(h * 0.76) };
     try {
@@ -2063,30 +2064,37 @@ function _playerBattleCrownBox(img) {
             }
         }
         if (maxX >= 0) {
-            let bandY = Math.min(h - 1, minY + Math.max(12, Math.round((maxY - minY) * 0.28)));
             let sumX = 0, cnt = 0;
-            for (let y = minY; y <= bandY; y++) {
-                for (let x = 0; x < w; x++) {
-                    if (data[(y * w + x) * 4 + 3] > 8) { sumX += x; cnt++; }
+            if (!(opt && opt.classCenter)) {
+                let bandY = Math.min(h - 1, minY + Math.max(12, Math.round((maxY - minY) * 0.28)));
+                for (let y = minY; y <= bandY; y++) {
+                    for (let x = 0; x < w; x++) {
+                        if (data[(y * w + x) * 4 + 3] > 8) { sumX += x; cnt++; }
+                    }
                 }
             }
             box = { x: cnt ? Math.round(sumX / cnt) : Math.round((minX + maxX) / 2), bottom: Math.max(12, h - minY + 1) };
         }
     } catch (e) {}
-    if (src) {
+    if (cacheKey) {
         if (Object.keys(_playerBattleCrownBoxCache).length > 512) _playerBattleCrownBoxCache = {};
-        _playerBattleCrownBoxCache[src] = box;
+        _playerBattleCrownBoxCache[cacheKey] = box;
     }
     return box;
 }
-function _playerBattleCrownApply(crown, body) {
+function _playerBattleCrownApply(crown, body, form) {
     if (!crown) return;
     if (!_playerCastleCrownOn()) { crown.style.visibility = 'hidden'; return; }
-    let box = _playerBattleCrownBox(body);
+    let classCenter = !!(form && /^class:(王子|王子F|王子2|公主|公主F|公主2):/.test(form.key || ''));
+    let box = _playerBattleCrownBox(body, { classCenter: classCenter });
     if (!box) { crown.style.visibility = 'hidden'; return; }
     if (crown.style.visibility === 'hidden') crown.style.visibility = '';
     crown.style.left = box.x + 'px';
     crown.style.bottom = box.bottom + 'px';
+}
+function _playerMorphYOffset(form) {
+    let k = (form && form.key) || '';
+    return /^morph:萊肯(?:F|2)?$/.test(k) ? 18 : 0;
 }
 // ⚔️ v3.0.91 攻擊動畫播放速度隨攻速：攻擊動作每幀時長＝攻擊間隔(秒)÷幀數→整段動畫恰在一次攻擊間隔內播完（「播完對上攻速」）。
 //   只加速不放慢：慢攻取 min(base,…)＝維持預設 8fps（早播完後待機·不拖成慢動作）；下限 45ms/幀(≈22fps)防過快閃爍。
@@ -2136,7 +2144,7 @@ function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態�
     } else if (_pmState.el.parentElement !== bv) bv.appendChild(_pmState.el);
     { let _pw = (a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100; _pmState.el.style.left = 'calc(' + _partySpriteXs().P + ' - ' + Math.round(_pw / 2) + 'px)'; }   // 🗡️ v3.0.71 每輪更新：站怪物格縫隙(依 5格/3格版面動態)·免 transform
     // 🗡️ v3.0.70 權重站位：依 aggro 權重排前後（_partyBottoms 由 _allySpritesApply 每輪先算·權重高=前=bottom小·z 高）
-    if (typeof _partyBottoms !== 'undefined' && _partyBottoms && _partyBottoms.P != null) { _pmState.el.style.bottom = _partyBottoms.P + 'px'; _pmState.el.style.zIndex = String(30 - _partyBottoms.P); }
+    if (typeof _partyBottoms !== 'undefined' && _partyBottoms && _partyBottoms.P != null) { _pmState.el.style.bottom = (_partyBottoms.P - _playerMorphYOffset(form)) + 'px'; _pmState.el.style.zIndex = String(30 - _partyBottoms.P); }
     if (CLASS_ANIM_3DIR.has(player.avatar) || MORPH_ANIM_3DIR.has(_playerMorphName() || '')) _class3Facing(player, _pmState.el);   // 🧭 v3.2.12 依攻擊目標更新朝向（寫 player._face3·下一幀 _classForm/_playerBattleForm 生效）·v3.5.10 三方向變身亦更新
     // 動作＋幀（比照 _mobAnimApply：單次動作播一輪回待機·death 凍結最後一幀）
     let act = null, f = 0, _useW = false;
@@ -2167,7 +2175,7 @@ function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態�
         _pmState.el.appendChild(cr); I.cr = cr;
     }
     if (I.bd.src !== seq[f].src) I.bd.src = seq[f].src;
-    _playerBattleCrownApply(I.cr, I.bd);
+    _playerBattleCrownApply(I.cr, I.bd, form);
     let ss = (act === 'skill' && _useW) ? a.shadow.wskill : a.shadow[act];   // 影子：寬容（幀數不足取模·缺動作隱藏）
     if (ss && ss.length) { let sf = f < ss.length ? f : (f % ss.length); if (I.sh.style.visibility === 'hidden') I.sh.style.visibility = ''; if (I.sh.src !== ss[sf].src) I.sh.src = ss[sf].src; }
     else if (I.sh.style.visibility !== 'hidden') I.sh.style.visibility = 'hidden';

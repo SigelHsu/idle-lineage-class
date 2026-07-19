@@ -1109,6 +1109,23 @@ function _petReviveDone(p, via) {
     petMarkDirty();
     try { renderSquadPanel(); } catch (e) {}
 }
+// 🐾 v3.6.29 回村/回城（js/11 changeMap 村莊分支呼叫·比照傭兵 reviveDownedMercsAtTown）：
+//    出戰寵物倒地者免費復活＋全體補滿 HP/MP（MP 含防具精神加成的有效上限·同 petsTick _mmpEff）＋清異常狀態。
+//    petsOutList 已依目前角色過濾——他角色出戰中的寵物不動（多分頁共用桶慣例）。
+function petsReviveAtTown() {
+    let outs = (typeof petsOutList === 'function') ? petsOutList() : [];
+    if (!outs.length) return;
+    let n = 0;
+    outs.forEach(p => {
+        if (p._downed) { p._downed = false; p._reviveCd = 0; p._animAct = null; n++; }
+        p.hp = p.mhp;
+        p.mp = (p.mmp || 0) + (((typeof petDerive === 'function' && petDerive(p)) || {}).mmpBonus || 0);
+        p._statuses = newMobStatus();
+    });
+    petMarkDirty();
+    if (n) { try { logCombat(`<span class="text-green-300 font-bold">回到安全區，${n} 隻倒下的寵物已恢復。</span>`, 'heal'); } catch (e) {} }
+    try { renderSquadPanel(); } catch (e) {}
+}
 function petRevive(uidv, method) {   // 隊伍面板按鈕：rez=返生術（立即·耗玩家MP）/ scroll=復活卷軸（需滿 5 秒·_petDown 設 _reviveCd=50 tick）
     let p = _petFind(uidv); if (!p || !p._downed) return;
     if (method === 'rez') {
