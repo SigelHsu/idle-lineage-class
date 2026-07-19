@@ -2146,7 +2146,7 @@ function rollPledgeDropEnhance(safe) {
 // 野外+血盟敵人擊殺掉寶：1% 機率獲得 1 件物品（抽法同潘朵拉黑市權重 getWeightedGachaResult；詞綴走新制——只可能獲得「祝福的」1%，屬性/遠古改由象牙塔『碧恩』取得；仍依安定值附帶強化等級）
 function pledgeBonusDrop(mob, rate) {
     if (typeof isSiegeArea === 'function' && isSiegeArea(mapState.current)) return;   // 🏰 攻城區敵人／玩家NPC死亡一律不掉攜帶物
-    if (Math.random() >= (rate || 0.01) * classicDropMult()) return;   // 預設 1% 機率（😤 白目玩家傳 0.10＝10%；🎮 經典模式：×1/10）
+    if (Math.random() >= (rate || 0.01) * classicDropMult()) return;   // 預設 1% 機率（😤 白目玩家傳 0.10＝10%）；classicDropMult 恆 1＝經典與一般同掉率
     let id = getWeightedGachaResult(true);   // 🔧 血盟野外＋攻城敵人：權重 1 以外的物品以 2 倍權重抽取（權重100→200）
     let d0 = DB.items[id];
     if (!d0) return;
@@ -2173,6 +2173,45 @@ function pledgeBonusDrop(mob, rate) {
     let fullName = getItemFullName(item);
     let colorClass = getItemColor(item);
     logSys(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 攜帶的 <span class="${colorClass} font-bold">${fullName}</span> 掉落了！`);
+}
+
+// ⚖️ v3.6.16 玩家 NPC 噴裝率依「該 NPC 的性向值」決定（用戶拍板）：越邪惡（負值）掉得越多、越正義（正值）掉得越少。
+//   性向值刻意不顯示數字——玩家只能從名字顏色判斷（pvpAlignmentColor：白→紅＝邪惡／白→藍＝正義·js/03）。
+//   來源＝mob._pvpAlignment（spawnMob 由叫賣 NPC 的 alignmentValue 寫入·js/03:1496）；缺值（非 _trollSpawn 路徑）視為 0 → 7%。
+//   ⚠️ 邊界採「≤」由負往正逐級判定，恰好對齊需求表：0＝7%、1＝6%（0 屬負向那一段）。
+function playerNpcDropRate(mob) {
+    let a = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment((mob && mob._pvpAlignment) || 0) : ((mob && mob._pvpAlignment) || 0);
+    if (a <= -30000) return 0.10;   // -30000 以下
+    if (a <= -20000) return 0.09;   // -20000 ~ -29999
+    if (a <= -10000) return 0.08;   // -10000 ~ -19999
+    if (a <= 0)      return 0.07;   //      0 ~  -9999
+    if (a <= 9999)   return 0.06;   //      1 ~   9999
+    if (a <= 19999)  return 0.05;   //  10000 ~  19999
+    if (a <= 29999)  return 0.04;   //  20000 ~  29999
+    return 0.03;                    //  30000 以上
+}
+// 🏺 v3.6.11 玩家 NPC 遺物掉落：全 DB 遺物池（懶建立＋快取·DB.items 為靜態字面量不會在 runtime 增刪，故可安全永久快取）
+let _relicDropPool = null;
+function allRelicIds() {
+    if (_relicDropPool) return _relicDropPool;
+    _relicDropPool = Object.keys(DB.items).filter(id => isRelic(DB.items[id]));
+    return _relicDropPool;
+}
+// 🏺 v3.6.11 玩家 NPC（白目玩家／PVP 玩家）專屬遺物掉落（用戶需求）：
+//   與上方 pledgeBonusDrop 的 10% 攜帶物**各自獨立判定**（互不排擠·可能同時掉兩件）。
+//   命中 0.001% 後，再從「全部遺物」等機率抽 1 件（非依 gachaWeight 權重──遺物權重一律 0，用權重抽會全員 0 抽不出東西）。
+function playerNpcRelicDrop(mob) {
+    if (typeof isSiegeArea === 'function' && isSiegeArea(mapState.current)) return;   // 🏰 攻城區一律不掉（比照 pledgeBonusDrop 首行·防無冷卻攻城變成刷遺物場）
+    let _relicX2 = 1;   // 🐰 幸運暴走兔腳（需裝備）：遺物掉落機率 ×2（比照 js/05 怪物掉落表的遺物判定）
+    try { for (let _k in player.eq) { let _e = player.eq[_k]; if (_e && DB.items[_e.id] && DB.items[_e.id].relicDropX2) { _relicX2 = 2; break; } } } catch (e) {}
+    if (Math.random() >= 0.00001 * _relicX2 * classicDropMult()) return;   // 0.001%＝0.00001（classicDropMult 現恆 1：經典模式的掉落/金錢/經驗懲罰已全數取消·保留呼叫僅為與其他掉落點同管線）
+    let pool = allRelicIds();
+    if (!pool.length) return;
+    let id = pool[Math.floor(Math.random() * pool.length)];
+    let info = gainItem(id, 1, true, false);   // 靜默取得（遺物本就不附詞綴/不強化）→ 下方自行顯示掉落訊息；收集冊登錄由 gainItem 內部處理
+    let item = info || { id: id, en: 0, bless: false, anc: false, attr: false, cnt: 1 };
+    try { if (typeof vfxRareDrop === 'function') vfxRareDrop(DB.items[id].n); } catch (e) {}   // ✨ 遺物 gachaWeight 恆 0 → 不會被 gainItem 的稀有閃光判定接住，這裡顯式補播
+    logSys(`<span class="text-amber-300 font-bold">✦ 極稀有！</span><span class="${getMobColor(mob.lv)}">${mob.n}</span> 掉落了遺物 <span class="${getItemColor(item)} font-bold">${getItemFullName(item)}</span>！`);
 }
 
 // ===== 內建效率/掉落統計（接在 killMob/gainItem，換地圖重置；不靠函數劫持）=====

@@ -43,8 +43,28 @@ function whMatchSearch(it){
     let full = (typeof getItemFullName === 'function') ? _whStripHtml(getItemFullName(it)) : '';
     return _whFuzzyIncludes(_whSearchNorm([it.id, d.n || '', full].join(' ')), q);
 }
-function whSetSearch(v, pos){
+// 🀄 v3.6.04 注音／中文輸入法（IME）組字保護。
+//   問題：whSetSearch 會整塊重繪面板（innerHTML）→ 搜尋輸入框元素被換成新的。
+//   Chrome 在 IME 組字期間也會持續發 input 事件，於是每打一個注音符號就把「IME 正在編輯的那個元素」
+//   砍掉重建 → 組字階段被強制中斷，注音永遠拼不出完整中文字（英數是逐字直接送出，故看起來正常）。
+//   修法：compositionstart~compositionend 之間只更新暫存值、不重繪；組字完成才套用並重繪。
+let _whComposing = false;     // IME 組字進行中
+let _whSearchDirty = false;   // 組字期間有輸入尚未套用
+function whSearchCompStart(){ _whComposing = true; }
+function whSearchCompEnd(v, pos){
+    _whComposing = false;
     _whSearchInput = (v == null) ? '' : String(v);
+    _whSearchDirty = true;
+    // ⚠️ compositionend 與其後 input 事件的先後順序跨瀏覽器／輸入法不一致：
+    //    input 在後（Chrome 現行）→ 由它渲染並清 dirty，此處的 timeout 就跳過；
+    //    compositionend 在後（部分實作）→ input 當時 isComposing 仍為 true 沒渲染，改由此處補一次。
+    //    setTimeout(0) 讓兩者都跑完再決定 → 保證「恰好渲染一次」，不重複也不遺漏。
+    setTimeout(() => { if(_whSearchDirty) whSetSearch(_whSearchInput, pos); }, 0);
+}
+function whSetSearch(v, pos, ev){
+    _whSearchInput = (v == null) ? '' : String(v);
+    if(_whComposing || (ev && ev.isComposing)){ _whSearchDirty = true; return; }   // 組字中：只記錄不重繪（重繪＝砍掉 IME 的編輯目標）
+    _whSearchDirty = false;
     renderWarehouseNPC(document.getElementById('interaction-content'));
     let el = document.getElementById('wh-search-input');
     if(el){
@@ -52,7 +72,12 @@ function whSetSearch(v, pos){
         try { let p = Math.min((pos == null ? el.value.length : pos), el.value.length); el.setSelectionRange(p, p); } catch(e){}
     }
 }
-function whClearSearch(){ whSetSearch('', 0); }
+function whClearSearch(){ _whComposing = false; _whSearchDirty = false; whSetSearch('', 0); }   // 清除鈕：一併重置組字旗標，避免殘留 true 使後續不重繪
+// ⚠️ composition 事件**沒有 inline handler 屬性**：HTML 規格的 GlobalEventHandlers 只涵蓋 oninput/onclick 那一批，
+//    `oncompositionstart=""` / `oncompositionend=""` 寫在標籤上瀏覽器會直接忽略（實測 handler 從未執行）→ 只能 addEventListener。
+//    又因面板每次重繪都會換掉輸入框元素，直接掛在元素上會隨重繪失效 → 改在 document 委派一次（composition 事件會冒泡），永久有效。
+document.addEventListener('compositionstart', e => { if (e.target && e.target.id === 'wh-search-input') whSearchCompStart(); });
+document.addEventListener('compositionend', e => { if (e.target && e.target.id === 'wh-search-input') whSearchCompEnd(e.target.value, e.target.selectionStart); });
 function whCategory(id){
     let d = DB.items[id];
     if(!d) return 'item';
@@ -504,7 +529,7 @@ function renderWarehouseNPC(div){
             </select>
             <span class="text-slate-500 text-xs">（存入／取出共用此分類）</span>
             <span class="text-slate-300 font-bold ms-2">搜尋：</span>
-            <input id="wh-search-input" type="search" placeholder="輸入 2 字以上" value="${_whEscAttr(_whSearchInput)}" oninput="whSetSearch(this.value, this.selectionStart)" title="輸入 2 字以上時，跨分類模糊搜尋背包與倉庫物品" class="w-44 bg-slate-900 border border-slate-600 text-white rounded h-8 px-2">
+            <input id="wh-search-input" type="search" placeholder="輸入 2 字以上" value="${_whEscAttr(_whSearchInput)}" oninput="whSetSearch(this.value, this.selectionStart, event)" title="輸入 2 字以上時，跨分類模糊搜尋背包與倉庫物品（支援注音等中文輸入法）" class="w-44 bg-slate-900 border border-slate-600 text-white rounded h-8 px-2">
             ${_whSearchInput ? '<button onclick="whClearSearch()" class="btn px-3 text-xs font-bold h-8 inline-flex items-center justify-center" title="清除搜尋">清除</button>' : ''}
             <span class="text-slate-300 font-bold ms-2">數量：</span>
             <input id="wh-qty-amt" type="number" min="1" placeholder="全部" value="${_whQtyInput}" oninput="whSetQty(this.value)" title="存入／取出的數量；留空或 0 ＝整疊全部（不再使用跳出式輸入框）" class="w-20 bg-slate-900 border border-slate-600 text-center text-white rounded h-8">

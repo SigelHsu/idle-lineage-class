@@ -1,6 +1,6 @@
 /** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.6.03';
+const GAME_VERSION = 'v3.6.16';
 // ===== 💾 存檔壓縮（LZString compressToUTF16/decompressFromUTF16·MIT, Pieroxy）：localStorage 內部以 UTF-16 壓縮，省 ~89%，繞過 5MB 上限 =====
 //  ⚠️ 只壓 localStorage（存檔位/倉庫/共用桶/_bak）；匯出檔維持明文 JSON（可攜·importSave 用 JSON.parse 驗證）。_lzGet 相容舊明文存檔（無 'LZ1:' 前綴→原樣回傳）。
 var LZString = (function () {
@@ -1975,7 +1975,7 @@ const DB = {
         "nm_022": { hard: true, n: "鋼鐵高崙", lv: 35, s: "L", beh: "主動", race: "高崙", e: "earth", hp: 650, ac: -18, mr: 50, exp: 1226, goldMin: 125, goldMax: 302, atkSpd: 3, dmg: [2, 49], db: 25, hit: 35 },
         "bandit_boss": { n: "強盜頭目", lv: 35, s: "S", beh: "主動", race: "強盜", e: "none", hp: 500, ac: -25, mr: 50, exp: 1226, goldMin: 185, goldMax: 302, atkSpd: 1.5, dmg: [1, 57], db: 6, hit: 43 },
         "evil_lizard": { n: "邪惡蜥蜴", lv: 36, s: "L", beh: "主動", race: "邪惡蜥蜴", e: "water", hp: 800, ac: -20, mr: 30, exp: 1297, goldMin: 165, goldMax: 365, atkSpd: 2, dmg: [2, 51], db: 26, hit: 37, mag: { skn: "石化噴吐", cd: 110, type: "stone", pbase: 100 } },
-        // 🔧 卡瑞：攜帶四樣任務道具時於龍之谷地監6樓 1% 機率出現（spawnMob 特殊判定·遭遇不消耗道具）；「擊殺」才 100% 掉屠龍劍並消耗四道具各一（🎮 v2.6.75 經典模式亦維持 100%·不受 ×1/10）
+        // 🔧 卡瑞：攜帶四樣任務道具時於龍之谷地監6樓 1% 機率出現（spawnMob 特殊判定·遭遇不消耗道具）；「擊殺」才 100% 掉屠龍劍並消耗四道具各一（🎮 v2.6.75 經典模式亦維持 100%）
         "kari": { hard: true, n: "卡瑞", lv: 52, s: "S", beh: "主動", race: "不死", un: true, e: "earth", boss: true, noAutoTeleport: true, hp: 3000, ac: -45, mr: 100, exp: 3000, goldMin: 1000, goldMax: 2000, atkSpd: 0.9, dmg: [3, 67], db: 21, hit: 76,   // 🔧 BOSS（但不觸發瞬移卷軸自動使用）
             mag:  { skn: "地面震裂", cd: 50, chance: 0.2, dmg: [4, 100], db: 99, ele: "earth" },                 // 每 5 秒判定，20% 機率施放：必中 4D100+99 地屬性魔法傷害
             mag2: { skn: "龍的一擊", cd: 70, dmg: [1, 100], db: 25, ele: "none", fixedDmg: true } },             // 每 7 秒：必中 1D100+25 無屬性固定傷害（不受屬抗/抗魔/減免影響）

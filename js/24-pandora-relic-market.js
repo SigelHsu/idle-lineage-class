@@ -245,6 +245,8 @@
             w.dismissedAt = w.dismissed ? Math.max(0, Math.floor(Number(w.dismissedAt) || 0)) : 0;
             w.broadcastStopped = !!w.broadcastStopped || w.dismissed;
             w.quietAt = Math.max(0, Math.floor(Number(w.quietAt) || 0));
+            w.playerBlocked = !!w.playerBlocked;
+            w.playerBlockedAt = w.playerBlocked ? Math.max(0, Math.floor(Number(w.playerBlockedAt) || 0)) : 0;
             return true;
         });
         delete st.wanderer;
@@ -350,6 +352,48 @@
         let a = _normalizeAlignmentValue(v);
         let evilLine = (typeof PVP_ALIGN_EVIL !== 'undefined') ? PVP_ALIGN_EVIL : -1000;
         return a <= evilLine;
+    }
+
+    function _tauntChaseRate(alignmentValue) {
+        let alignment = _normalizeAlignmentValue(alignmentValue);
+        let evilLine = (typeof PVP_ALIGN_EVIL !== 'undefined') ? PVP_ALIGN_EVIL : -1000;
+        let justiceLine = (typeof PVP_ALIGN_JUSTICE !== 'undefined') ? PVP_ALIGN_JUSTICE : 1000;
+        if (alignment <= evilLine) return 1;
+        if (alignment >= justiceLine) return 0.2;
+        return 0.5;
+    }
+
+    function _logWandererBlocked(w) {
+        if (typeof logSys !== 'function') return;
+        logSys('<span class="text-slate-400">你已被對方封鎖</span>');
+    }
+
+    function _startWandererChase(w) {
+        if (!w || typeof player === 'undefined' || !player || !player.cls) return false;
+        if (!Array.isArray(player.trollPlayers)) player.trollPlayers = [];
+        let old = player.trollPlayers.find(t => t && t.n === w.name);
+        let chase = {
+            n: w.name,
+            avatar: w.avatar || '男戰士',
+            alignmentValue: _normalizeAlignmentValue(w.alignmentValue),
+            until: Date.now() + 2 * 60 * 60 * 1000
+        };
+        if (old && Number.isFinite(Number(old.levelOffset))) chase.levelOffset = old.levelOffset;
+        player.trollPlayers = player.trollPlayers.filter(t => t && t.n !== w.name);
+        player.trollPlayers.push(chase);
+        try { if (typeof saveGame === 'function') saveGame(); } catch (e) {}
+        return true;
+    }
+
+    function _blockPlayerForWanderer(wandererId) {
+        return _withStateLock(st => {
+            let w = _findWanderer(st, wandererId);
+            if (!_wandererPresent(w)) return { commit: false, gone: true };
+            if (w.playerBlocked) return { commit: false, already: true, name: w.name };
+            w.playerBlocked = true;
+            w.playerBlockedAt = Date.now();
+            return { name: w.name };
+        });
     }
 
     function _makeAlignmentValue(st) {
@@ -971,6 +1015,10 @@
             renderWanderBroadcastPins(st);
             return;
         }
+        if (w.playerBlocked) {
+            _logWandererBlocked(w);
+            return;
+        }
         let choices = _buildOfflineTauntChoices(w);
         _activeTauntChoices = { wandererId: w.id, choices: choices, createdAt: Date.now() };
         let menu = document.createElement('div');
@@ -997,6 +1045,10 @@
             renderWanderBroadcastPins(st);
             return;
         }
+        if (w.playerBlocked) {
+            _logWandererBlocked(w);
+            return;
+        }
         if (!choice) {
             if (typeof logSys === 'function') logSys('<span class="text-slate-400">嘲諷選項已失效，請重新點選這名玩家。</span>');
             return;
@@ -1011,6 +1063,21 @@
                 `<span class="wander-chat-in"><span class="wander-chat-speaker">[${_wandererNameHtml(w)}]</span> ` +
                 `${_esc(reply)}</span>`
             );
+        }
+        if (Math.random() < _tauntChaseRate(w.alignmentValue)) {
+            if (_startWandererChase(w) && typeof logSys === 'function') {
+                logSys(`<span class="text-rose-400 font-bold">[${_wandererNameHtml(w)}] 惡狠狠地記住了你……</span>`);
+            }
+            return;
+        }
+        if (Math.random() < 0.2) {
+            let blockResult = _blockPlayerForWanderer(w.id);
+            if (blockResult.ok || blockResult.already) {
+                w.playerBlocked = true;
+                _logWandererBlocked(w);
+            } else if (!blockResult.gone && typeof logSys === 'function') {
+                logSys(`<span class="text-slate-400">${_esc(blockResult.error || '共用資料暫時忙碌，封鎖狀態未能儲存。')}</span>`);
+            }
         }
     }
 
@@ -1035,6 +1102,11 @@
         let w = _findWanderer(st, wandererId);
         if (!_wandererPresent(w)) {
             _closeWanderingShoutMenu();
+            return;
+        }
+        if (w.playerBlocked) {
+            _closeWanderingShoutMenu();
+            _logWandererBlocked(w);
             return;
         }
         let forceSpicy = _isEvilAlignmentValue(w.alignmentValue);
@@ -1064,12 +1136,8 @@
             );
         }
         // 😤 白目玩家系統：NPC 嗆聲回覆→正式版 20% 記仇；若叫賣者是紅名，玩家選「吵死了」必定反嗆並追殺。
-        if (_reply.spicy && (forceSpicy || TEST_BUILD || Math.random() < 0.2) && typeof player !== "undefined" && player && player.cls) {   // 🧪 TEST版：回嗆必定記仇（正式版 20%；紅名 100%）
-            if (!player.trollPlayers) player.trollPlayers = [];
-            player.trollPlayers = player.trollPlayers.filter(t => t && t.n !== w.name);
-            player.trollPlayers.push({ n: w.name, avatar: w.avatar || "男戰士", alignmentValue: _normalizeAlignmentValue(w.alignmentValue), until: Date.now() + 2 * 60 * 60 * 1000 });
+        if (_reply.spicy && (forceSpicy || TEST_BUILD || Math.random() < 0.2) && _startWandererChase(w)) {   // 🧪 TEST版：回嗆必定記仇（正式版 20%；紅名 100%）
             if (typeof logSys === "function") logSys(`<span class="text-rose-400 font-bold">[${_wandererNameHtml(w)}] 惡狠狠地記住了你……</span>`);
-            try { if (typeof saveGame === "function") saveGame(); } catch (e) {}
         }
     }
 

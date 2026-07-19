@@ -353,7 +353,10 @@ function tick() {
         if (_mpDue) _regenMP();
         if ((_hpDue || _mpDue) && typeof updateUI === 'function') updateUI();
     }
-    if (state.ticks % 10 === 0) siegeTick();   // 攻城戰：每秒檢查時限
+    if (state.ticks % 10 === 0) {
+        siegeTick();   // 攻城戰：每秒檢查時限
+        pvpPostKillWhisperTick();   // PVP：擊敗玩家後的一小時限時密語
+    }
     if (state.ticks % 100 === 0) { try { refreshPandoraMarket(false); } catch (e) {} }   // 🔧 潘朵拉黑市：每 10 秒檢查是否到 10 分鐘換商品（含稀有公告）
     if (state._junkSellAt == null) state._junkSellAt = state.ticks + JUNK_AUTOSELL_TICKS;   // 🗑️ 自動賣廢品倒數：預設 10 秒（JUNK_AUTOSELL_TICKS）
     if (state.ticks >= state._junkSellAt) { try { if (typeof autoSellJunk === 'function' && (!player || player.autoSellOn !== false)) autoSellJunk(); } catch (e) {} state._junkSellAt = state.ticks + JUNK_AUTOSELL_TICKS; }   // 🗑️ 倒數到→若「自動賣出」開啟(player.autoSellOn!==false·預設開)則賣出標示為廢品的物品並重新排程 10 秒；停止賣出時只重排程不賣。玩家手動標示廢品會把此時間往後推 10 秒（_bumpJunkSellTimer）。⚠️自動路徑 autoSellJunk() 不 saveGame（效能·靠其他存檔點落地）
@@ -798,6 +801,12 @@ const PVP_ALIGN_JUSTICE = 1000;
 const PVP_REVENGE_COST = 100000;
 const PVP_REVENGE_MAX = 20;
 const PVP_WILD_CHANCE = 0.01;
+const PVP_KILL_WHISPER_LIFE_MS = 60 * 60 * 1000;
+const PVP_KILL_WHISPER_INTERVAL_MS = 10 * 60 * 1000;
+const PVP_KILL_WHISPER_CHANCE = 0.20;
+const PVP_KILL_WHISPER_REVENGE_CHANCE = 0.50;
+const PVP_KILL_WHISPER_REVENGE_MAX = 3;
+const PVP_KILL_WHISPER_RECORD_MAX = 20;
 const PVP_AVATARS = Object.keys(TROLL_CLASS_BY_AVATAR);
 const PVP_NAME_HEAD = ['煞氣ㄟ', '最愛', '闇の', '破滅', '終焉', '霸氣', '覺醒', '無敵', '爆裂', '狂氣', '孤高', '夜月', '紅名', '藍名', '天堂', '亞丁', '奇岩', '海音', '肯特', '風木', '沉默', '法書', '祝武', '祝防', '掛網', '回卷', '勇水', '白水'];
 const PVP_NAME_CORE = ['刀神', '法皇', '妖弓', '黑妖', '龍騎', '戰王', '王子', '公主', '盟主', '騎士', '補師', '歐洲人', '倉庫王', '紅水仔', '打寶哥', '奇岩王', '海音霸主', '肯特劍魂', '風木狂人', '傲塔住民', '古魯丁路霸', '說島老手'];
@@ -805,6 +814,24 @@ const PVP_NAME_TAIL = ['前輩', '之夢', '公主', '王子', '大人', 'さま
 function pvpClampAlignment(v) {
     v = Math.round(Number(v) || 0);
     return Math.max(PVP_ALIGN_MIN, Math.min(PVP_ALIGN_MAX, v));
+}
+function _pvpNormalizeKillWhisperRecord(raw) {
+    if (!raw || !raw.n) return null;
+    let whisperSeq = Math.max(0, Math.floor(Number(raw.whisperSeq) || 0));
+    let revengeCount = Math.max(0, Math.min(PVP_KILL_WHISPER_REVENGE_MAX, Math.floor(Number(raw.revengeCount) || 0)));
+    return {
+        n: String(raw.n).slice(0, 24),
+        avatar: TROLL_CLASS_BY_AVATAR[raw.avatar] ? raw.avatar : '男戰士',
+        alignmentValue: pvpClampAlignment(raw.alignmentValue),
+        levelOffset: Number.isFinite(Number(raw.levelOffset)) ? Math.max(-10, Math.min(10, Math.round(Number(raw.levelOffset)))) : undefined,
+        revengeCount: revengeCount,
+        awaitingRevenge: revengeCount < PVP_KILL_WHISPER_REVENGE_MAX && !!raw.awaitingRevenge,
+        expiresAt: Math.max(0, Math.floor(Number(raw.expiresAt) || 0)),
+        nextCheckAt: Math.max(0, Math.floor(Number(raw.nextCheckAt) || 0)),
+        whisperSeq: whisperSeq,
+        repliedSeq: Math.max(0, Math.min(whisperSeq, Math.floor(Number(raw.repliedSeq) || 0))),
+        updatedAt: Math.max(0, Math.floor(Number(raw.updatedAt) || 0))
+    };
 }
 function pvpEnsureState() {
     if (!player || !player.cls) return;
@@ -815,9 +842,20 @@ function pvpEnsureState() {
         n: String(r.n).slice(0, 24),
         avatar: TROLL_CLASS_BY_AVATAR[r.avatar] ? r.avatar : '男戰士',
         alignmentValue: pvpClampAlignment(r.alignmentValue),
+        levelOffset: Number.isFinite(Number(r.levelOffset)) ? Math.max(-10, Math.min(10, Math.round(Number(r.levelOffset)))) : undefined,
         deaths: Math.max(1, Number(r.deaths) || 1),
         t: Number(r.t) || Date.now()
     }));
+    let whisperByName = Object.create(null);
+    (Array.isArray(player.pvpKillWhispers) ? player.pvpKillWhispers : []).forEach(raw => {
+        let rec = _pvpNormalizeKillWhisperRecord(raw);
+        if (!rec) return;
+        if (!whisperByName[rec.n] || rec.updatedAt >= whisperByName[rec.n].updatedAt) whisperByName[rec.n] = rec;
+    });
+    player.pvpKillWhispers = Object.keys(whisperByName)
+        .map(n => whisperByName[n])
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, PVP_KILL_WHISPER_RECORD_MAX);
 }
 function pvpAlignmentKind(v) {
     v = pvpClampAlignment(v);
@@ -894,6 +932,16 @@ function pvpRandomName() {
 function pvpRandomAlignment() {
     return pvpClampAlignment(Math.floor(PVP_ALIGN_MIN + Math.random() * (PVP_ALIGN_MAX - PVP_ALIGN_MIN + 1)));
 }
+function pvpRandomLevelOffset() {
+    return Math.floor(Math.random() * 21) - 10;
+}
+function pvpResolveLevelOffset(entry) {
+    let offset = Number(entry && entry.levelOffset);
+    if (!Number.isFinite(offset)) offset = pvpRandomLevelOffset();
+    offset = Math.max(-10, Math.min(10, Math.round(offset)));
+    if (entry) entry.levelOffset = offset;
+    return offset;
+}
 function pvpCreateRandomOpponent(onFieldNames) {
     let tries = 0, n = '';
     do { n = pvpRandomName(); tries++; } while (onFieldNames && onFieldNames.includes(n) && tries < 8);
@@ -901,6 +949,7 @@ function pvpCreateRandomOpponent(onFieldNames) {
         n: n,
         avatar: PVP_AVATARS[Math.floor(Math.random() * PVP_AVATARS.length)] || '男戰士',
         alignmentValue: pvpRandomAlignment(),
+        levelOffset: pvpRandomLevelOffset(),
         pvpRandom: true
     };
 }
@@ -908,16 +957,65 @@ function pvpMarkForChase(entry) {
     if (!entry || !entry.n) return;
     pvpEnsureState();
     if (!Array.isArray(player.trollPlayers)) player.trollPlayers = [];
+    let old = player.trollPlayers.find(t => t && t.n === entry.n);
+    if (!Number.isFinite(Number(entry.levelOffset)) && old && Number.isFinite(Number(old.levelOffset))) {
+        entry.levelOffset = old.levelOffset;
+    }
     let rec = {
         n: String(entry.n).slice(0, 24),
         avatar: TROLL_CLASS_BY_AVATAR[entry.avatar] ? entry.avatar : '男戰士',
         alignmentValue: pvpClampAlignment(entry.alignmentValue),
+        levelOffset: pvpResolveLevelOffset(entry),
+        revengeCount: Math.max(0, Math.min(PVP_KILL_WHISPER_REVENGE_MAX, Math.floor(Number(entry.revengeCount) || 0))),
         pvpRevenge: true,
         noExpire: true,
         until: Date.now() + 3650 * 24 * 60 * 60 * 1000
     };
     player.trollPlayers = player.trollPlayers.filter(t => t && t.n !== rec.n);
     player.trollPlayers.push(rec);
+}
+function pvpTrollLevelOverride(entry) {
+    let siegeLevel = Number(entry && entry.siegeLevel);
+    if (Number.isFinite(siegeLevel)) return siegeLevel;
+    let revengeCount = Math.max(0, Math.min(PVP_KILL_WHISPER_REVENGE_MAX, Math.floor(Number(entry && entry.revengeCount) || 0)));
+    let playerLevel = Math.max(1, Math.round(Number(player.lv) || 1));
+    return Math.max(1, playerLevel + pvpResolveLevelOffset(entry) + revengeCount * 3);
+}
+function pvpRegisterKillWhisper(mob) {
+    if (!mob || !mob.trollPlayer || mob._siegePlayer || !mob.n || !player || !player.cls) return;
+    pvpEnsureState();
+    let now = Date.now();
+    let list = player.pvpKillWhispers || [];
+    let rec = list.find(entry => entry && entry.n === mob.n);
+    if (!rec) {
+        rec = {
+            n: String(mob.n).slice(0, 24),
+            avatar: '男戰士',
+            alignmentValue: 0,
+            levelOffset: pvpRandomLevelOffset(),
+            revengeCount: 0,
+            awaitingRevenge: false,
+            expiresAt: 0,
+            nextCheckAt: 0,
+            whisperSeq: 0,
+            repliedSeq: 0,
+            updatedAt: now
+        };
+    }
+    rec.avatar = TROLL_CLASS_BY_AVATAR[mob._pvpAvatar] ? mob._pvpAvatar : '男戰士';
+    rec.alignmentValue = pvpClampAlignment(mob._pvpAlignment || 0);
+    if (Number.isFinite(Number(mob._pvpLevelOffset))) rec.levelOffset = pvpResolveLevelOffset({ levelOffset: mob._pvpLevelOffset });
+    rec.awaitingRevenge = false;
+    rec.repliedSeq = rec.whisperSeq;
+    rec.updatedAt = now;
+    if (rec.revengeCount >= PVP_KILL_WHISPER_REVENGE_MAX) {
+        rec.expiresAt = now;
+        rec.nextCheckAt = 0;
+    } else {
+        rec.expiresAt = now + PVP_KILL_WHISPER_LIFE_MS;
+        rec.nextCheckAt = now + PVP_KILL_WHISPER_INTERVAL_MS;
+    }
+    player.pvpKillWhispers = [rec].concat(list.filter(entry => entry && entry.n !== rec.n)).slice(0, PVP_KILL_WHISPER_RECORD_MAX);
 }
 function pvpAddRevengeFromMob(mob) {
     if (!mob || !mob.trollPlayer || !mob.n) return;
@@ -930,10 +1028,18 @@ function pvpAddRevengeFromMob(mob) {
     if (old) {
         old.avatar = avatar;
         old.alignmentValue = align;
+        if (Number.isFinite(Number(mob._pvpLevelOffset))) old.levelOffset = pvpResolveLevelOffset({ levelOffset: mob._pvpLevelOffset });
         old.deaths = (old.deaths || 1) + 1;
         old.t = Date.now();
     } else {
-        list.unshift({ n: mob.n, avatar: avatar, alignmentValue: align, deaths: 1, t: Date.now() });
+        list.unshift({
+            n: mob.n,
+            avatar: avatar,
+            alignmentValue: align,
+            levelOffset: Number.isFinite(Number(mob._pvpLevelOffset)) ? pvpResolveLevelOffset({ levelOffset: mob._pvpLevelOffset }) : pvpRandomLevelOffset(),
+            deaths: 1,
+            t: Date.now()
+        });
     }
     player.pvpRevengeList = list.slice(0, PVP_REVENGE_MAX);
 }
@@ -950,6 +1056,7 @@ function pvpOnKillMob(mob) {
         let a = pvpClampAlignment(mob._pvpAlignment || 0);
         if (a >= PVP_ALIGN_JUSTICE) pvpChangeAlignment(-3000);
         else if (a > PVP_ALIGN_EVIL) pvpChangeAlignment(-500);
+        pvpRegisterKillWhisper(mob);
         if (player.pvpRevengeList && player.pvpRevengeList.length) {
             let _n0 = player.pvpRevengeList.length;
             player.pvpRevengeList = player.pvpRevengeList.filter(r => r && r.n !== mob.n);
@@ -973,6 +1080,75 @@ const TROLL_ENCOUNTER_NPC_TAUNTS = [
     '來 PK 啊，誰飛誰孬', '你先想好墓碑要寫什麼', '你的勇水喝到膽子上了？', '這區我包了，你旁邊蹲', '笑你不敢貼身', '你那傷害像沒點蠟燭',
     '別演強者了，大家都在看', '我在這等你掉經驗', '你回村路線我都幫你排好了', '打我之前先買保險', '你這套話術我昨天殺過'
 ];
+const PVP_KILL_WHISPER_LINES = [
+    '剛剛那場只是你運氣好，有種再遇一次。',
+    '撿到一次尾刀就以為自己很強？',
+    '我剛才網路延遲，再碰到你就知道。',
+    '先別急著得意，我補完紅水就回去。',
+    '剛才我沒開變身，重來你就躺。',
+    '裝備先別收，我等等親自拿回來。',
+    '你那最後一下我記住了。',
+    '剛才是我按錯回卷，不然躺的是你。',
+    '敢不敢離開安全區再打一場？',
+    '你最好祈禱下次先看到我。',
+    '剛才旁邊怪太多，別把那場當實力。',
+    '笑得很大聲嘛，等等別先飛。',
+    '我已經記住你的練功路線了。',
+    '贏一場就在頻道裝高手喔？',
+    '剛才只是讓你，下次不會了。',
+    '紅水買滿了嗎？我可不想你又找理由。',
+    '你的名字我先記著，這件事還沒完。',
+    '別急著下線，我很快就會找到你。',
+    '那一下很痛是不是？等等換你試試。',
+    '你以為回村就結束了？想太多。'
+];
+const PVP_KILL_WHISPER_PLAYER_REPLIES = [
+    '躺在地上的人話還這麼多？',
+    '先把噴掉的自尊撿回來再密。',
+    '要來就來，別只會躲在密語裡。',
+    '剛才地板舒服嗎？還想再躺一次？',
+    '理由很多，勝負畫面只有一個。',
+    '你補多少紅水都補不回那場面子。',
+    '別急，我原地等你回來送。',
+    '網路延遲會讓你嘴巴變快喔？',
+    '下次記得先買回卷，至少跑得掉。',
+    '我還以為你下線了，原來在打字。',
+    '再來一次也只是多一個趣味結局。',
+    '你不是來尋仇，是來補我的擊殺數。',
+    '裝備修好了再來，嘴巴不用修。',
+    '位置報給你了，敢不敢真的出現？',
+    '先練等吧，你現在只適合練嘴。',
+    '剛才那場不夠清楚，要不要再示範？',
+    '你慢慢找理由，我先繼續打怪。',
+    '輸家密語這麼勤，戰鬥倒是挺快結束。'
+];
+const PVP_KILL_WHISPER_REVENGE_REPLIES = [
+    '很好，這句我記住了，你等著。',
+    '有種別換圖，我現在就去找你。',
+    '嘴硬是吧？等我抓到你就知道。',
+    '座標不用報，我自己查得到。',
+    '行，紅水帶滿，我馬上回來。',
+    '你成功惹到我了，這次別想飛。',
+    '先別下線，我的回卷已經撕了。',
+    '很好笑嗎？等等換我看你躺。',
+    '我最喜歡嘴硬的，等著收密語。',
+    '這句算你下的戰帖，我接了。'
+];
+const PVP_KILL_WHISPER_DISMISS_REPLIES = [
+    '算了，跟你浪費時間。',
+    '你慢慢得意，我懶得理你。',
+    '嘴成這樣也沒比較強，先這樣。',
+    '今天先放你一馬，別想太多。',
+    '我還有事，沒空陪你打字。',
+    '你就繼續在頻道自我安慰吧。',
+    '算你會嘴，下次再說。',
+    '我去練等了，你慢慢回味。',
+    '懶得跟你爭，當你贏兩次。',
+    '先不找你，不代表這場算了。'
+];
+let _pvpKillWhisperMenu = null;
+let _pvpKillWhisperMenuHandler = null;
+let _pvpKillWhisperChoiceState = null;
 function _trollEncounterPick(list) {
     return list[Math.floor(Math.random() * list.length)] || '';
 }
@@ -987,10 +1163,152 @@ function logTrollEncounterTrashTalk(name) {
     logSys(`<span class="wander-chat-out"><span class="wander-chat-arrow">-&gt;</span> <span class="wander-chat-target">[${_name}]</span> ${_trollEncounterEsc(_trollEncounterPick(TROLL_ENCOUNTER_PLAYER_TAUNTS))}</span>`);
     logSys(`<span class="wander-chat-in"><span class="wander-chat-speaker">[${_name}]</span> ${_trollEncounterEsc(_trollEncounterPick(TROLL_ENCOUNTER_NPC_TAUNTS))}</span>`);
 }
+function _pvpKillWhisperRecord(name) {
+    pvpEnsureState();
+    return (player.pvpKillWhispers || []).find(rec => rec && rec.n === name) || null;
+}
+function _pvpKillWhisperArg(name) {
+    return encodeURIComponent(String(name || '')).replace(/'/g, '%27');
+}
+function _pvpKillWhisperTestBuild() {
+    return !!(typeof window !== 'undefined' && window.__FB5_TEST_BUILD);
+}
+function _pvpKillWhisperPickThree() {
+    let pool = PVP_KILL_WHISPER_PLAYER_REPLIES.slice();
+    for (let i = pool.length - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * (i + 1));
+        let tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    return pool.slice(0, 3);
+}
+function _pvpKillWhisperLog(rec) {
+    if (!rec || typeof logSys !== 'function') return;
+    let arg = _pvpKillWhisperArg(rec.n);
+    let name = pvpNameHtml(rec.n, rec.alignmentValue, 'font-bold');
+    let line = _trollEncounterPick(PVP_KILL_WHISPER_LINES);
+    logSys(
+        `<span class="wander-chat-in"><button type="button" class="pvp-kill-whisper-name" ` +
+        `onclick="openPvpKillWhisperMenu(decodeURIComponent('${arg}'),${rec.whisperSeq},event)">[${name}]</button> ` +
+        `${_trollEncounterEsc(line)}</span>`
+    );
+}
+function pvpPostKillWhisperTick() {
+    if (!player || !player.cls) return;
+    pvpEnsureState();
+    let now = Date.now();
+    let changed = false;
+    (player.pvpKillWhispers || []).forEach(rec => {
+        if (!rec || rec.revengeCount >= PVP_KILL_WHISPER_REVENGE_MAX || rec.awaitingRevenge) return;
+        if (!rec.nextCheckAt || now < rec.nextCheckAt || now >= rec.expiresAt) return;
+        let dueCount = 1 + Math.floor((now - rec.nextCheckAt) / PVP_KILL_WHISPER_INTERVAL_MS);
+        let remainingChecks = Math.max(0, Math.ceil((rec.expiresAt - rec.nextCheckAt) / PVP_KILL_WHISPER_INTERVAL_MS));
+        dueCount = Math.min(dueCount, remainingChecks);
+        if (dueCount <= 0) return;
+        rec.nextCheckAt += dueCount * PVP_KILL_WHISPER_INTERVAL_MS;
+        rec.updatedAt = now;
+        changed = true;
+        let combinedChance = 1 - Math.pow(1 - PVP_KILL_WHISPER_CHANCE, dueCount);
+        if (_pvpKillWhisperTestBuild() || Math.random() < combinedChance) {
+            rec.whisperSeq += 1;
+            _pvpKillWhisperLog(rec);
+        }
+    });
+    if (changed) {
+        try { if (typeof saveGame === 'function') saveGame(); } catch (e) {}
+    }
+}
+function _closePvpKillWhisperMenu() {
+    if (_pvpKillWhisperMenu && _pvpKillWhisperMenu.parentNode) _pvpKillWhisperMenu.parentNode.removeChild(_pvpKillWhisperMenu);
+    _pvpKillWhisperMenu = null;
+    _pvpKillWhisperChoiceState = null;
+    if (_pvpKillWhisperMenuHandler) {
+        try { document.removeEventListener('click', _pvpKillWhisperMenuHandler); } catch (e) {}
+        _pvpKillWhisperMenuHandler = null;
+    }
+}
+function _mountPvpKillWhisperMenu(menu, ev) {
+    document.body.appendChild(menu);
+    let x = ev && Number.isFinite(ev.clientX) ? ev.clientX : Math.round(window.innerWidth / 2);
+    let y = ev && Number.isFinite(ev.clientY) ? ev.clientY : Math.round(window.innerHeight / 2);
+    let rect = menu.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(x, window.innerWidth - rect.width - 8)) + 'px';
+    menu.style.top = Math.max(8, Math.min(y + 8, window.innerHeight - rect.height - 8)) + 'px';
+    _pvpKillWhisperMenu = menu;
+    setTimeout(() => {
+        if (_pvpKillWhisperMenu !== menu) return;
+        _pvpKillWhisperMenuHandler = e => {
+            if (!_pvpKillWhisperMenu || !_pvpKillWhisperMenu.contains(e.target)) _closePvpKillWhisperMenu();
+        };
+        document.addEventListener('click', _pvpKillWhisperMenuHandler);
+    }, 0);
+}
+function openPvpKillWhisperMenu(name, whisperSeq, ev) {
+    if (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+    }
+    _closePvpKillWhisperMenu();
+    let rec = _pvpKillWhisperRecord(name);
+    let now = Date.now();
+    whisperSeq = Math.max(0, Math.floor(Number(whisperSeq) || 0));
+    if (!rec || rec.revengeCount >= PVP_KILL_WHISPER_REVENGE_MAX || rec.awaitingRevenge ||
+        now >= rec.expiresAt || rec.whisperSeq !== whisperSeq || rec.repliedSeq >= whisperSeq) {
+        if (typeof logSys === 'function') logSys('<span class="text-slate-400">這則密語已無法回覆。</span>');
+        return;
+    }
+    let choices = _pvpKillWhisperPickThree();
+    _pvpKillWhisperChoiceState = { name: rec.n, whisperSeq: whisperSeq, choices: choices, createdAt: now };
+    let arg = _pvpKillWhisperArg(rec.n);
+    let menu = document.createElement('div');
+    menu.id = 'pvp-kill-whisper-menu';
+    menu.className = 'pvp-kill-whisper-menu';
+    menu.innerHTML =
+        `<div class="pvp-kill-whisper-heading">選一句回 ${pvpNameHtml(rec.n, rec.alignmentValue, 'font-bold')}</div>` +
+        choices.map((line, index) =>
+            `<button type="button" onclick="pvpReplyToKillWhisper(decodeURIComponent('${arg}'),${whisperSeq},${index})">${_trollEncounterEsc(line)}</button>`
+        ).join('');
+    _mountPvpKillWhisperMenu(menu, ev);
+}
+function pvpReplyToKillWhisper(name, whisperSeq, choiceIndex) {
+    let active = _pvpKillWhisperChoiceState;
+    let line = active && active.name === name && active.whisperSeq === whisperSeq && Date.now() - active.createdAt < 5 * 60 * 1000
+        ? active.choices[Math.max(0, Math.floor(Number(choiceIndex) || 0))]
+        : '';
+    _closePvpKillWhisperMenu();
+    let rec = _pvpKillWhisperRecord(name);
+    let now = Date.now();
+    if (!line || !rec || rec.revengeCount >= PVP_KILL_WHISPER_REVENGE_MAX || rec.awaitingRevenge ||
+        now >= rec.expiresAt || rec.whisperSeq !== whisperSeq || rec.repliedSeq >= whisperSeq) {
+        if (typeof logSys === 'function') logSys('<span class="text-slate-400">這則密語已無法回覆。</span>');
+        return;
+    }
+    rec.repliedSeq = whisperSeq;
+    rec.updatedAt = now;
+    let nameHtml = pvpNameHtml(rec.n, rec.alignmentValue, 'font-bold');
+    if (typeof logSys === 'function') {
+        logSys(`<span class="wander-chat-out"><span class="wander-chat-arrow">-&gt;</span> <span class="wander-chat-target">[${nameHtml}]</span> ${_trollEncounterEsc(line)}</span>`);
+    }
+    let seeksRevenge = _pvpKillWhisperTestBuild() || Math.random() < PVP_KILL_WHISPER_REVENGE_CHANCE;
+    if (seeksRevenge) {
+        rec.revengeCount = Math.min(PVP_KILL_WHISPER_REVENGE_MAX, rec.revengeCount + 1);
+        rec.awaitingRevenge = true;
+        rec.expiresAt = now;
+        rec.nextCheckAt = 0;
+        pvpMarkForChase(rec);
+        if (typeof logSys === 'function') {
+            logSys(`<span class="wander-chat-in"><span class="wander-chat-speaker">[${nameHtml}]</span> ${_trollEncounterEsc(_trollEncounterPick(PVP_KILL_WHISPER_REVENGE_REPLIES))}</span>`);
+            let last = rec.revengeCount >= PVP_KILL_WHISPER_REVENGE_MAX;
+            logSys(`<span class="text-rose-400 font-bold">${last ? '這是對方第 3 次也是最後一次尋仇；之後不再密語。' : `對方再次開始追殺你（尋仇 ${rec.revengeCount} / ${PVP_KILL_WHISPER_REVENGE_MAX}）。`}</span>`);
+        }
+    } else if (typeof logSys === 'function') {
+        logSys(`<span class="wander-chat-in"><span class="wander-chat-speaker">[${nameHtml}]</span> ${_trollEncounterEsc(_trollEncounterPick(PVP_KILL_WHISPER_DISMISS_REPLIES))}</span>`);
+    }
+    try { if (typeof saveGame === 'function') saveGame(); } catch (e) {}
+}
 function applyTrollScaling(mob, levelOverride) {
     let requested = Number(levelOverride);
-    let L = Number.isFinite(requested) ? Math.round(requested) : player.lv + 5;
-    L = Math.min(100, Math.max(1, L));
+    let L = Number.isFinite(requested) ? Math.round(requested) : Math.round(Number(player.lv) || 1) + pvpRandomLevelOffset();
+    L = Math.max(1, L);
     let s = mob.scale || {};
     mob.lv = L;
     mob.hp = (s.hpC || 12) * L; mob.curHp = mob.hp;
@@ -1098,7 +1416,7 @@ function spawnMob(idx) {
             let _onF = mapState.mobs.filter(m => m).map(m => m.n);
             let _siegePvp = pvpCreateRandomOpponent(_onF);
             _siegePvp.siegePlayer = true;
-            _siegePvp.siegeLevel = Math.min(100, Math.max(1, player.lv + Math.floor(Math.random() * 21) - 10));
+            _siegePvp.siegeLevel = Math.max(1, player.lv + Math.floor(Math.random() * 21) - 10);
             mobId = TROLL_CLASS_BY_AVATAR[_siegePvp.avatar] || 'troll_warrior';
             mapState._trollSpawn = _siegePvp;
         }
@@ -1172,11 +1490,12 @@ function spawnMob(idx) {
     if(base.pledgeEnemy) applyPledgeEnemyScaling(mapState.mobs[idx]);   // 血盟敵人：依玩家等級縮放
     if(base.trollPlayer) {   // 😤 白目玩家：等級縮放＋名稱=叫賣NPC本人＋戰鬥動態=玩家職業動畫（v3.5.64·assets/anim/玩家<avatar>·從職業動畫產出·idle/attack/hurt/death/skill＋_s 影子全套·動態註冊 MOB_ANIM_ALIAS 真共用）
         let _t = mapState._trollSpawn;
-        applyTrollScaling(mapState.mobs[idx], _t && _t.siegeLevel);
+        applyTrollScaling(mapState.mobs[idx], pvpTrollLevelOverride(_t));
         if (_t) {
             mapState.mobs[idx].n = _t.n;
             mapState.mobs[idx]._pvpAlignment = pvpClampAlignment(_t.alignmentValue);
             mapState.mobs[idx]._pvpAvatar = TROLL_CLASS_BY_AVATAR[_t.avatar] ? _t.avatar : "男戰士";
+            mapState.mobs[idx]._pvpLevelOffset = pvpResolveLevelOffset(_t);
             mapState.mobs[idx]._pvpRandom = !!_t.pvpRandom;
             mapState.mobs[idx]._pvpRevenge = !!_t.pvpRevenge;
             if (_t.siegePlayer) {

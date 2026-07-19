@@ -696,7 +696,6 @@ function openSiegeSelect(faction, targetEl) {
     if (!clan) { alert('你尚未加入血盟，無法宣布攻城戰。'); return; }
     if (typeof clanCanSiege === 'function' && !clanCanSiege(player)) { alert('此模式沒有創立血盟的王族，無法攻城。'); return; }
     if (s.active) { alert('攻城戰正在進行中！'); return; }
-    if (player.lv < 40) { alert('需要等級 40 以上才能宣布攻城戰。'); return; }   // ⚔️ v3.6.01 攻城冷卻取消（用戶拍板）：勝負皆可立即再宣戰
     faction = clan.faction;
     let held = (typeof clanGetCastleCity === 'function') ? clanGetCastleCity(player) : null;
     let choice = (city, label, style) => held === city
@@ -726,7 +725,7 @@ function startSiege(faction, city) {
     if (!clan) { alert('你尚未加入血盟，無法宣布攻城戰。'); return; }
     if (typeof clanCanSiege === 'function' && !clanCanSiege(player)) { alert('此模式沒有創立血盟的王族，無法攻城。'); return; }
     if (s.active) { alert('攻城戰正在進行中！'); return; }
-    if (player.lv < 40) { alert('需要等級 40 以上才能宣布攻城戰。'); return; }   // ⚔️ v3.6.01 攻城冷卻取消（用戶拍板）
+    // ⚔️ v3.6.05 等級限制取消（用戶拍板·原 Lv40 門檻）：與 v3.6.01 的冷卻取消一致，攻城不再有任何前置條件
     if (typeof clanGetCastleCity === 'function' && clanGetCastleCity(player) === city) { alert(`你的血盟目前已持有${cfg.name}。`); return; }
     if (!confirm(`確定要對【${cfg.name}】宣戰嗎？限時 30 分鐘。`)) return;
     let accCdUntil = Number(s.accCdUntil) || 0;

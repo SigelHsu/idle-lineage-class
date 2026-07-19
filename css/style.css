@@ -2835,6 +2835,53 @@ button.classic-skill-cell { cursor:pointer; }
 .wander-chat-target { color: #d8c79e; font-weight: 700; }
 .wander-chat-in { color: #ddd6d0; }
 .wander-chat-speaker { color: #c8b9ee; font-weight: 700; }
+.pvp-kill-whisper-name {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    line-height: inherit;
+    cursor: pointer;
+}
+.pvp-kill-whisper-name:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.pvp-kill-whisper-menu {
+    position: fixed;
+    z-index: 261;
+    width: min(340px, calc(100vw - 16px));
+    padding: 4px;
+    border: 1px solid #9f4d52;
+    border-radius: 3px;
+    background: rgba(36, 30, 33, .98);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .72);
+}
+.pvp-kill-whisper-heading {
+    padding: 7px 10px 8px;
+    border-bottom: 1px solid rgba(190, 83, 91, .34);
+    color: #b8afa5;
+    font-size: 11px;
+    line-height: 1.35;
+}
+.pvp-kill-whisper-menu button {
+    width: 100%;
+    padding: 9px 11px;
+    border: 0;
+    background: transparent;
+    color: #eadfdb;
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: left;
+    white-space: normal;
+    cursor: pointer;
+}
+.pvp-kill-whisper-menu button:hover {
+    background: rgba(153, 63, 70, .24);
+    color: #ffd2d5;
+}
 /* 🏘️ v3.2.88 NPC 功能改成與倉庫相同的「浮動視窗」：position:fixed 脫離會塌陷的 town-view(不再點了沒顯示)·z-index 73 高於動態 sprite 圖層(map z:1) 與倉庫(72) */
 #town-interaction-container:not(.hidden) {
     position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
