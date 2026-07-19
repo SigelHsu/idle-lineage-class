@@ -2032,6 +2032,62 @@ function _playerMorphRemove() {
     if (_pmState.el) { try { _pmState.el.remove(); } catch (e) {} }
     _pmState.el = null; _pmState.imgs = null; _pmState.act = null; _pmState.name = null; _pmState.prevHp = null; _pmState.pendAtk = false;
 }
+function _playerCastleCrownOn() {
+    try {
+        if (typeof siegeVictoryActive !== 'function' || !siegeVictoryActive()) return false;
+        return !!(player && (player.cls === 'royal' || player.avatar === '王子' || player.avatar === '公主'));
+    } catch (e) { return false; }
+}
+let _playerBattleCrownBoxCache = {};
+function _playerBattleCrownBox(img) {
+    if (!img || !img.complete || !(img.naturalWidth > 0) || !(img.naturalHeight > 0)) return null;
+    let src = img.currentSrc || img.src || '';
+    if (src && _playerBattleCrownBoxCache[src]) return _playerBattleCrownBoxCache[src];
+    let w = img.naturalWidth, h = img.naturalHeight;
+    let box = { x: Math.round(w / 2), bottom: Math.round(h * 0.76) };
+    try {
+        let cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        let ctx = cv.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0);
+        let data = ctx.getImageData(0, 0, w, h).data;
+        let minX = w, minY = h, maxX = -1, maxY = -1;
+        for (let y = 0, p = 3; y < h; y++) {
+            for (let x = 0; x < w; x++, p += 4) {
+                if (data[p] > 8) {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+        if (maxX >= 0) {
+            let bandY = Math.min(h - 1, minY + Math.max(12, Math.round((maxY - minY) * 0.28)));
+            let sumX = 0, cnt = 0;
+            for (let y = minY; y <= bandY; y++) {
+                for (let x = 0; x < w; x++) {
+                    if (data[(y * w + x) * 4 + 3] > 8) { sumX += x; cnt++; }
+                }
+            }
+            box = { x: cnt ? Math.round(sumX / cnt) : Math.round((minX + maxX) / 2), bottom: Math.max(12, h - minY + 1) };
+        }
+    } catch (e) {}
+    if (src) {
+        if (Object.keys(_playerBattleCrownBoxCache).length > 512) _playerBattleCrownBoxCache = {};
+        _playerBattleCrownBoxCache[src] = box;
+    }
+    return box;
+}
+function _playerBattleCrownApply(crown, body) {
+    if (!crown) return;
+    if (!_playerCastleCrownOn()) { crown.style.visibility = 'hidden'; return; }
+    let box = _playerBattleCrownBox(body);
+    if (!box) { crown.style.visibility = 'hidden'; return; }
+    if (crown.style.visibility === 'hidden') crown.style.visibility = '';
+    crown.style.left = box.x + 'px';
+    crown.style.bottom = box.bottom + 'px';
+}
 // ⚔️ v3.0.91 攻擊動畫播放速度隨攻速：攻擊動作每幀時長＝攻擊間隔(秒)÷幀數→整段動畫恰在一次攻擊間隔內播完（「播完對上攻速」）。
 //   只加速不放慢：慢攻取 min(base,…)＝維持預設 8fps（早播完後待機·不拖成慢動作）；下限 45ms/幀(≈22fps)防過快閃爍。
 //   intervalSec 來源＝各消費者實際攻擊排程用值：玩家＝player.d.aspd(js/03:290·已含加速/勇敢/精通/切割/變身所有倍率)、傭兵＝atkSpdBaseItv(ally)(js/06:1833)。僅套用於 attack 動作·idle/skill/hurt/death 維持 8fps。
@@ -2070,10 +2126,11 @@ function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態�
         let sh = document.createElement('img'); sh.className = 'pm-shadow';
         let bd = document.createElement('img'); bd.className = 'pm-body';
         let wp = document.createElement('img'); wp.className = 'pm-weapon';
-        [sh, bd, wp].forEach(i => { i.alt = ''; i.draggable = false; });
-        el.append(sh, bd, wp);
+        let cr = document.createElement('img'); cr.className = 'pm-castle-crown'; cr.src = 'assets/ui/castle-crown.gif?v=v3.6.22'; cr.style.visibility = 'hidden';
+        [sh, bd, wp, cr].forEach(i => { i.alt = ''; i.draggable = false; });
+        el.append(sh, bd, wp, cr);
         bv.appendChild(el);
-        _pmState.el = el; _pmState.imgs = { sh: sh, bd: bd, wp: wp };
+        _pmState.el = el; _pmState.imgs = { sh: sh, bd: bd, wp: wp, cr: cr };
         let w = (a.idle && a.idle[0]) ? a.idle[0].naturalWidth : 100;
         el.style.width = w + 'px';
     } else if (_pmState.el.parentElement !== bv) bv.appendChild(_pmState.el);
@@ -2105,7 +2162,12 @@ function _playerMorphApply() {   // 8fps ticker 驅動（🗡️ v3.0.67 形態�
     if (act === null) return;
     let seq = (act === 'skill' && _useW) ? a.wskill : a[act]; if (!seq || !seq[f]) return;
     let I = _pmState.imgs;
+    if (!I.cr && _pmState.el) {
+        let cr = document.createElement('img'); cr.className = 'pm-castle-crown'; cr.src = 'assets/ui/castle-crown.gif?v=v3.6.22'; cr.alt = ''; cr.draggable = false; cr.style.visibility = 'hidden';
+        _pmState.el.appendChild(cr); I.cr = cr;
+    }
     if (I.bd.src !== seq[f].src) I.bd.src = seq[f].src;
+    _playerBattleCrownApply(I.cr, I.bd);
     let ss = (act === 'skill' && _useW) ? a.shadow.wskill : a.shadow[act];   // 影子：寬容（幀數不足取模·缺動作隱藏）
     if (ss && ss.length) { let sf = f < ss.length ? f : (f % ss.length); if (I.sh.style.visibility === 'hidden') I.sh.style.visibility = ''; if (I.sh.src !== ss[sf].src) I.sh.src = ss[sf].src; }
     else if (I.sh.style.visibility !== 'hidden') I.sh.style.visibility = 'hidden';

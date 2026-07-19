@@ -523,6 +523,12 @@
         .party-sprite img { position: absolute; left: 0; bottom: 0; image-rendering: crisp-edges; image-rendering: pixelated; }
         .party-sprite .pm-shadow { mix-blend-mode: multiply; }
         #player-morph-sprite .pm-weapon { mix-blend-mode: screen; }
+        #player-morph-sprite .pm-castle-crown {
+            position: absolute; z-index: 6; width: 16px; height: 12px; object-fit: contain;
+            transform: translateX(-50%); pointer-events: none; user-select: none;
+            image-rendering: crisp-edges; image-rendering: pixelated;
+            filter: drop-shadow(0 1px 1px rgba(69,26,3,.95)) drop-shadow(0 0 3px rgba(250,204,21,.82));
+        }
         .party-sprite .pm-weapon { mix-blend-mode: screen; }   /* 🧝 v3.5.23 傭兵變身特效層（_w）＝同玩家 screen 加亮混合（容器同樣不用 transform 防隔離群組毀 blend） */
         /* 🌑 v2.7.17 真實影子 sprite 圖層：絕對定位、底部置中、與本體同 native 尺寸(同世界錨定畫布)→像素級疊合。DOM 順序影子在前→本體(在後)自然疊於其上；影子沿用上方 .mob-anim img 的 native/pixelated 規則。 */
         #battle-view .mob-img-inner.mob-anim .mob-anim-shadow { position: absolute !important; left: 50%; bottom: 0; transform: translateX(-50%); pointer-events: none; mix-blend-mode: multiply; }   /* 🌑 v2.7.43 影子灰階當「濃淡遮罩」multiply(白→透明/黑→濃/灰→淡)：修自帶光源怪(不死鳥/伊弗利特)淺灰影子顯示成一塊灰·改成淡影子·一般近黑怪→濃影子 */
@@ -2676,6 +2682,14 @@ button.classic-skill-cell { cursor:pointer; }
     position: absolute; left: 0; top: 0; width: 100%; height: auto; z-index: 2;
     pointer-events: none; image-rendering: pixelated; mix-blend-mode: screen;
 }
+.town-npc .tn-castle-crown {
+    position: absolute; left: 50%; bottom: 100%; z-index: 55;
+    transform: translateX(-50%); margin-bottom: 3px;
+    display: block; width: 16px; height: 12px; object-fit: contain;
+    pointer-events: none; user-select: none;
+    image-rendering: crisp-edges; image-rendering: pixelated;
+    filter: drop-shadow(0 1px 1px rgba(69,26,3,.95)) drop-shadow(0 0 4px rgba(250,204,21,.9));
+}
 .town-npc:hover { filter: brightness(1.16) drop-shadow(0 0 7px rgba(250,204,21,.65)); transform: translate(-50%,-100%) scale(1.07); }
 .town-npc .tn-label {
     position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: 5px;
@@ -2683,6 +2697,7 @@ button.classic-skill-cell { cursor:pointer; }
     background: rgba(15,23,42,.94); border: 1px solid #64748b; box-shadow: 0 2px 8px rgba(0,0,0,.5);
     opacity: 0; pointer-events: none; transition: opacity .12s ease; z-index: 60;
 }
+.town-npc.has-castle-crown .tn-label { margin-bottom: 17px; }
 .town-npc:hover .tn-label { opacity: 1; }
 /* 🏷️ v3.2.92 戰鬥日誌「狀態」鈕(_showMobStatus)開啟→名牌常駐頭頂；hover 的 NPC 一律置頂(蓋過鄰近 NPC 身體/名牌) */
 /* 🖱️ v3.2.93 狀態開啟時名牌也可點：pointer-events 打開→點名牌事件冒泡到父層 .town-npc 的 onclick(interactNPC)＝點名字＝選到該 NPC；狀態關閉時維持 none(僅 hover 顯示·不擋下方點擊) */

@@ -971,7 +971,7 @@ function _enemyPhysicalAttackInner(mob, idx, stunChance = 0, atkDmg = null, atkD
             totalDmg = Math.floor(totalDmg * 1.5);                              // 冰凍中：受到物理傷害 +50%
             player.statuses.freeze = Math.max(0, player.statuses.freeze - 10); // 並使冰凍剩餘時間 -1 秒(10 ticks)
         }
-        if(player.statuses.armorBreak > 0) totalDmg = Math.floor(totalDmg * 1.5);   // 破壞盔甲：一般攻擊受傷 +50%
+        if(player.statuses.armorBreak > 0) totalDmg = Math.floor(totalDmg * (1 + (player.statuses.armorBreakPct || 50) / 100));   // 破壞盔甲：一般攻擊受傷 +50%（😤 v3.6.20 %數參數化·二模板黑妖 58%·armorBreakPct 施放時寫入）
         // 🔧 百分比受傷「減免」統一乘算（多層疊加採乘算：例 鐵衛20%×聖結界30%＝1−0.8×0.7＝44%，非相加 50%）
         { let _drMult = 1.0;
           if (player._setIron3) _drMult *= 0.8;                          // 🔮 鐵衛 3/5：-20%
@@ -992,9 +992,11 @@ function _enemyPhysicalAttackInner(mob, idx, stunChance = 0, atkDmg = null, atkD
                 mobInsightPrefix = `<span class="text-fuchsia-300 font-bold">【看破】${mob.n}看穿了你的破綻！</span> `;
             }
         }
-        // 常駐被動：雙重破壞（闇影格立特）— 命中時依機率造成兩倍最終傷害（5%，50級6%，之後每5級+1%）
+        // 常駐被動：雙重破壞（闇影格立特）— 命中時依機率造成兩倍最終傷害（基底 ddBase%·預設5，50級 +1%，之後每5級再+1%）
+        // 😤 v3.6.20 ddBase 參數化：二模板黑妖 ddBase 20 → 20%/50級21%/每5級+1%；未標示者維持原 5%/6% 曲線。
         if(mob.doubleDestroy) {
-            let ddRate = (mob.lv >= 50) ? (6 + Math.floor((mob.lv - 50) / 5)) : 5;
+            let _ddB = mob.ddBase || 5;
+            let ddRate = (mob.lv >= 50) ? (_ddB + 1 + Math.floor((mob.lv - 50) / 5)) : _ddB;
             if(Math.random() * 100 < ddRate) {
                 totalDmg *= 2;
                 mobInsightPrefix += `<span class="text-fuchsia-400 font-bold">【雙重破壞】${mob.n}撕裂了你的防禦！</span> `;
@@ -1429,7 +1431,18 @@ function killPlayer() {
 //    🌑 v3.4.14 覆蓋規則統一（玩家傭兵完全一致）：反射＝「普攻主擊＋主動技能直擊」（物理依武器近/遠、魔法=magic）；不反射＝武器特效 proc/雙擊/副手/連射/魔擊/魔爆/龍擊/穿透波及/反擊/居合/受擊荊棘/DoT(毒血灼燒立方風暴)/寵物/召喚。玩家掛點 js/04:132＋js/03 奇古獸＋js/07(魔法/物理/屠宰/咆哮/粉碎/心破/會心)；傭兵掛點 js/06 鏡像同名路徑；傭兵中央匯流 _allyDamageMob 已移除反射（僅承載 proc 類）。
 //    掛點＝玩家一般攻擊(playerAttack)/玩家法術(js/07 castSkill)/傭兵一般攻擊(js/06)；DoT/寵物/召喚物傷害不反彈（召喚物無HP池概念沿用舊規）。
 // 🌅 巨大骷髏的「恐怖的面貌」僅共用 _reflectWall 資料，不共用血壁覆蓋範圍：另由 terrorVisageOnDamage 補上玩家/傭兵觸發魔法、雙擊/副手、連射、寵物與召喚；中毒、灼燒、出血等持續傷害不掛免疫。
+// 🛡️ v3.6.20 反擊屏障消費（玩家NPC二模板·騎士）：屏障 1 層·受到玩家/傭兵直擊傷害時消耗並立即對「施傷者」反打一次一般攻擊。
+//    掛點＝reflectWallOnDamage 頂部（全部 18 個直擊呼叫點自動涵蓋·DoT/寵物/召喚傷害不經此函式故不觸發·與血壁慣例一致）。
+//    先歸零再反擊：反擊引發的荊棘/反射回傷再進到本函式時屏障已 0 → 不會無限往返。致死打擊（curHp<=0）不反擊。
+function trollCounterBarrierOnDamage(mob, dmg, ally) {
+    if (!mob || !(dmg > 0) || !((mob._counterBarrier || 0) > 0) || mob.curHp <= 0 || mob._dead) return;
+    mob._counterBarrier = 0;
+    logCombat(`<span class="font-bold" style="color:#fbbf24;">【反擊屏障】</span><span class="${getMobColor(mob.lv)}">${mob.n}</span> 的屏障回應了攻擊！`, 'enemy');
+    if (ally) { if (typeof enemyAttackAlly === 'function') enemyAttackAlly(mob, ally); }
+    else if (!player.dead) enemyPhysicalAttack(mob, mapState.mobs.indexOf(mob), 0);
+}
 function reflectWallOnDamage(mob, dmg, kind, ally) {
+    trollCounterBarrierOnDamage(mob, dmg, ally);   // 🛡️ v3.6.20 反擊屏障：獨立於血壁判定（無 _reflectWall 也要跑）
     if (!mob || !mob._reflectWall || !(dmg > 0)) return;
     let rw = mob._reflectWall;
     if (state.ticks > rw.until) { mob._reflectWall = null; return; }
@@ -1480,7 +1493,7 @@ function castMobMagic(mob, sk) {
     if (mob && mob.curHp > 0 && typeof _mobAnimTrigger === 'function') _mobAnimTrigger(mob, 'skill');   // 🎞️ 序列幀：技能動作（🔒 鎖定·強制放完·播放中的新觸發被忽略）
     if (mob && mob.curHp > 0) { try { if (typeof playMobSkill === 'function') playMobSkill(mob); } catch (e) {} }   // 🔊 怪物技能(施法)音（查 MOB_SKILL_SFX·查無/缺檔靜音·冰之女王 3564）
     if (mob && mob.curHp > 0 && (mob.n === '死亡騎士' || mob.n === '真‧死亡騎士 冥皇丹特斯')) { try { if (typeof vfxCastShake === 'function') vfxCastShake(); } catch (e) {} }   // ✨ 死亡騎士／真‧死亡騎士 冥皇丹特斯 施放死亡騎士技能特效→整個戰場震動（v3.4.8·cosmetic·吃 __vfxOff）
-    let redirectable = !!sk.dmg || ['stone', 'paralyze', 'silence', 'magicseal', 'freeze', 'sleep', 'scald', 'stun', 'slowatk', 'poison', 'burn', 'bleed', 'frost_breath', 'weaken', 'disease', 'potionfrost'].includes(sk.type);
+    let redirectable = !!sk.dmg || ['stone', 'paralyze', 'silence', 'magicseal', 'freeze', 'sleep', 'scald', 'stun', 'slowatk', 'poison', 'burn', 'bleed', 'frost_breath', 'weaken', 'disease', 'potionfrost', 'foulwater'].includes(sk.type);   // 🌊 v3.6.20 汙濁之水：單體·依仇恨權重打玩家或某傭兵（寵物中招走 js/22）
     if (!redirectable) { applyMobMagic(mob, sk); return; }
     let allies = (player.allies || []).filter(a => a && !a._downed && (a.curHp || 0) > 0);
     let pets = (typeof petsOutList === 'function') ? petsOutList().filter(p => p && !p._downed && (p.hp || 0) > 0) : [];
@@ -1580,6 +1593,12 @@ function _applyMobMagicToAllyInner(mob, sk, ally) {
         }
         return;
     }
+    // 🌊 v3.6.20 汙濁之水（玩家NPC二模板·妖精）：必中·目標受到的治癒（藥水與技能）效果減半（規格無機率/抵抗項）
+    if (sk.type === 'foulwater') {
+        st.foulWater = (sk.dur || 8) * 10;
+        logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 施放${sk.skn || '汙濁之水'}，${nm} 陷入汙濁之水！（受到的治癒效果減半·持續 ${sk.dur || 8} 秒）`, 'enemy');
+        return;
+    }
     // ❄️ 寒冰吐息：(pbase − 傭兵MR)/2 % 機率驅散該傭兵所有增益（保留變身/迷魅/誘捕/召喚），並使其攻擊速度減慢100%（比照玩家 js/04:1330·全體 AoE 同時打玩家與各傭兵）
     if (sk.type === 'frost_breath') {
         let chance = Math.max(0, ((sk.pbase !== undefined ? sk.pbase : 200) - mr) / 2);
@@ -1675,6 +1694,15 @@ function _applyMobMagicInner(mob, sk) {
         logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 展露 ${sk.skn || '恐怖的面貌'}，<span class="font-bold" style="color:#a78bfa;">免疫${{ melee: '近距離', ranged: '遠距離', magic: '魔法' }[_k]}傷害</span>（${sk.dur || 10} 秒）！`, 'enemy');
         return;
     }
+    // 🛡️ v3.6.20 反擊屏障（玩家NPC二模板·騎士）：自我增益·獲得 1 層屏障（無時限·至被消耗為止）；
+    //    屏障期間下一次受到玩家/傭兵「直擊」傷害時，立即對施傷者反打一次一般攻擊（消耗掛點＝reflectWallOnDamage 頂部·涵蓋全部 18 個直擊點；DoT/寵物/召喚傷害不觸發）。
+    if(sk.type === 'counter_barrier') {
+        if(!mob || mob.curHp <= 0) return;
+        if((mob._counterBarrier || 0) > 0) return;   // 屏障未被消耗：不重複施放（冷卻由施法迴圈照常計）
+        mob._counterBarrier = 1;
+        logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 展開 ${sk.skn || '反擊屏障'}，<span class="font-bold" style="color:#fbbf24;">受到傷害時將立即反擊</span>！`, 'enemy');
+        return;
+    }
     if(inAbsBarrier()) return;   // 🛡️ 絕對屏障：與世界隔絕，敵方魔法（傷害與異常狀態）一律無效
     if(!mob || mob.curHp <= 0) return;   // 🔧 施法者已死亡（如 mag1 追加攻擊期間被反殺）：mag2/mag3 不得以死怪身分施放
     if(mob.st && mob.st.confuse > 0 && !mob.boss) { logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 思緒混亂，無法施放技能。`, 'magic'); return; }   // 🔮 混亂：非BOSS敵人無法施放技能
@@ -1708,7 +1736,9 @@ function _applyMobMagicInner(mob, sk) {
     // 自我增益：堅固防護(傷害減免) / 暴風神射(額外傷害+命中)
     if(sk.type === 'self_buff') {
         if(sk.buffKind === 'guard') {
-            mob._siegeDrVal = (mob.lv >= 50) ? (2 + Math.floor((mob.lv - 50) / 10)) : 1;
+            // 😤 v3.6.20 傷減參數化：drBase(50級前)/dr50(50級起)/drStep(每10級遞增)——預設 1/2/1＝原鋼鐵阿頓曲線；二模板騎士 10/12/2（持續 15 秒不變）
+            let _gB = sk.drBase || 1, _gB50 = (sk.dr50 != null ? sk.dr50 : _gB + 1), _gStep = sk.drStep || 1;
+            mob._siegeDrVal = (mob.lv >= 50) ? (_gB50 + _gStep * Math.floor((mob.lv - 50) / 10)) : _gB;
             mob._siegeDrEnd = state.ticks + 150;
             logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 使出 ${sk.skn || '堅固防護'}，傷害減免提升了！`, 'enemy');
         } else if(sk.buffKind === 'volley') {
@@ -1721,11 +1751,12 @@ function _applyMobMagicInner(mob, sk) {
         }
         return;
     }
-    // 破壞盔甲：使玩家陷入「破壞盔甲」，之後受到的一般攻擊傷害 +50%，持續 8 秒
+    // 破壞盔甲：使玩家陷入「破壞盔甲」，之後受到的一般攻擊傷害 +pct%（預設 50·😤 v3.6.20 二模板黑妖 58），持續 dur 秒（預設 8）
     if(sk.type === 'armor_break') {
         if(player.dead) return;
-        player.statuses.armorBreak = 80;
-        logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 使出 ${sk.skn || '破壞盔甲'}，破壞了你的防禦！（一般攻擊受傷 +50%，持續 8 秒）`, 'enemy');
+        player.statuses.armorBreak = (sk.dur || 8) * 10;
+        player.statuses.armorBreakPct = sk.pct || 50;   // 消費點 js/04:974·每次施放覆寫（不同來源 %數不殘留）
+        logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 使出 ${sk.skn || '破壞盔甲'}，破壞了你的防禦！（一般攻擊受傷 +${sk.pct || 50}%，持續 ${sk.dur || 8} 秒）`, 'enemy');
         return;
     }
     // 邪靈之氣：必定命中，使玩家 AC+10、ER−10，持續 dur 秒（數值套用於 calcStats 的 evilAura 判定）
@@ -1760,6 +1791,21 @@ function _applyMobMagicInner(mob, sk) {
             bonus: Math.floor((mob.lv || 1) / 3)
         };
         logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 施放 ${sk.skn || '生命的祝福'}，血盟同伴開始恢復生命！`, 'enemy');
+        return;
+    }
+    // 💚 v3.6.20 生命的祝福（玩家NPC二模板·妖精）：即時恢復場上所有玩家 NPC（trollPlayer·含自己）healDice + 施法者等級 HP；無傷者不施放
+    if(sk.type === 'troll_bless') {
+        let _tbDice = sk.healDice || [1, 200], _tbBonus = mob.lv || 0, _tbHealed = 0;
+        mapState.mobs.forEach(m2 => {
+            if(m2 && m2.trollPlayer && m2.curHp > 0 && m2.curHp < m2.hp) {
+                m2.curHp = Math.min(m2.hp, m2.curHp + roll(_tbDice[0], _tbDice[1]) + _tbBonus);
+                _tbHealed++;
+            }
+        });
+        if(_tbHealed) {
+            logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 施放 ${sk.skn || '生命的祝福'}，治癒了場上的玩家們！`, 'enemy');
+            renderMobs();
+        }
         return;
     }
     // 🗑️ v3.5.83 移除第二段 self_heal：上方（v3.5.59）的同型分支無條件 return，此處永不可達；sk.heal 已併入上方 fallback。
@@ -1864,6 +1910,13 @@ function _applyMobMagicInner(mob, sk) {
             player.statuses.potionFrost = (sk.dur || 8) * 10;
             logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 施放${sk.skn || '枯竭詛咒'}，你陷入了<span class="font-bold" style="color:#93c5fd;">藥水霜化</span>！（治癒藥水恢復量減少 50%·持續 ${sk.dur || 8} 秒）`, 'enemy');
         }
+        return;
+    }
+    // 🌊 v3.6.20 汙濁之水（玩家NPC二模板·妖精）：必中·你受到的治癒（藥水與技能）效果減半（規格無機率/抵抗項；技能收口 rollHealingSpell·藥水 js/08）
+    if(sk.type === 'foulwater') {
+        if(player.dead) return;
+        player.statuses.foulWater = (sk.dur || 8) * 10;
+        logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 施放${sk.skn || '汙濁之水'}，你陷入了<span class="font-bold" style="color:#67e8f9;">汙濁之水</span>！（受到的治癒效果減半·持續 ${sk.dur || 8} 秒）`, 'enemy');
         return;
     }
     if(sk.type === 'self_haste') {

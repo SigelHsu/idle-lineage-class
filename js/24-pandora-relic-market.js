@@ -41,6 +41,15 @@
     const NAME_SURNAME = ['南宮', '上官', '司徒', '慕容', '東方', '北辰', '長孫', '令狐', '歐陽', '夏侯'];
     const NAME_GIVEN = ['無月', '長歌', '聽雪', '清風', '流雲', '暮雨', '星河', '青鋒', '白夜', '未央', '若水', '凌霜'];
     const NAME_CASUAL = ['小隊長', '老玩家', '別打我', '路過', '掛機中', '求組隊', '練功中', '只收不賣', '佛系玩家'];
+    const NAME_SHORT = NAME_PREFIX.concat(NAME_TITLE).filter((name, index, list) => name.length === 2 && list.indexOf(name) === index);
+    const NAME_WRAPPERS = [
+        ['Oo', 'oO'], ['oO', 'Oo'], ['O0', '0O'], ['Xx', 'xX'], ['xX', 'Xx'], ['Xxx', 'xxX'],
+        ['卍', '卍'], ['乂', '乂'], ['一', '一'], ['丨', '丨'], ['灬', '灬'], ['丶', '丶'],
+        ['メ', 'メ'], ['ミ', 'ミ'], ['彡', '彡'], ['艸', '艸'], ['ㄨ', 'ㄨ'], ['★', '★'],
+        ['☆', '☆'], ['◆', '◆'], ['◇', '◇'], ['煞氣a', 'a煞氣'], ['可愛a', 'a可愛'],
+        ['霸氣a', 'a霸氣'], ['最愛a', 'a最愛'], ['闇夜a', 'a闇夜'], ['神之', '之神'],
+        ['惡魔a', 'a惡魔'], ['天使a', 'a天使'], ['戀愛a', 'a戀愛']
+    ];
     const SILENCE_COMPLAINTS = [
         '吵死了', '安靜一點', '別再喊了', '不要一直廣播', '別洗了', '可以停一下嗎', '別再洗頻了', '安靜啦',
         '不要重複喊', '我已經看到了', '別一直刷訊息', '可以閉嘴了', '讓頻道安靜一下', '不要再洗版', '停一下好嗎', '夠了喔',
@@ -580,14 +589,20 @@
         let made = '';
         for (let tries = 0; tries < 12; tries++) {
             let mode = _rand(st, 'name-mode');
-            if (mode < 0.40) {
-                made = _pick(st, NAME_PREFIX, 'name-prefix') + _pick(st, NAME_IMAGE, 'name-image') + _pick(st, NAME_TITLE, 'name-title');
-            } else if (mode < 0.65) {
-                made = _pick(st, NAME_SURNAME, 'name-surname') + _pick(st, NAME_GIVEN, 'name-given');
+            if (mode < 0.45) {
+                made = _pick(st, NAME_SHORT, 'name-short');
+            } else if (mode < 0.70) {
+                made = _pick(st, NAME_CASUAL, 'name-casual');
             } else if (mode < 0.85) {
                 made = _pick(st, NAME_PREFIX, 'name-prefix2') + _pick(st, NAME_GIVEN, 'name-given2');
+            } else if (mode < 0.95) {
+                made = _pick(st, NAME_PREFIX, 'name-prefix') + _pick(st, NAME_IMAGE, 'name-image') + _pick(st, NAME_TITLE, 'name-title');
             } else {
-                made = _pick(st, NAME_CASUAL, 'name-casual');
+                made = _pick(st, NAME_SURNAME, 'name-surname') + _pick(st, NAME_GIVEN, 'name-given');
+            }
+            if (_rand(st, 'name-wrapper-chance') < 0.4) {
+                let wrapper = _pick(st, NAME_WRAPPERS, 'name-wrapper');
+                made = wrapper[0] + made + wrapper[1];
             }
             if (!history.has(made)) break;
         }

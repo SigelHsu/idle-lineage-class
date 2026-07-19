@@ -434,6 +434,7 @@ function useItem(u, silent = false) {
             if (hasMastery('k_dragonblood')) h = Math.floor(h * 1.15);   // 🐉 龍血精通：治癒藥水恢復 +15%
             if (player.hp < player.mhp * 0.2) { try { for (let _k in player.eq) { let _e = player.eq[_k]; if (_e && DB.items[_e.id] && DB.items[_e.id].lowHpPotionX2) { h = h * 2; break; } } } catch (e) {} }   // 🏺 v3.2.17 聖伯納的急救酒桶：HP<20% 時治癒藥水恢復量 ×2
             if (player.statuses && player.statuses.potionFrost > 0) h = Math.max(1, Math.floor(h * 0.5));   // 🌅 藥水霜化（巨大骷髏·枯竭詛咒）：治癒藥水恢復量 −50%
+            if (player.statuses && player.statuses.foulWater > 0) h = Math.max(1, Math.floor(h * 0.5));   // 🌊 v3.6.20 汙濁之水（玩家NPC二模板）：治癒藥水也減半
             player.hp = Math.min(player.mhp, player.hp + h);
             player.cds.pot = 1;
             if(!silent) logSys(`飲用 ${d.n}，恢復 ${h} HP。`);
@@ -1014,7 +1015,8 @@ const PLAYER_DEBUFF_NAME = {
     stun: '暈眩', freeze: '冰凍', stone: '石化', paralyze: '麻痺',
     silence: '沉默', magicseal: '魔法封印', poison: '中毒',
     burn: '灼燒', scald: '燙傷', evilAura: '邪靈之氣',
-    weaken: '弱化', disease: '疾病', blind: '目盲', potionFrost: '藥水霜化'   // 🌅 日出之國新異常
+    weaken: '弱化', disease: '疾病', blind: '目盲', potionFrost: '藥水霜化',   // 🌅 日出之國新異常
+    foulWater: '汙濁之水'   // 🌊 v3.6.20 玩家NPC二模板（妖精）：受到治癒效果減半
 };
 
 // 🌩️ v3.5.94 玩家減益的狀態圖示對照（值＝assets/state-icons/<值>.jpg 的檔名，供 renderStatusIconBar 使用）。
@@ -1184,7 +1186,8 @@ function renderStatusEffects() {
         weaken: 'text-amber-400',    // 🌅 弱化 (琥珀)
         disease: 'text-lime-400',    // 🌅 疾病 (病綠)
         blind: 'text-purple-300',    // 🌅 目盲 (霧紫)
-        potionFrost: 'text-sky-300'  // 🌅 藥水霜化 (霜藍)
+        potionFrost: 'text-sky-300', // 🌅 藥水霜化 (霜藍)
+        foulWater: 'text-cyan-300'   // 🌊 汙濁之水 (濁青·v3.6.20)
     };
 
     let debuffs = [];

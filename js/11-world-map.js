@@ -830,8 +830,10 @@ function startPanelRefresh() {
 }
 // 🔍 魔物追蹤可指定地圖：野外/地監/特殊＋底比斯(rift)＋海賊島(pirate_island) 三類掃 MAP_CATEGORIES（濾掉村莊與純BOSS房），
 //    再補上「不在 MAP_CATEGORIES」的遺忘之島(途中/島)＋風木地監。
-//    刻意排除：村莊(town_)、純BOSS房(PURE_BOSS_MAPS)、攻城內外城(siege_* 限時活動)、傲慢之塔攀登樓層(pride_* 攀登模式·非固定地圖)、
+//    刻意排除：村莊(town_)、純BOSS房(PURE_BOSS_MAPS)、攻城內外城(siege_* 限時活動)、傲慢之塔攀登樓層(pride_f* 攀登模式·非固定地圖)、
 //    🚫 隱藏狩獵區域(hidden_*·象牙塔密室/巨蟻女皇·用戶要求不開放追蹤·維持只能由母圖傳送進入)。
+//    🗼 v3.6.25 例外（用戶拍板）：背包持有 傲慢之塔支配符(NF)（僅 dom·傳送符/移動卷軸不算）→ 開放該符對應樓層區間
+//    (pride_N_(N+9)) 的魔物追蹤；賣掉/存倉即從清單消失（追蹤已生效者不中斷·出怪判定只看 tracking.map）。
 const OBEL_EXTRA_MAPS = [
     { v: 'oblivion_travel', t: '遺忘之島途中' }, { v: 'oblivion_island', t: '遺忘之島' },
     { v: 'windwood_dungeon', t: '風木地監' }
@@ -844,6 +846,10 @@ function obelMapList() {
         });
     });
     OBEL_EXTRA_MAPS.forEach(e => { if(DB.maps[e.v]) out.push({ v: e.v, t: e.t }); });
+    [11, 21, 31, 41, 51, 61, 71, 81, 91].forEach(N => {   // 🗼 v3.6.25 支配符樓層
+        let _pv = 'pride_' + N + '_' + (N + 9);
+        if(DB.maps[_pv] && typeof prideHasTalisman === 'function' && prideHasTalisman(N, ['dom'])) out.push({ v: _pv, t: '傲慢之塔' + N + '~' + (N + 9) + '樓' });
+    });
     return out;
 }
 function renderObelNPC(div) {
@@ -1988,6 +1994,68 @@ function _townMapBg(townId) {
 }
 
 let _townNpcSprites = [];
+function _townCastleCrownHtml(npc) {
+    if (!npc || typeof siegeVictoryActive !== 'function' || !siegeVictoryActive()) return '';
+    let royalNpc = npc.id === 'npc_esti' || npc.id === 'npc_tros';
+    let royalPlayer = !!npc._wanderer && (npc.avatar === '王子' || npc.avatar === '公主');
+    return (royalNpc || royalPlayer)
+        ? '<img class="tn-castle-crown" src="assets/ui/castle-crown.gif?v=v3.6.22" alt="" aria-hidden="true" draggable="false">'
+        : '';
+}
+let _townCastleCrownBoxCache = {};
+function _townCastleCrownBox(img) {
+    if (!img || !img.complete || !(img.naturalWidth > 0) || !(img.naturalHeight > 0)) return null;
+    let src = img.currentSrc || img.src || '';
+    if (src && _townCastleCrownBoxCache[src]) return _townCastleCrownBoxCache[src];
+    let w = img.naturalWidth, h = img.naturalHeight;
+    let srcText = '';
+    try { srcText = decodeURIComponent(String(src || '')).replace(/\\/g, '/'); } catch (e) { srcText = String(src || '').replace(/\\/g, '/'); }
+    if (srcText.indexOf('/assets/npc/3227/') >= 0 || srcText.indexOf('/assets/npc/3225/') >= 0) {
+        let royalBox = { x: 18, bottom: h };
+        if (src) _townCastleCrownBoxCache[src] = royalBox;
+        return royalBox;
+    }
+    let box = null;
+    try {
+        let cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        let ctx = cv.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0);
+        let data = ctx.getImageData(0, 0, w, h).data;
+        let minY = h, maxY = -1;
+        for (let y = 0, p = 3; y < h; y++) {
+            for (let x = 0; x < w; x++, p += 4) {
+                if (data[p] > 8) {
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+        if (maxY >= 0) {
+            let bandY = Math.min(h - 1, minY + Math.max(8, Math.round((maxY - minY) * 0.28)));
+            let sumX = 0, cnt = 0;
+            for (let y = minY; y <= bandY; y++) {
+                for (let x = 0; x < w; x++) {
+                    if (data[(y * w + x) * 4 + 3] > 8) { sumX += x; cnt++; }
+                }
+            }
+            box = { x: cnt ? Math.round(sumX / cnt) : Math.round(w / 2), bottom: Math.max(12, h - minY) };
+        }
+    } catch (e) {}
+    if (!box) box = { x: Math.round(w / 2), bottom: h };
+    if (src) {
+        if (Object.keys(_townCastleCrownBoxCache).length > 512) _townCastleCrownBoxCache = {};
+        _townCastleCrownBoxCache[src] = box;
+    }
+    return box;
+}
+function _townCastleCrownAlign(crown, bodyImg) {
+    if (!crown || !bodyImg) return;
+    let box = _townCastleCrownBox(bodyImg);
+    if (!box) return;
+    crown.style.left = box.x + 'px';
+    crown.style.bottom = box.bottom + 'px';
+}
 function renderTownNPCMap(townId) {
     let map = document.getElementById('town-npc-map');
     if (!map) return;
@@ -2056,17 +2124,24 @@ function renderTownNPCMap(townId) {
             el.style.left = p.x + '%'; el.style.top = p.y + '%'; el.style.zIndex = Math.round(p.y * 10);
             let align = (typeof pvpClampAlignment === 'function') ? pvpClampAlignment(npc.alignmentValue) : Math.max(-32767, Math.min(32767, Math.round(Number(npc.alignmentValue) || 0)));
             let nameHtml = (typeof pvpNameHtml === 'function') ? pvpNameHtml(npc.n, align, 'tn-name') : '<span class="tn-name">' + npc.n + '</span>';
+            let crownHtml = _townCastleCrownHtml(npc);
+            if (crownHtml) el.classList.add('has-castle-crown');
             el.innerHTML =
                 '<div class="tn-label">' + nameHtml + '<span class="tn-title">[' + (npc.title || '玩家收購') + ']</span></div>' +
+                crownHtml +
                 '<img class="tn-shadow" src="' + shadow0 + '" alt="" onload="this.parentElement.classList.add(\'has-tn-shadow\')" onerror="this.remove()">' +
                 '<img class="tn-body" src="' + body0 + '" alt="">';
             el.onclick = () => openWanderingBuyerDialog(npc.id);
             map.appendChild(el);
             let bodyImg = el.querySelector('.tn-body');
             let shadowImg = el.querySelector('.tn-shadow');
+            let crownImg = el.querySelector('.tn-castle-crown');
+            if (crownImg) bodyImg.addEventListener('load', () => _townCastleCrownAlign(crownImg, bodyImg));
+            if (crownImg) setTimeout(() => _townCastleCrownAlign(crownImg, bodyImg), 0);
             bodyImg.addEventListener('load', _scheduleTownLabelResolve, { once: true });
             _townNpcSprites.push({
                 img: bodyImg,
+                crown: crownImg,
                 wimg: shadowImg,
                 wframes: spr.shadows || null,
                 frames: spr.frames || [],
@@ -2080,8 +2155,11 @@ function renderTownNPCMap(townId) {
         let el = document.createElement('div');
         el.className = 'town-npc';
         el.style.left = p.x + '%'; el.style.top = p.y + '%'; el.style.zIndex = Math.round(p.y * 10);
+        let crownHtml = _townCastleCrownHtml(npc);
+        if (crownHtml) el.classList.add('has-castle-crown');
         el.innerHTML =
             '<div class="tn-label"><span class="tn-name">' + npc.n + '</span><span class="tn-title">' + npc.title + '</span></div>' +
+            crownHtml +
             '<img class="tn-shadow" src="assets/npc/' + cat.g + '/idle_s_0.png" alt="" onload="this.parentElement.classList.add(\'has-tn-shadow\')" onerror="this.remove()">' +   // 🌑 v3.3.5 真實影子 sprite(body gfx+1·共畫布疊本體對齊)；有影子→onload 標記父層隱藏後備橢圓；無影子(職業動畫/老 gfx/告示)→404 remove→改用 CSS 橢圓後備影子(v3.3.18)
             '<img class="tn-body"' + (cat.tint ? (' style="filter:' + cat.tint + '"') : '') + ' src="assets/npc/' + cat.g + '/idle_0.png" alt="">' +
             (cat.w ? '<img class="tn-weapon" src="assets/npc/' + cat.g + '/idle_w_0.png" alt="" onerror="this.remove()">' : '');   // 🔥 v3.3.18 火焰/武器疊層(screen 混合·宙斯之熔岩高崙的燃燒特效)
@@ -2090,9 +2168,12 @@ function renderTownNPCMap(townId) {
         else el.onclick = () => interactNPC(npc.id, townId);
         map.appendChild(el);
         let bodyImg = el.querySelector('.tn-body');
+        let crownImg = el.querySelector('.tn-castle-crown');
+        if (crownImg) bodyImg.addEventListener('load', () => _townCastleCrownAlign(crownImg, bodyImg));
+        if (crownImg) setTimeout(() => _townCastleCrownAlign(crownImg, bodyImg), 0);
         bodyImg.addEventListener('load', _scheduleTownLabelResolve, { once: true });   // 🏷️ 圖片載入拿到真實高度後再排名牌
         let wImg = cat.w ? el.querySelector('.tn-weapon') : null;   // 🔥 火焰疊層與本體同步推進
-        _townNpcSprites.push({ img: bodyImg, wimg: wImg, wframes: (cat.w ? _npcWeaponFrames(key) : null), frames: _npcFrames(key), phase: (i * 3) % 8, last: -1 });
+        _townNpcSprites.push({ img: bodyImg, crown: crownImg, wimg: wImg, wframes: (cat.w ? _npcWeaponFrames(key) : null), frames: _npcFrames(key), phase: (i * 3) % 8, last: -1 });
     });
     // 🏷️ v3.2.92 名牌常駐開關：跟隨戰鬥日誌「狀態」鈕(_showMobStatus)·開→所有 NPC 名字常駐頭頂；關→僅 hover
     map.classList.toggle('show-labels', (typeof _showMobStatus === 'undefined') ? true : !!_showMobStatus);
@@ -2124,7 +2205,11 @@ function _resolveTownLabelOverlap() {
         let labels = [].slice.call(map.querySelectorAll('.town-npc .tn-label'));
         if (!labels.length) return;
         labels.forEach(l => { l.style.marginBottom = ''; });   // 先歸零(回 CSS 預設 5px)再量測
-        let entries = labels.map(l => ({ l, r: l.getBoundingClientRect() })).filter(e => e.r.width > 0);
+        let entries = labels.map(l => ({
+            l,
+            r: l.getBoundingClientRect(),
+            baseMargin: l.parentElement && l.parentElement.classList.contains('has-castle-crown') ? 17 : 5
+        })).filter(e => e.r.width > 0);
         entries.sort((a, b) => a.r.top - b.r.top);   // 由上而下：越高者當錨點，下方者往上讓
         let placed = [];
         for (let e of entries) {
@@ -2143,7 +2228,7 @@ function _resolveTownLabelOverlap() {
             }
             placed.push({ left, right, top, bottom });
             let shift = r.top - top;
-            if (shift > 0.5) e.l.style.marginBottom = (5 + shift / scale) + 'px';
+            if (shift > 0.5) e.l.style.marginBottom = (e.baseMargin + shift / scale) + 'px';
         }
     } catch (err) {}
 }
@@ -2166,6 +2251,7 @@ function _townNpcAnimTick() {
         if (fi !== s.last) {
             s.last = fi;
             let fr = s.frames[fi]; if (fr && fr.src) s.img.src = fr.src;
+            if (s.crown) _townCastleCrownAlign(s.crown, s.img);
             if (s.wimg && s.wframes && s.wframes.length) { let wf = s.wframes[fi % s.wframes.length]; if (wf && wf.src) s.wimg.src = wf.src; }   // 🔥 火焰疊層同幀
         }
     }

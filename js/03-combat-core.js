@@ -69,9 +69,18 @@ function healingSpellCasterMult(sk, caster) {
     let w = DB.items[caster.eq.wpn.id];
     return Math.max(0, Number(w && w.groupHealMult) || 1);
 }
+// 🌊 v3.6.20 汙濁之水（玩家NPC二模板·妖精）：目標受到的治癒（藥水與技能）效果減半。
+//   技能治癒統一在 rollHealingSpell 收口；藥水另有三掛點（玩家 js/08／傭兵 js/06／寵物 js/22 各自讀自己的狀態）。
+//   target 可能是 player（statuses）/傭兵（statuses）/寵物（_statuses），三型通吃。
+function foulWaterHealMult(target) {
+    if (!target) return 1;
+    let st = (typeof player !== 'undefined' && target === player) ? player.statuses : (target.statuses || target._statuses);
+    return (st && (st.foulWater || 0) > 0) ? 0.5 : 1;
+}
 function rollHealingSpell(sk, dStats, caster, target) {
     if (!sk) return 0;
-    if (sk.fullRestore) return Math.max(0, healingSpellTargetMhp(target) - healingSpellTargetHp(target));
+    let _fw = foulWaterHealMult(target);
+    if (sk.fullRestore) return Math.max(0, Math.floor((healingSpellTargetMhp(target) - healingSpellTargetHp(target)) * _fw));
     // 💙 v3.5.75 正義治癒加成：justiceHeal 旗標技能→依「施法者」正義值提升最終恢復量（滿正義+20%·中立/邪惡不變·不看被治療者）。
     //   v3.5.76 傭兵適用：caster=傭兵時改用其招募時記錄的來源存檔性向值（ally.alignmentValue）。
     let _jm = 1;
@@ -86,11 +95,11 @@ function rollHealingSpell(sk, dStats, caster, target) {
         let rolled = 0;
         for (let i = 0; i < count; i++) rolled += roll(1, sides);
         let mult = 2 * Math.max(0, Number(c.mult) || 1) * healingSpellCasterMult(sk, caster);
-        return Math.max(1, Math.floor(rolled * mult * _jm));
+        return Math.max(1, Math.floor(rolled * mult * _jm * _fw));
     }
     // 尚未轉換的治癒來源保留舊資料相容性。
-    if (sk.healDice) return Math.max(1, Math.floor((rollDice(sk.healDice[0], sk.healDice[1]) + (sk.healBase || 0)) * (1 + 3 * (Number(dStats && dStats.magicDmg) || 0) / 32) * _jm));
-    if (sk.valDice) return Math.max(1, Math.floor(((sk.valBase || 0) + roll(sk.valDice[0], sk.valDice[1]) + (Number(dStats && dStats.magicDmg) || 0)) * _jm));
+    if (sk.healDice) return Math.max(1, Math.floor((rollDice(sk.healDice[0], sk.healDice[1]) + (sk.healBase || 0)) * (1 + 3 * (Number(dStats && dStats.magicDmg) || 0) / 32) * _jm * _fw));
+    if (sk.valDice) return Math.max(1, Math.floor(((sk.valBase || 0) + roll(sk.valDice[0], sk.valDice[1]) + (Number(dStats && dStats.magicDmg) || 0)) * _jm * _fw));
     return 0;
 }
 // 魔法型武器特效／奇古獸普攻依潘朵拉權重換算法術階級；傳說與遺物固定視為 5 階。
@@ -336,7 +345,7 @@ function tick() {
     
     let canAct = true;
     for(let k in player.statuses) {
-        if (player.statuses[k] > 0 && k !== 'poisonDmg' && k !== 'poisonTick' && k !== 'burnDmg' && k !== 'burnTick' && k !== 'scaldDmg' && k !== 'scaldTick' && k !== 'bleedDmg' && k !== 'bleedTick') {
+        if (player.statuses[k] > 0 && k !== 'poisonDmg' && k !== 'poisonTick' && k !== 'burnDmg' && k !== 'burnTick' && k !== 'scaldDmg' && k !== 'scaldTick' && k !== 'bleedDmg' && k !== 'bleedTick' && k !== 'armorBreakPct') {   // 😤 v3.6.20 armorBreakPct＝伴隨值（%數）非時長，不遞減
             player.statuses[k]--;
             if(k === 'cleave' && player.statuses.cleave === 0) calcStats();   // 🔧 切割到期：重算攻速
             if(k === 'evilAura' && player.statuses.evilAura === 0) calcStats();   // 🔧 邪靈之氣到期：還原 AC/ER
@@ -415,6 +424,7 @@ function tick() {
     if(player.statuses.disease > 0) alerts.push("疾病");
     if(player.statuses.blind > 0) alerts.push("目盲");
     if(player.statuses.potionFrost > 0) alerts.push("藥水霜化");
+    if(player.statuses.foulWater > 0) alerts.push("汙濁之水");   // 🌊 v3.6.20 玩家NPC二模板（妖精）：受到治癒效果減半
     if(!state.ff) {
         document.getElementById('status-alerts').innerText = alerts.length > 0 ? "[" + alerts.join(", ") + "]" : "";
         document.getElementById('status-alerts').className = alerts.length > 0 ? "text-red-400 text-sm font-bold anim-flash" : "text-sm font-normal";
@@ -622,8 +632,9 @@ function tick() {
         if(m.curHp <= 0) continue;   // 反擊使該怪在自己回合內死亡 → 跳過後續魔法施放
         if(m.st && (m.st.vacuum > 0 || m.st.magicseal > 0)) continue; // 真空 / 魔法封印：無法施放技能
         if(!m._magCd) m._magCd = {};
-        _dpsReactWrap(() => ['mag','mag2','mag3','mag4'].forEach(mk => {   // 🌑 v3.3.33 mag4：吉爾塔斯第四技（血壁空間）；🎯 DPS：怪物施法引發的玩家受擊反應（鏡反射等）歸玩家
+        _dpsReactWrap(() => ['mag','mag2','mag3','mag4','mag5'].forEach(mk => {   // 🌑 v3.3.33 mag4：吉爾塔斯第四技（血壁空間）；😤 v3.6.20 mag5：二模板法師第五技（究極光裂術）；🎯 DPS：怪物施法引發的玩家受擊反應（鏡反射等）歸玩家
             if(!m[mk]) return;
+            if(m[mk].reqAlign != null && pvpClampAlignment(m._pvpAlignment || 0) < m[mk].reqAlign) return;   // ⚖️ v3.6.20 性向門檻技（究極光裂術≥500）：未達＝視同沒有此技（不進冷卻）
             // 檢查發動機率
             if(m[mk].chance !== undefined) {
                  if(m._magCd[mk] === undefined) m._magCd[mk] = m[mk].cd;
@@ -794,6 +805,13 @@ function applySiegeEnemyScaling(mob) {
 
 // 😤 v3.5.59 白目玩家：叫賣NPC 頭像→白目怪 id；等級=玩家+5(上限100)·常駐回血 40/60 每2秒(王族 regenFix 60)·經驗/金幣 0
 const TROLL_CLASS_BY_AVATAR = { "王子": "troll_royal", "公主": "troll_royal", "男騎士": "troll_knight", "女騎士": "troll_knight", "男妖精": "troll_elf", "女妖精": "troll_elf", "男法師": "troll_mage", "女法師": "troll_mage", "男黑暗妖精": "troll_dark", "女黑暗妖精": "troll_dark", "男幻術士": "troll_illusion", "女幻術士": "troll_illusion", "男龍騎士": "troll_dragon", "女龍騎士": "troll_dragon", "男戰士": "troll_warrior", "女戰士": "troll_warrior" };
+// 😤 v3.6.20 第二能力模板：決定玩家 NPC 能力時 70% 抽原模板、30% 抽第二模板（troll2_*·js/00）。三個生成點（攻城/PVP野遇/記仇）統一走 trollPickClassMob。
+const TROLL_TEMPLATE2_CHANCE = 0.3;
+const TROLL_CLASS_TEMPLATE2 = { troll_royal: "troll2_royal", troll_knight: "troll2_knight", troll_elf: "troll2_elf", troll_mage: "troll2_mage", troll_dark: "troll2_dark", troll_dragon: "troll2_dragon", troll_illusion: "troll2_illusion", troll_warrior: "troll2_warrior" };
+function trollPickClassMob(avatar) {
+    let base = TROLL_CLASS_BY_AVATAR[avatar] || "troll_warrior";
+    return (Math.random() < TROLL_TEMPLATE2_CHANCE && TROLL_CLASS_TEMPLATE2[base] && DB.mobs[TROLL_CLASS_TEMPLATE2[base]]) ? TROLL_CLASS_TEMPLATE2[base] : base;
+}
 const PVP_ALIGN_MIN = -32767;
 const PVP_ALIGN_MAX = 32767;
 const PVP_ALIGN_EVIL = -1000;
@@ -811,6 +829,15 @@ const PVP_AVATARS = Object.keys(TROLL_CLASS_BY_AVATAR);
 const PVP_NAME_HEAD = ['煞氣ㄟ', '最愛', '闇の', '破滅', '終焉', '霸氣', '覺醒', '無敵', '爆裂', '狂氣', '孤高', '夜月', '紅名', '藍名', '天堂', '亞丁', '奇岩', '海音', '肯特', '風木', '沉默', '法書', '祝武', '祝防', '掛網', '回卷', '勇水', '白水'];
 const PVP_NAME_CORE = ['刀神', '法皇', '妖弓', '黑妖', '龍騎', '戰王', '王子', '公主', '盟主', '騎士', '補師', '歐洲人', '倉庫王', '紅水仔', '打寶哥', '奇岩王', '海音霸主', '肯特劍魂', '風木狂人', '傲塔住民', '古魯丁路霸', '說島老手'];
 const PVP_NAME_TAIL = ['前輩', '之夢', '公主', '王子', '大人', 'さま', '先輩', '總長', '煞星', '魔王', '本尊', '分身', '不回卷', '專殺掛機', '只打紅人', '單挑啦', '包場中', '撿骨人', '補刀王', '掉寶王', '盟倉守護者', '安定值零'];
+const PVP_NAME_SHORT = PVP_NAME_HEAD.concat(PVP_NAME_TAIL).filter((name, index, list) => name.length === 2 && list.indexOf(name) === index);
+const PVP_NAME_WRAPPERS = [
+    ['Oo', 'oO'], ['oO', 'Oo'], ['O0', '0O'], ['Xx', 'xX'], ['xX', 'Xx'], ['Xxx', 'xxX'],
+    ['卍', '卍'], ['乂', '乂'], ['一', '一'], ['丨', '丨'], ['灬', '灬'], ['丶', '丶'],
+    ['メ', 'メ'], ['ミ', 'ミ'], ['彡', '彡'], ['艸', '艸'], ['ㄨ', 'ㄨ'], ['★', '★'],
+    ['☆', '☆'], ['◆', '◆'], ['◇', '◇'], ['煞氣a', 'a煞氣'], ['可愛a', 'a可愛'],
+    ['霸氣a', 'a霸氣'], ['最愛a', 'a最愛'], ['闇夜a', 'a闇夜'], ['神之', '之神'],
+    ['惡魔a', 'a惡魔'], ['天使a', 'a天使'], ['戀愛a', 'a戀愛']
+];
 function pvpClampAlignment(v) {
     v = Math.round(Number(v) || 0);
     return Math.max(PVP_ALIGN_MIN, Math.min(PVP_ALIGN_MAX, v));
@@ -920,14 +947,24 @@ function pvpChangeAlignment(delta) {
     return player.alignmentValue - before;
 }
 function pvpRandomName() {
-    let h = PVP_NAME_HEAD[Math.floor(Math.random() * PVP_NAME_HEAD.length)];
-    let c = PVP_NAME_CORE[Math.floor(Math.random() * PVP_NAME_CORE.length)];
-    let t = PVP_NAME_TAIL[Math.floor(Math.random() * PVP_NAME_TAIL.length)];
-    let style = Math.floor(Math.random() * 4);
-    if (style === 0) return `${h}${c}`;
-    if (style === 1) return `${c}${t}`;
-    if (style === 2) return `${h}${c}${t}`;
-    return `${c}oO${h}`;
+    let name;
+    if (Math.random() < 0.45) {
+        name = PVP_NAME_SHORT[Math.floor(Math.random() * PVP_NAME_SHORT.length)];
+    } else {
+        let h = PVP_NAME_HEAD[Math.floor(Math.random() * PVP_NAME_HEAD.length)];
+        let c = PVP_NAME_CORE[Math.floor(Math.random() * PVP_NAME_CORE.length)];
+        let t = PVP_NAME_TAIL[Math.floor(Math.random() * PVP_NAME_TAIL.length)];
+        let style = Math.floor(Math.random() * 4);
+        name = style === 0 ? `${h}${c}`
+            : style === 1 ? `${c}${t}`
+            : style === 2 ? `${h}${c}${t}`
+            : `${c}oO${h}`;
+    }
+    if (Math.random() < 0.4) {
+        let wrapper = PVP_NAME_WRAPPERS[Math.floor(Math.random() * PVP_NAME_WRAPPERS.length)];
+        name = wrapper[0] + name + wrapper[1];
+    }
+    return name;
 }
 function pvpRandomAlignment() {
     return pvpClampAlignment(Math.floor(PVP_ALIGN_MIN + Math.random() * (PVP_ALIGN_MAX - PVP_ALIGN_MIN + 1)));
@@ -1305,6 +1342,49 @@ function pvpReplyToKillWhisper(name, whisperSeq, choiceIndex) {
     }
     try { if (typeof saveGame === 'function') saveGame(); } catch (e) {}
 }
+// 🎲 v3.6.22 玩家NPC普攻傷害＝「同等級怪物」傷害骰模型（用戶拍板·v3.6.23 起兩個模板 troll_*/troll2_* 全數適用）：移植 tools/mob-designer.js designMob 的非頭目路徑——
+//   單一真相在工具（改曲線先改工具再同步這裡）；等級動態（玩家±10）→ 只能生成時計算。
+//   只取 dmg/db：命中維持模板規則（hitBase + L/2·規格另有王族+5 等命中設定）；王族/戰士的常駐「額外傷害」(dbPlus) 疊在曲線 db 之上。
+//   工具的「單擊帽壓 DPS→拉高命中補償」只動 hit 不動骰，此處不取 hit 故不移植該迴圈。
+const _TROLL_CURVE_AC_PTS = [[1, -4], [20, -13], [40, -42], [60, -68], [65, -83], [75, -95], [90, -110]];
+function _trollCurveGearedAC(L) {
+    if (L <= 1) return -4;
+    for (let i = 1; i < _TROLL_CURVE_AC_PTS.length; i++) {
+        let x1 = _TROLL_CURVE_AC_PTS[i - 1][0], y1 = _TROLL_CURVE_AC_PTS[i - 1][1], x2 = _TROLL_CURVE_AC_PTS[i][0], y2 = _TROLL_CURVE_AC_PTS[i][1];
+        if (L <= x2) return y1 + (L - x1) * (y2 - y1) / (x2 - x1);
+    }
+    return -110;
+}
+function _trollCurveStretchHv(raw) { if (raw >= 8) return Math.min(20, raw); let e = Math.min(30, 8 - raw), f = e / 30, h = 2 * f - f * f; return 8 - 7 * h; }
+// 第三參 mult（😤 v3.6.24 用戶拍板）：曲線解出的每擊傷害 B「套完單擊帽後」整體倍率——一模板 2.0／二模板 2.5（v3.6.26·首設1.5/2.0）／法師兩模板皆 1（不掛 dmgMult）。
+// 倍率放帽後＝刻意允許超出標準怪單擊上限；骰/db 比例與取整沿用同一套推導。
+function trollCurveDmg(lv, atkSpd, mult) {
+    lv = Math.max(1, Math.round(lv)); atkSpd = +atkSpd || 0.67;
+    mult = (Number(mult) > 0) ? Number(mult) : 1;
+    let fast = atkSpd < 2, sd = fast ? 5 / 6 : 2 / 3, n = fast ? 1 : 2;
+    let S = lv < 25 ? 15 : lv < 50 ? 40 : 60.5;
+    let A, dpsPerMob;
+    if (lv <= 10)      { A = 8 - Math.floor(lv / 7); dpsPerMob = 0.80 * 15 / 5; }
+    else if (lv <= 20) { A = 8 - Math.floor(lv / 7); dpsPerMob = 1.00 * 15 / 5; }
+    else if (lv <= 25) { let t = (lv - 20) / 6; A = 6 + t * (-21.7 - 6); dpsPerMob = (1.0 + t * 0.25) * (15 + t * 25) / 5; }
+    else               { A = _trollCurveGearedAC(lv); dpsPerMob = 1.25 * S / 5; }
+    let hit = Math.max(0, Math.round((fast ? 8 : 0.56) - A));   // 命中錨（僅供解 B·不輸出）
+    let blk = lv < 30 ? 0 : lv < 55 ? 60 : 100, bN = 1 - 0.5 * (blk * 0.3 / 100), bH = 1 - 0.5 * (blk / 100);
+    let acGap = Math.max(0, 10 - A), rMax = Math.floor(acGap / 5), rMin = Math.floor(rMax / 3), M = (rMin + rMax) / 2;
+    let shv = Math.max(1, Math.min(20, _trollCurveStretchHv(hit + A)));
+    let pN0 = (1 + Math.max(0, Math.min(shv, 19) - 1)) / 20 - 0.05;
+    let B = (dpsPerMob * atkSpd + (pN0 * bN + 0.05 * bH) * M + 0.05 * bH * n) / (pN0 * bN + 0.05 * bH * (1 + sd));
+    let mhp = 14 + (lv - 1) * 11.5 + (lv >= 55 ? 100 : 0);
+    let capFrac = lv <= 20 ? (fast ? 0.12 : 0.25) : lv <= 25 ? (fast ? (0.12 + (lv - 20) / 6 * 0.03) : (0.25 + (lv - 20) / 6 * 0.05)) : (fast ? 0.15 : 0.30);
+    let Bcap = (capFrac * mhp + n + rMin) / (1 + sd);
+    if (B > Bcap) B = Bcap;
+    B *= mult;   // 😤 v3.6.24 模板倍率（帽後）
+    let db = Math.max(0, Math.round((1 - sd) * B));
+    let eRoll = sd * B;
+    let sides = Math.max(2, Math.round(2 * eRoll / n - 1));
+    while (sides > 99) { n++; sides = Math.max(2, Math.round(2 * eRoll / n - 1)); }
+    return { dmg: [n, sides], db: db };
+}
 function applyTrollScaling(mob, levelOverride) {
     let requested = Number(levelOverride);
     let L = Number.isFinite(requested) ? Math.round(requested) : Math.round(Number(player.lv) || 1) + pvpRandomLevelOffset();
@@ -1315,10 +1395,16 @@ function applyTrollScaling(mob, levelOverride) {
     mob.ac = (s.acBase !== undefined ? s.acBase : -10) - Math.floor(L / (s.acDiv || 4));
     mob.mr = (s.mrBase || 0) + Math.floor(L / (s.mrDiv || 5));
     mob.exp = 0; mob.goldMin = 0; mob.goldMax = 0;
-    mob.dmg = [1, s.dmgSides || 10];
-    mob.db = (s.dbHalf ? Math.floor(L / 2) : L) + (s.dbPlus || 0);
-    mob.hit = (s.hitBase || 0) + Math.floor(L / 2);
     mob.atkSpd = s.atkSpd || 0.67;
+    if (s.curveDmg) {   // 🎲 v3.6.22 玩家NPC：普攻骰＝同等級怪物曲線（依本模板攻速）×模板倍率(dmgMult·v3.6.24)＋常駐額外傷害(dbPlus)
+        let _cv = trollCurveDmg(L, mob.atkSpd, s.dmgMult);
+        mob.dmg = _cv.dmg;
+        mob.db = _cv.db + (s.dbPlus || 0);
+    } else {
+        mob.dmg = [1, s.dmgSides || 10];
+        mob.db = (s.dbHalf ? Math.floor(L / 2) : L) + (s.dbPlus || 0);
+    }
+    mob.hit = (s.hitBase || 0) + Math.floor(L / 2);
     mob.regenHp = mob.regenFix || ((L >= 50) ? 60 : 40);
     mob.regenEvery = 20;
     if (s.er) mob.er = s.er;
@@ -1417,7 +1503,7 @@ function spawnMob(idx) {
             let _siegePvp = pvpCreateRandomOpponent(_onF);
             _siegePvp.siegePlayer = true;
             _siegePvp.siegeLevel = Math.max(1, player.lv + Math.floor(Math.random() * 21) - 10);
-            mobId = TROLL_CLASS_BY_AVATAR[_siegePvp.avatar] || 'troll_warrior';
+            mobId = trollPickClassMob(_siegePvp.avatar);   // 😤 v3.6.20 70%/30% 模板抽選
             mapState._trollSpawn = _siegePvp;
         }
         // PVP：玩家開啟後，野外一般出怪有 1% 機率遭遇隨機玩家 NPC。
@@ -1429,7 +1515,7 @@ function spawnMob(idx) {
             let _onF = mapState.mobs.filter(m => m).map(m => m.n);
             let _pvp = pvpCreateRandomOpponent(_onF);
             if (_pvp && !_onF.includes(_pvp.n)) {
-                mobId = TROLL_CLASS_BY_AVATAR[_pvp.avatar] || "troll_warrior";
+                mobId = trollPickClassMob(_pvp.avatar);   // 😤 v3.6.20 70%/30% 模板抽選
                 mapState._trollSpawn = _pvp;
             }
         }
@@ -1441,7 +1527,7 @@ function spawnMob(idx) {
             if (_tl.length && !PURE_BOSS_MAPS.includes(mapState.current) && !isSiegeArea(mapState.current) && Math.random() < ((typeof window !== 'undefined' && window.__FB5_TEST_BUILD) ? 1 : 0.05)) {   // 🧪 TEST版：野外重生必定遭遇（正式版 5%）
                 let _onF = mapState.mobs.filter(m => m).map(m => m.n);
                 let _cand = _tl.filter(t => !_onF.includes(t.n));
-                if (_cand.length) { let _t = _cand[Math.floor(Math.random() * _cand.length)]; mobId = TROLL_CLASS_BY_AVATAR[_t.avatar] || "troll_warrior"; mapState._trollSpawn = _t; }
+                if (_cand.length) { let _t = _cand[Math.floor(Math.random() * _cand.length)]; mobId = trollPickClassMob(_t.avatar); mapState._trollSpawn = _t; }   // 😤 v3.6.20 70%/30% 模板抽選
             }
         }
     }

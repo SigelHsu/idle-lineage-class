@@ -869,7 +869,7 @@ function _petStatusTick(p) {
     for (let x of dots) {
         if ((st[x[0]] || 0) > 0 && state.ticks % Math.max(1, st[x[2]] || 10) === 0) p.hp -= Math.max(1, st[x[1]] || 1);
     }
-    ['freeze','stun','stone','sleep','paralyze','silence','magicseal','slowAtk','poison','burn','scald','bleed','weaken','disease','blind','potionFrost'].forEach(k => { if ((st[k] || 0) > 0) st[k]--; });
+    ['freeze','stun','stone','sleep','paralyze','silence','magicseal','slowAtk','poison','burn','scald','bleed','weaken','disease','blind','potionFrost','foulWater'].forEach(k => { if ((st[k] || 0) > 0) st[k]--; });   // 🌊 v3.6.20 含汙濁之水
     if (p.hp <= 0) _petDown(p, '持續傷害');
 }
 function _petPickTarget(p) {
@@ -1039,6 +1039,7 @@ function applyMobMagicToPet(mob, sk, p) {
     if (sk.type === 'weaken') { applyPure('weaken', (sk.dur || 15) * 10, '陷入弱化', 150); return; }
     if (sk.type === 'disease') { applyPure('disease', (sk.dur || 20) * 10, '陷入疾病', 150); return; }
     if (sk.type === 'potionfrost') { applyPure('potionFrost', (sk.dur || 8) * 10, '陷入藥水霜化', 150); return; }
+    if (sk.type === 'foulwater') { st.foulWater = Math.max(st.foulWater || 0, (sk.dur || 8) * 10); logCombat(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 施放${sk.skn || '汙濁之水'}，${nm} 陷入汙濁之水！（受到的治癒效果減半·持續 ${sk.dur || 8} 秒）`, 'enemy'); return; }   // 🌊 v3.6.20 必中（規格無機率項·不走 applyPure 的 pbase 判定）
     if (sk.type === 'frost_breath') { applyPure('slowAtk', (sk.dur || 8) * 10, '的攻擊速度大幅減慢', 200); return; }
     if (sk.type === 'scald') { if (chance(200)) { st.scald=(sk.dur||15)*10; st.scaldDmg=shMul*(sk.d||100); st.scaldTick=(sk.tick||3)*10; } return; }
     if (sk.type === 'poison') { if (chance(100)) { st.poison=(sk.dur||6)*10; st.poisonDmg=shMul*(sk.d||1); st.poisonTick=(sk.tick||1)*10; } return; }
@@ -1094,6 +1095,7 @@ function petTryPotion(p) {   // HP<X% 用治癒藥水（邏輯同傭兵 allyTryP
     stack.cnt--; if (stack.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== stack.uid);   // 🛡️ v3.2.42 稽核修：只移除喝空的那疊（原全背包 filter 會誤刪 cnt 為 undefined 的舊物品）
     let h = Math.max(1, Math.floor(potionHealBase(pdef) * (1 + getConPotionPct((player.d && player.d.con) || 0) / 100)));
     if (p._statuses && p._statuses.potionFrost > 0) h = Math.max(1, Math.floor(h * 0.5));   // 🌅 藥水霜化：寵物也以自己的 MR/狀態判定，不再借用主角色結果
+    if (p._statuses && p._statuses.foulWater > 0) h = Math.max(1, Math.floor(h * 0.5));   // 🌊 v3.6.20 汙濁之水：治癒藥水也減半
     p.hp = Math.min(p.mhp, p.hp + h);
     p._potCd = 10;
     logCombat(`寵物 <span class="text-emerald-300 font-bold">${p.form}</span> 飲用 ${pdef.n}，恢復 ${h} 點 HP。`, 'heal');

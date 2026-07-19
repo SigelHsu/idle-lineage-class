@@ -474,7 +474,7 @@ function castSkillInner(skId) {
         // 🆕 v2.6.28 淨化改「團隊清除」→ v2.6.29 改「一次只解一人·優先主要玩家」：施法者(玩家自己)受 石化/冰凍/暈眩/麻痺/沉睡/沉默/魔封 時無法使用；否則解隊列首位(玩家排首→傭兵)有可解狀態者一人。
         let _dk = (skId === 'sk_antidote') ? ['poison']
             : (skId === 'sk_holy_light') ? ['stone', 'paralyze']
-            : (skId === 'sk_cancel') ? ['freeze', 'stone', 'poison', 'paralyze', 'burn', 'scald', 'weaken', 'disease', 'blind', 'potionFrost'] : null;   // 🌅 審查修：魔法相消術可解日出之國四新異常
+            : (skId === 'sk_cancel') ? ['freeze', 'stone', 'poison', 'paralyze', 'burn', 'scald', 'weaken', 'disease', 'blind', 'potionFrost', 'foulWater'] : null;   // 🌅 審查修：魔法相消術可解日出之國四新異常；🌊 v3.6.20 含汙濁之水
         if(!_dk) { player.mp -= cost; player.cds.purifySk = getAutoCastInterval(player, true, player.cds.purifySk); logCombat(`施放 ${sk.n}。${sk.msg || ''}`, 'heal'); return true; }   // 非淨化 heal（保底·理論上無此類）
         if(dispelCasterBlocked(player.statuses)) return false;   // 🆕 自己硬控/沉默/魔封→無法使用
         let _tgt = teamCleanseOne(_dk);
