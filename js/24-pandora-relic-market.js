@@ -328,12 +328,13 @@
         });
     }
 
-    function _wandererItemPool() {
+    function _wandererItemPool(currency) {
         if (typeof DB === 'undefined' || !DB.items) return [];
+        let maxWeight = currency === 'gold' ? 80 : 10;
         return Object.keys(DB.items).filter(id => {
             let d = DB.items[id];
             let w = Math.floor(Number(d && d.gachaWeight) || 0);
-            return !!(d && d.n && !d.relic && w >= 1 && w <= 10);
+            return !!(d && d.n && !d.relic && w >= 1 && w <= maxWeight);
         });
     }
 
@@ -360,9 +361,9 @@
 
     function _makeWanderer(st, now, townId, currency) {
         let towns = _eligibleTowns();
-        let items = _wandererItemPool();
-        if (!towns.length || !items.length) return null;
         currency = currency === 'gold' ? 'gold' : 'diamond';
+        let items = _wandererItemPool(currency);
+        if (!towns.length || !items.length) return null;
         if (!townId || !towns.includes(townId)) townId = _pick(st, towns, 'wander-town');
         let itemId = _pick(st, items, 'wander-item');
         let d = DB.items[itemId];
@@ -371,7 +372,7 @@
             let max = _safeValue(d) + 3;
             en = Math.floor(_rand(st, 'wander-enhance') * (max + 1));
         }
-        let weight = Math.max(1, Math.min(10, Math.floor(Number(d.gachaWeight) || 10)));
+        let weight = Math.max(1, Math.min(currency === 'gold' ? 80 : 10, Math.floor(Number(d.gachaWeight) || 10)));
         let over = en == null ? 0 : Math.max(0, en - _safeValue(d));
         let mult = over === 1 ? 1.2 : over === 2 ? 1.5 : over >= 3 ? 2 : 1;
         let buyer = {
