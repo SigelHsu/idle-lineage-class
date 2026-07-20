@@ -232,16 +232,20 @@ function gameLoop() {
         state.ff = false;
         state.ffSmall = false;
     }
-    if (_tickDebt < TICK_MS) {   // 補跑完畢：統一刷新＋存檔（補跑期間 killMob 等的逐次刷新/存檔全被 state.ff 跳過）
-        try { renderMobs(); updateUI(); renderTabs(true); } catch (e) {}
-        try { saveGame(); } catch (e) {}
-        if (_ffAcc && _ffAcc.ticks >= 30) {   // ≥3 秒的補跑才顯示摘要（前景微卡頓的小補跑不洗版）
+    if (_tickDebt < TICK_MS) {   // 補跑完畢
+        if (_ffAcc && _ffAcc.ticks >= 30) {   // ≥3 秒的補跑（回前景補幀）：統一刷新＋存檔＋摘要
+            try { renderMobs(); updateUI(); renderTabs(true); } catch (e) {}
+            try { saveGame(); } catch (e) {}
             try {
                 let _gd = (player.gold || 0) - _ffAcc.gold;
                 let _sec = Math.round(_ffAcc.ticks / 10);
                 let _dur = _sec >= 60 ? Math.floor(_sec / 60) + ' 分 ' + (_sec % 60) + ' 秒' : _sec + ' 秒';
                 logSys('<span class="text-cyan-300 font-bold">⏩ 掛機補跑完成：</span>已補上 ' + _dur + ' 的進度' + (_gd > 0 ? ('，金幣 +' + _gd.toLocaleString()) : '') + '。');
             } catch (e) {}
+        } else {
+            // ⚠️ 前景微卡頓的小補跑（owed 2~29·開面板/GC/重繪都會觸發）只補常規重繪，絕不存檔：
+            //    saveGame 的 LZ 壓縮本身會卡出下一次 owed≥2 → 存檔→卡頓→再存檔的自我延續迴圈（v3.6.96 修連續自動存檔）。
+            flushTickRender();
         }
         _ffAcc = null;
     } else {
