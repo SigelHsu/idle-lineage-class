@@ -29,6 +29,8 @@ const NPC_CLAN_WORLD_COUNT = 20;
 const NPC_CLAN_MORALE_MAX = 1000;
 const NPC_CLAN_HATRED_MAX = 100;
 const NPC_CLAN_HATRED_DECAY_MS = 60 * 60 * 1000;
+const NPC_CLAN_WAR_MIN_MS = 24 * 60 * 60 * 1000;
+const NPC_CLAN_COUNTER_WAR_STEP = 0.05;
 const NPC_CLAN_GROUP_CHANCE = 0.01;
 const NPC_CLAN_WAR_ENCOUNTER_CHANCE = 0.80;
 const NPC_CLAN_PLAYER_WAR_ENCOUNTER_CHANCE = 0.50;
@@ -265,6 +267,10 @@ function _npcClanNormalizeEntry(raw, legacyCombinedWar) {
     }
     let playerWar = !!raw.war;
     let npcHostile = !!raw.hostile || (!!legacyCombinedWar && playerWar);
+    let warStartedAt = playerWar
+        ? Math.max(0, Math.floor(Number(raw.warStartedAt) || Number(raw.createdAt) || 0))
+        : 0;
+    let counterWarChance = playerWar && !npcHostile ? Math.max(0, Math.min(1, Number(raw.counterWarChance) || 0)) : 0;
     return {
         id:id,
         name:name,
@@ -273,6 +279,8 @@ function _npcClanNormalizeEntry(raw, legacyCombinedWar) {
         known:!!raw.known || npcHostile || playerWar,
         hostile:npcHostile,
         war:playerWar,
+        warStartedAt:warStartedAt,
+        counterWarChance:counterWarChance,
         mercyUsed:!!raw.mercyUsed,
         mercy:mercy,
         leader:_npcClanNormalizeLeader(raw.leader),
@@ -483,6 +491,8 @@ function _npcClanCreateOne(world, mode) {
         known:false,
         hostile:false,
         war:false,
+        warStartedAt:0,
+        counterWarChance:0,
         mercyUsed:false,
         mercy:null,
         leader:leader,
@@ -621,9 +631,16 @@ function npcClanGetById(clanId, p) {
     return _npcClanById(npcClanGetWorld(p || player), clanId);
 }
 
+function _npcClanWarRemainingMs(clan, now) {
+    if (!clan || !clan.war) return 0;
+    let startedAt = Math.max(0, Math.floor(Number(clan.warStartedAt) || 0));
+    if (!startedAt) return 0;
+    return Math.max(0, startedAt + NPC_CLAN_WAR_MIN_MS - (Number(now) || Date.now()));
+}
+
 function npcClanHostileList(p) {
     let world = npcClanGetWorld(p || player);
-    return world ? world.clans.filter(c => c && (c.known || c.hostile || c.war || (c.mercy && c.mercy.pending))) : [];
+    return world ? world.clans.filter(c => c && (c.hostile || c.war || (c.mercy && c.mercy.pending))) : [];
 }
 
 function _npcClanConflictSnapshot(world, at) {
@@ -738,6 +755,7 @@ function _npcClanApplyMoraleLocked(world, clan, delta, events, mode) {
         clan.mercyUsed = true;
         clan.hatred = 0;
         clan.hostile = false;
+        clan.counterWarChance = 0;
         clan.mercy = {
             pending:true,
             nextAt:Date.now() + _npcClanRandomDelay(60 * 1000, 5 * 60 * 1000)
@@ -753,6 +771,7 @@ function _npcClanApplyHatredLocked(clan, delta) {
     if (clan.hatred >= 50) {
         clan.known = true;
         clan.hostile = true;
+        clan.counterWarChance = 0;
     }
 }
 
@@ -971,16 +990,30 @@ function npcClanOnNpcKilled(mob) {
         let world = st.npcWorlds[mode];
         let clan = world && _npcClanById(world, mob._npcClanId);
         if (!clan) return { commit:false, missing:true };
+        let clanName = clan.name;
         let atWar = !!clan.war;
+        let counterDeclared = false;
         let leaderKill = atWar && !!mob._npcClanLeader;
         let impact = leaderKill ? 10 : 1;
         _npcClanApplyHatredLocked(clan, impact);
+        if (atWar && !clan.hostile) {
+            clan.counterWarChance = Math.min(1, Math.max(0, Number(clan.counterWarChance) || 0) + NPC_CLAN_COUNTER_WAR_STEP);
+            if (Math.random() < clan.counterWarChance) {
+                clan.known = true;
+                clan.hostile = true;
+                clan.counterWarChance = 0;
+                counterDeclared = true;
+            }
+        }
         if (atWar) clan = _npcClanApplyMoraleLocked(world, clan, -impact, events, mode);
-        return { clanAlive:!!clan, clanWar:!!(clan && clan.war), wasWar:atWar };
+        return { clanAlive:!!clan, clanWar:!!(clan && clan.war), wasWar:atWar, counterDeclared:!!clan && counterDeclared, clanName:clanName };
     });
     if (result && result.ok) {
         mob._npcClanWarKill = !!result.wasWar;
         _npcClanEventLog(events);
+        if (result.counterDeclared && typeof logSys === 'function') {
+            logSys(`<span class="text-red-400 font-bold">NPC 血盟「${clanEsc(result.clanName)}」對你的血盟宣戰，雙方進入互宣狀態！</span>`);
+        }
     }
     let battle = mapState && mapState.npcClanBattle;
     if (battle && battle.clanId === mob._npcClanId) {
@@ -1094,16 +1127,27 @@ function npcClanSetWar(clanId, on) {
     if (!player || player.cls !== 'royal') { alert('只有王族可以對 NPC 血盟宣戰或停止宣戰。'); return; }
     if (!clanGetModeInfo(player)) { alert('你尚未加入血盟。'); return; }
     let mode = clanModeKey(player);
+    let now = Date.now();
     let result = _clanWithLock(st => {
         let world = st.npcWorlds[mode];
         let clan = world && _npcClanById(world, clanId);
         if (!clan) return { commit:false, error:'該 NPC 血盟已不存在。' };
         if (on) {
             clan.known = true;   // 🏴 v3.6.52 宣戰列表改列全部 NPC 血盟→取消「未識別不可宣戰」的閘（宣戰本身即代表已知曉對方）
-            clan.war = true;
+            if (!clan.war) {
+                clan.war = true;
+                clan.warStartedAt = now;
+                clan.counterWarChance = 0;
+            }
             clan.mercy = null;
         } else {
+            let remaining = _npcClanWarRemainingMs(clan, now);
+            if (remaining > 0) {
+                return { commit:false, error:`宣戰後必須維持 24 小時，尚需 ${_npcClanWarRemainingText(remaining)}才能停止宣戰。` };
+            }
             clan.war = false;
+            clan.warStartedAt = 0;
+            clan.counterWarChance = 0;
             clan.mercy = null;
         }
         return { name:clan.name, npcHostile:!!clan.hostile };
@@ -1129,17 +1173,27 @@ function npcClanMercyAction(clanId, action) {
         let clan = world && _npcClanById(world, clanId);
         if (!clan) return { commit:false, error:'該 NPC 血盟已不存在。' };
         if (!clan.mercy || !clan.mercy.pending) return { commit:false, error:'這次求饒已經失效。' };
+        if (action !== 'taunt') {
+            let remaining = _npcClanWarRemainingMs(clan, Date.now());
+            if (remaining > 0) return { commit:false, error:`宣戰未滿 24 小時，尚需 ${_npcClanWarRemainingText(remaining)}才能接受停戰。` };
+        }
         clan.mercy = null;
         if (action === 'taunt') {
             clan.morale = Math.min(NPC_CLAN_MORALE_MAX, clan.morale + 200);
             clan.hatred = NPC_CLAN_HATRED_MAX;
             clan.known = true;
             clan.hostile = true;
-            clan.war = true;
+            if (!clan.war) {
+                clan.war = true;
+                clan.warStartedAt = Date.now();
+            }
+            clan.counterWarChance = 0;
         } else {
             clan.hatred = 0;
             clan.hostile = false;
             clan.war = false;
+            clan.warStartedAt = 0;
+            clan.counterWarChance = 0;
         }
         return { name:clan.name, taunted:action === 'taunt' };
     });
@@ -1624,6 +1678,14 @@ function _npcClanCastleLabel(world, clanId) {
     return cities.length ? cities.map(city => CLAN_CASTLE_NAMES[city]).join('、') : '未佔領城堡';
 }
 
+function _npcClanWarRemainingText(ms) {
+    let totalMinutes = Math.max(1, Math.ceil((Number(ms) || 0) / 60000));
+    let hours = Math.floor(totalMinutes / 60);
+    let minutes = totalMinutes % 60;
+    if (!hours) return `${minutes} 分鐘`;
+    return `${hours} 小時${minutes ? ` ${minutes} 分鐘` : ''}`;
+}
+
 // 🏴 v3.6.52 宣戰列表：顯示「遊戲中所有 NPC 血盟」（不再只列已識別/已交戰者），四種外交狀態各自配色。
 //   和平＝藍｜宣戰(我方單方)／對方宣戰(NPC 單方)＝淺紅｜互相宣戰＝深紅。求和中維持既有的嘲諷/解除功能，以附註標籤呈現。
 function _npcClanHostilePanelHtml() {
@@ -1636,16 +1698,22 @@ function _npcClanHostilePanelHtml() {
         else if (clan.war)            { status = '宣戰';     statusCls = 'clan-dip-war'; }
         else if (clan.hostile)        { status = '對方宣戰'; statusCls = 'clan-dip-enemy'; }
         else                          { status = '和平';     statusCls = 'clan-dip-peace'; }
+        let warRemaining = _npcClanWarRemainingMs(clan, Date.now());
         let mercyTag = (clan.mercy && clan.mercy.pending) ? '<span class="text-amber-300 font-bold ml-2">（求和中）</span>' : '';
+        let warLockTag = warRemaining > 0 ? `<span class="text-amber-300 font-normal ml-2">（${_npcClanWarRemainingText(warRemaining)}後可停止）</span>` : '';
         let leader = clan.leader && clan.leader.n ? clan.leader.n : '未知盟主';
         let actions = '';
         if (royal && clan.mercy && clan.mercy.pending) {
             actions = `<div class="flex gap-2 shrink-0">
                 <button class="btn px-3 py-2 text-sm font-bold bg-red-900 border-red-600 text-red-100" onclick="npcClanMercyAction('${clan.id}','taunt')">嘲諷</button>
-                <button class="btn px-3 py-2 text-sm font-bold bg-emerald-900 border-emerald-600 text-emerald-100" onclick="npcClanMercyAction('${clan.id}','release')">解除</button>
+                ${warRemaining > 0
+                    ? '<button class="btn px-3 py-2 text-sm font-bold opacity-60 cursor-not-allowed" disabled>尚不可解除</button>'
+                    : `<button class="btn px-3 py-2 text-sm font-bold bg-emerald-900 border-emerald-600 text-emerald-100" onclick="npcClanMercyAction('${clan.id}','release')">解除</button>`}
             </div>`;
         } else if (royal && clan.war) {
-            actions = `<button class="btn shrink-0 px-3 py-2 text-sm font-bold bg-emerald-900 border-emerald-600 text-emerald-100" onclick="npcClanSetWar('${clan.id}',false)">停止宣戰</button>`;
+            actions = warRemaining > 0
+                ? '<button class="btn shrink-0 px-3 py-2 text-sm font-bold opacity-60 cursor-not-allowed" disabled>尚不可解除</button>'
+                : `<button class="btn shrink-0 px-3 py-2 text-sm font-bold bg-emerald-900 border-emerald-600 text-emerald-100" onclick="npcClanSetWar('${clan.id}',false)">停止宣戰</button>`;
         } else if (royal) {
             actions = `<button class="btn shrink-0 px-3 py-2 text-sm font-bold bg-red-900 border-red-600 text-red-100" onclick="npcClanSetWar('${clan.id}',true)">宣戰</button>`;
         }
@@ -1653,7 +1721,7 @@ function _npcClanHostilePanelHtml() {
             <div class="min-w-0">
                 <div class="font-bold text-slate-100 truncate">${clanEsc(clan.name)}</div>
                 <div class="text-xs text-slate-400 mt-1">盟主：${clanEsc(leader)}・${clanEsc(_npcClanCastleLabel(world, clan.id))}</div>
-                <div class="text-xs font-bold mt-1 ${statusCls}">${status}${mercyTag}</div>
+                <div class="text-xs font-bold mt-1 ${statusCls}">${status}${mercyTag}${warLockTag}</div>
             </div>
             ${actions}
         </div>`;
