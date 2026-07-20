@@ -930,6 +930,28 @@ function npcClanAssignOpponent(entry, opts) {
     return entry;
 }
 
+function npcClanUpdateMemberAlignment(name, alignmentValue, p) {
+    if (!name || !p || !p.cls) return false;
+    let key = String(name).slice(0, 24);
+    let value = typeof pvpClampAlignment === 'function'
+        ? pvpClampAlignment(alignmentValue)
+        : Math.max(-32767, Math.min(32767, Math.round(Number(alignmentValue) || 0)));
+    let mode = clanModeKey(p);
+    let result = _clanWithLock(st => {
+        let world = st.npcWorlds[mode] || (st.npcWorlds[mode] = _npcClanDefaultWorld());
+        _npcClanEnsureWorldData(world, mode);
+        let rec = world.memberships[key];
+        if (!rec) return { commit:false, missing:true };
+        rec.alignmentValue = value;
+        if (rec.leader && rec.clanId) {
+            let clan = _npcClanById(world, rec.clanId);
+            if (clan && clan.leader && clan.leader.n === key) clan.leader.alignmentValue = value;
+        }
+        return { alignmentValue:value };
+    });
+    return !!(result && result.ok);
+}
+
 function npcClanCreateGroupBattleOpponent(clanId) {
     let entry = typeof pvpCreateRandomOpponent === 'function'
         ? pvpCreateRandomOpponent(null, { skipClanAssign:true })

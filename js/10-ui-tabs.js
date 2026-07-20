@@ -2153,15 +2153,16 @@ function toggleLock(uid) {
     if (item) {
         item.lock = !item.lock;
         if (item.lock) item.junk = false;   // 鎖定自動解除廢品勾選
-        // 🔓 v3.6.57 解鎖後自動併回同簽章的未鎖定堆疊：
-        //    gainItem 期間刻意「不併入鎖定堆疊」(v3.5.84)，同一物品因此會分裂成「鎖定一疊＋未鎖定一疊」；
-        //    解鎖＝玩家放行這疊，若不合併就會永遠留著兩格同名物品（且之後每次獲得又只進其中一疊）。
-        //    合併方向比照 gainItem：併入既有的未鎖定堆疊、只加數量、不更動對方的廢品狀態。
+        // 🔒 v3.6.92 上鎖／解鎖後都併回同簽章的另一疊（取代 v3.6.57 的「僅解鎖時併回未鎖疊」）：
+        //    現行不變量＝同簽章永遠只有一格（gainItem／倉庫／載入合併同口徑），舊存檔留下的分裂在此收斂。
+        //    ⚠️ 剛「解鎖」時只找未鎖定的對象——若併進鎖定疊會被 _whStackAbsorb 式的保護擴散重新鎖回去，
+        //       玩家的解鎖動作等於當場失效；剛「上鎖」則可併入任何一疊（結果本來就是整疊鎖定）。
         //    ⚠️ 巨靈的三個願望(gw)每只戒指的願望各自獨立，永不合併（sameItemSig 不含 gw，須顯式排除）。
-        if (!item.lock && !item.gw) {
-            let host = player.inv.find(i => i !== item && !i.lock && !i.gw && sameItemSig(i, item));
+        if (!item.gw) {
+            let host = player.inv.find(i => i !== item && !i.gw && (item.lock || !i.lock) && sameItemSig(i, item));
             if (host) {
                 host.cnt = (host.cnt || 1) + (item.cnt || 1);
+                if (item.lock) { host.lock = true; host.junk = false; }   // 保護狀態只會擴散、不會遺失
                 player.inv.splice(player.inv.indexOf(item), 1);
                 item = host;
             }

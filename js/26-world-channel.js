@@ -1760,7 +1760,7 @@ function worldChannelAsk() {
     input.value = '';
     let myName = (typeof player !== 'undefined' && player && player.name) ? player.name : '你';
     let myAlignment = (typeof player !== 'undefined' && player) ? player.alignmentValue : 0;
-    logWorld(`<span class="wc-ask">[${_wcStaticNameHtml(myName, myAlignment)}] ${_wcEsc(q)}</span>`);
+    logWorld(`<span class="wc-ask">${_wcStaticNameHtml(myName, myAlignment)}：${_wcEsc(q)}</span>`);
 
     let topic = _wcMatchTopic(q);
     let n = 1 + Math.floor(Math.random() * 3);             // 每次隨機 1~3 人回覆

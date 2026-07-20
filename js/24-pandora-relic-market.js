@@ -418,10 +418,13 @@
         if (!w || typeof player === 'undefined' || !player || !player.cls) return false;
         if (!Array.isArray(player.trollPlayers)) player.trollPlayers = [];
         let old = player.trollPlayers.find(t => t && t.n === w.name);
+        let alignmentValue = (typeof pvpLockAlignment === 'function')
+            ? pvpLockAlignment(w.name, w.alignmentValue, old && old.clanId)
+            : _normalizeAlignmentValue(w.alignmentValue);
         let chase = {
             n: w.name,
             avatar: w.avatar || '男戰士',
-            alignmentValue: _normalizeAlignmentValue(w.alignmentValue),
+            alignmentValue: alignmentValue,
             until: Date.now() + 2 * 60 * 60 * 1000
         };
         if (old && Number.isFinite(Number(old.levelOffset))) chase.levelOffset = old.levelOffset;
@@ -431,6 +434,22 @@
         if (quietResult && !quietResult.gone) _lastBroadcastCycles[w.id] = 'quiet';
         try { if (typeof saveGame === 'function') saveGame(); } catch (e) {}
         return true;
+    }
+
+    function pandoraUpdateWandererAlignment(name, alignmentValue) {
+        name = String(name || '').slice(0, 24);
+        if (!name) return false;
+        let value = _normalizeAlignmentValue(alignmentValue);
+        let result = _withStateLock(st => {
+            let changed = false;
+            (st.wanderers || []).forEach(w => {
+                if (!w || String(w.name || '').slice(0, 24) !== name || w.alignmentValue === value) return;
+                w.alignmentValue = value;
+                changed = true;
+            });
+            return changed ? { alignmentValue:value } : { commit:false, unchanged:true };
+        });
+        return !!(result && result.ok);
     }
 
     function _blockPlayerForWanderer(wandererId) {
@@ -1885,6 +1904,7 @@
     }
 
     window.wanderingBuyerSystemTick = wanderingBuyerSystemTick;
+    window.pandoraUpdateWandererAlignment = pandoraUpdateWandererAlignment;
     window.renderWanderBroadcastPins = renderWanderBroadcastPins;
     window.getWanderingBuyersForTown = getWanderingBuyersForTown;
     window.getWanderingBuyerForTown = getWanderingBuyerForTown;

@@ -1,16 +1,19 @@
 // ===== 真正離線收益（獨立於戰鬥 tick，不補幀、不模擬戰鬥）=====
 // 公式：同地圖最近實戰每分鐘產出 × 可結算分鐘 × 70%。
-// 最短離線 5 分鐘、最多結算 12 小時；依實戰怪物組成抽取一般掉落與卡片。
+// 最短離線 1 分鐘、最多結算 12 小時；依實戰怪物組成抽取一般掉落與卡片。
 // 頭目、PVP、任務專用品與活動事件不做離線抽取，避免事件重複觸發。
+// 🔀 v3.6.95 混合制（用戶拍板）：本檔只負責「真正關閉網頁後重開」（loadGame／pageshow bfcache 還原）；
+//    「網頁還開著」的切分頁/縮小＝js/01 錨點＋js/03 state.ff 補跑全額補幀，本檔於回前景時只重置不結算。
 (function () {
     'use strict';
 
-    const OFFLINE_VERSION = 2;
-    const OFFLINE_MIN_MS = 5 * 60 * 1000;
+    const OFFLINE_VERSION = 3;
+    const OFFLINE_MIN_MS = 1 * 60 * 1000;
     const OFFLINE_MAX_MS = 12 * 60 * 60 * 1000;
     const OFFLINE_EFFICIENCY = 0.70;
-    const OFFLINE_SAMPLE_MIN_MS = 30 * 1000;
+    const OFFLINE_SAMPLE_MIN_MS = 15 * 1000;
     const OFFLINE_SAMPLE_MIN_KILLS = 3;
+    const OFFLINE_MAX_SAVED_PROFILES = 5;
     const OFFLINE_RECENT_KILL_MS = 5 * 60 * 1000;
     const OFFLINE_HEARTBEAT_MS = 30 * 1000;
     const OFFLINE_MAX_KILLS_PER_MIN = 3000;
@@ -24,7 +27,7 @@
     let _offlineSettling = false;
     let _offlineInternalSave = false;
     // ⚠️ 背景分頁期間任何存檔（js/01 每 5 分鐘自動存檔在背景仍會觸發）都不得把 awaySince／
-    //    checkpoint.lastActive 往後推，否則離線時長永遠湊不滿 5 分鐘下限、資格也會因
+    //    checkpoint.lastActive 往後推，否則離線時長永遠湊不滿 1 分鐘下限、資格也會因
     //    「最後擊殺超過 5 分鐘」被翻成 false → 回前景永遠結不了帳。
     //    快照時間一律夾回「進入背景那一刻」（visibilitychange 設定／清除）。
     let _offlineHiddenAt = (typeof document !== 'undefined' && document.hidden) ? Date.now() : 0;
@@ -163,17 +166,58 @@
         };
     }
 
+    function _offlineSavedProfiles(raw, legacyProfile) {
+        let rows = Array.isArray(raw) ? raw.slice() : [];
+        if (legacyProfile) rows.push(legacyProfile);
+        let byMap = Object.create(null);
+        rows.forEach(row => {
+            let profile = _offlineProfile(row);
+            if (!profile) return;
+            let old = byMap[profile.map];
+            if (!old || profile.updatedAt >= old.updatedAt) byMap[profile.map] = profile;
+        });
+        return Object.keys(byMap)
+            .map(map => byMap[map])
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .slice(0, OFFLINE_MAX_SAVED_PROFILES);
+    }
+
+    function _offlineProfileForMap(st, map) {
+        map = String(map || '');
+        if (!st || !map) return null;
+        let current = _offlineProfile(st.profile);
+        if (current && current.map === map) return current;
+        let profiles = Array.isArray(st.profiles) ? st.profiles : [];
+        for (let i = 0; i < profiles.length; i++) {
+            let profile = _offlineProfile(profiles[i]);
+            if (profile && profile.map === map) return profile;
+        }
+        return null;
+    }
+
+    function _offlineRememberProfile(st, raw) {
+        let profile = _offlineProfile(raw);
+        if (!st || !profile) return null;
+        st.profiles = _offlineSavedProfiles([profile].concat(st.profiles || []), null);
+        st.profile = profile;
+        return profile;
+    }
+
     function _offlineEnsureState() {
         if (typeof player === 'undefined' || !player || !player.cls) return null;
         let raw = player.offlineHunt;
         if (!raw || typeof raw !== 'object') raw = {};
+        let profile = _offlineProfile(raw.profile);
+        let profiles = _offlineSavedProfiles(raw.profiles, profile);
+        if (profile) profile = profiles.find(row => row.map === profile.map) || profile;
         player.offlineHunt = {
             v: OFFLINE_VERSION,
             eligible: raw.eligible === true,
             awaySince: Math.max(0, Math.floor(_offlineFinite(raw.awaySince, 0))),
             map: raw.map ? String(raw.map) : '',
             mapName: raw.mapName ? String(raw.mapName) : '',
-            profile: _offlineProfile(raw.profile)
+            profile: profile,
+            profiles: profiles
         };
         return player.offlineHunt;
     }
@@ -271,16 +315,20 @@
         }
     }
 
-    function _offlineCommitProfile(now) {
-        let st = _offlineEnsureState();
-        if (!st || !_offlineRuntime || !_offlineRuntime.firstKillAt) return st ? st.profile : null;
+    function _offlineCommitProfile(now, st) {
+        st = st || _offlineEnsureState();
+        if (!st) return null;
+        let currentMap = String(mapState && mapState.current || '');
+        let previous = _offlineProfileForMap(st, currentMap);
+        st.profile = previous;
+        if (!_offlineRuntime || !_offlineRuntime.firstKillAt) return previous;
         let rt = _offlineRuntime;
         let elapsed = Math.max(0, now - rt.firstKillAt);
-        if (rt.map !== String(mapState && mapState.current || '') || elapsed < OFFLINE_SAMPLE_MIN_MS || rt.kills < OFFLINE_SAMPLE_MIN_KILLS) {
-            return st.profile;
+        if (rt.map !== currentMap || elapsed < OFFLINE_SAMPLE_MIN_MS || rt.kills < OFFLINE_SAMPLE_MIN_KILLS) {
+            return previous;
         }
         let mins = elapsed / 60000;
-        st.profile = _offlineProfile({
+        return _offlineRememberProfile(st, {
             map: rt.map,
             mapName: _offlineMapName(rt.map),
             expPerMin: rt.exp / mins,
@@ -293,14 +341,13 @@
             sampleKills: rt.kills,
             updatedAt: now
         });
-        return st.profile;
     }
 
     function _offlinePrepareSnapshot(now) {
         if (_offlineHiddenAt > 0 && now > _offlineHiddenAt) now = _offlineHiddenAt;
         let st = _offlineEnsureState();
         if (!st) return null;
-        let profile = _offlineCommitProfile(now);
+        let profile = _offlineCommitProfile(now, st);
         let eligible = _offlineCanSnapshot(now, profile);
         st.eligible = eligible;
         st.awaySince = now;
@@ -651,7 +698,6 @@
                 '<div style="color:#cbd5e1;line-height:1.7;margin-bottom:12px;">' +
                     '<div>狩獵區：<span style="color:#93c5fd;">' + _offlineEsc(result.mapName) + '</span></div>' +
                     '<div>離線時間：' + _offlineFormatDuration(result.elapsedMs) + (result.capped ? '（已達 12 小時上限）' : '') + '</div>' +
-                    '<div>離線效率：70%</div>' +
                 '</div>' +
                 '<div style="display:grid;grid-template-columns:1fr auto;gap:8px 14px;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:12px;">' +
                     '<span>獲得經驗</span><b style="color:#86efac;">' + result.exp.toLocaleString() + '</b>' +
@@ -774,7 +820,9 @@
         window.killMob = function (idx) {
             let map = typeof mapState !== 'undefined' && mapState ? String(mapState.current || '') : '';
             let mob = mapState && mapState.mobs ? mapState.mobs[idx] : null;
-            let valid = _offlineValidMob(mob, map);
+            // ⏩ v3.6.95 補跑（state.ff）期間的擊殺不進離線取樣：補幀是把數小時壓縮在幾秒內重放，
+            //    餵進取樣會把「每分鐘擊殺/經驗/金幣速率」灌爆 → 之後關頁的離線收益跟著爆炸。
+            let valid = !(typeof state !== 'undefined' && state && state.ff) && _offlineValidMob(mob, map);
             let beforeGold = valid ? Math.max(0, Number(player.gold) || 0) : 0;
             let beforeProgress = valid ? _offlineExpProgress(player.lv, player.exp) : 0;
             let partyExp = valid ? _offlineExpectedPartyExp(mob) : { pet: 0, ally: 0 };
@@ -839,8 +887,13 @@
                 if (!_offlineHiddenAt) _offlineHiddenAt = _offlineNow();
                 _offlinePauseAndSave();
             } else {
+                // 🔀 v3.6.95 混合制（用戶拍板）：分頁還開著時切回前景＝js/03 補幀全額補跑，這裡「只重置、不結算」。
+                //    離線結算只留給「真正關閉網頁後重開」（loadGame）與 bfcache 還原（pageshow）兩個入口。
+                //    ⚠️ 重置（awaySince 拉回現在＋清空取樣 runtime）不可省——補幀已 100% 補過的時段若留著舊 awaySince，
+                //       之後一關頁就會被離線結算再算一次（重複入帳）；runtime 不清則取樣窗跨過背景空窗、速率被稀釋。
                 _offlineHiddenAt = 0;
-                setTimeout(function () { _offlineSettle('visible'); }, 0);
+                _offlineResetRuntime(typeof mapState !== 'undefined' && mapState ? mapState.current : '');
+                _offlinePrepareSnapshot(_offlineNow());
             }
         });
     }

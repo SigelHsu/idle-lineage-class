@@ -1038,7 +1038,7 @@ function doBianAttr(slotKey, ele) {
     let same = !!(cur && cur.ele === ele);
     let nextTier = same ? cur.tier + 1 : 1;   // 同屬性→下一階；無屬性/不同屬性→該屬性1階
     if (same && cur.tier >= 5) {
-        if (weaponHasBaseTriggeredSkill(d)) { logSys('<span class="text-amber-300">此武器無法附加魔法。</span>'); return; }   // 原生已有攻擊／命中觸發技能，不消耗
+        if (weaponHasBaseTriggeredSkill(d, item.id)) { logSys('<span class="text-amber-300">此武器無法附加魔法。</span>'); return; }   // 原生已有攻擊／命中觸發技能，不消耗
         let pool = ATTR_MAGIC_SKILLS[ele] || [];
         if (!pool.length) return;
         let oldMagic = getAttrMagicProc(item);

@@ -55,10 +55,11 @@ function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, de
 
     let _tEn = 0;   // 🏛️ v3.0.83 傳統模式已取消：掉落自帶強化值停用（任何來源恆 +0·手動強化照常）
     let _probe = { id: id, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff };
-    // ⚠️ v3.5.84 不得併入「鎖定」堆疊（與同檔 unequipItem/syncShahaArrow 及倉庫 _whStackFind 一致）：
-    //    鎖定＝「這疊不要動」。若新獲得的物品被併進鎖定堆疊，它們就連帶變成不可消耗，
-    //    而製作/任務的扣料路徑會跳過鎖定件 → 出現「底層材料被吃掉、中間物卻沒扣」的無限複製，
-    //    以及「背包看得到 100 個卻被告知持有 0」。改為另開一疊未鎖定的，鎖定那疊維持原狀。
+    // 🔒 v3.6.92 改為「併入鎖定堆疊」（用戶拍板·取代 v3.5.84 的分裂制）：鎖定的物品再次獲得→直接併同一格，
+    //    整疊都受鎖定保護（＝要用就得先手動解鎖整疊）。同簽章永遠只有一格是本作現行不變量，
+    //    倉庫(js/12 _whStackFind)、載入合併(js/13 consolidateInventory)、上鎖/解鎖(js/10 toggleLock) 皆同口徑。
+    //    ⚠️ 唯一例外＝`_lockMergeOff`（js/14 ensureMaterial 製作遞迴補製中間物）：中間物若併進鎖定疊，
+    //       invCountId/buildPool 看不到它 → 父層扣不到 → 重演 v3.5.85 的「底層材料被吃掉、中間物卻沒扣」。
     // 🏺 v3.6.44 巨靈的三個願望：獲得瞬間以 committed RNG 從 16 種能力抽 3 個（不重複）存於實體 gw（永不與其他堆疊合併——每只戒指願望各自獨立·calcStats 消費·tooltip 顯示）
     let _gw = null;
     if (id === 'relic_genie_wishes' && d && d.wishRing) {
@@ -66,7 +67,7 @@ function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, de
         _gw = [];
         for (let _k = 0; _k < 3; _k++) { let _ri = Math.floor(lootRng('geniewish') * _pool.length); _gw.push(_pool.splice(_ri, 1)[0]); }
     }
-    let ex = _gw ? null : player.inv.find(i => !i.lock && sameItemSig(i, _probe));   // 🔧 架構#3：統一簽章比對（itemSig 已含 en→+0 只併 +0、+3 只併 +3，永不誤併不同強化值）
+    let ex = _gw ? null : player.inv.find(i => !i.gw && (!_lockMergeOff || !i.lock) && sameItemSig(i, _probe));   // 🔧 架構#3：統一簽章比對（itemSig 已含 en→+0 只併 +0、+3 只併 +3，永不誤併不同強化值）；⚠️ 巨靈願望戒指(gw)每只獨立·簽章不含 gw 故顯式排除
     if(ex) ex.cnt += cnt;   // 僅加數量、不更動既有堆疊的廢品狀態
     else { let _push = { id: id, uid: uid(), cnt: cnt, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff, lock: false, junk: !!(player.junkPrefs && player.junkPrefs[itemSig(_probe)]) && !(d && d.noJunk) }; if (_gw) _push.gw = _gw; player.inv.push(_push); }   // 🔧 廢品記憶改以完整簽章比對：詞綴物品也可自動標記，但僅限「完全相同詞綴」者；🎴 noJunk(收集冊)永不自動標記
 
@@ -105,7 +106,7 @@ function gainSherineRemains(remId, group, silent) {
     let d = DB.items[remId];
     if (!d || !group) return null;
     let _probe = { id: remId, en: 0, bless: false, anc: false, attr: false, seteff: group };
-    let ex = player.inv.find(i => !i.lock && sameItemSig(i, _probe));   // ⚠️ 同上：不併入鎖定堆疊
+    let ex = player.inv.find(i => sameItemSig(i, _probe));   // 🔒 v3.6.92 同上：併入鎖定堆疊（遺骸不是製作中間物·無 _lockMergeOff 需求）
     if (ex) ex.cnt += 1;
     else player.inv.push({ id: remId, uid: uid(), cnt: 1, en: 0, bless: false, anc: false, attr: false, seteff: group, lock: false, junk: false });
     let itemInfo = { id: remId, cnt: 1, en: 0, bless: false, anc: false, attr: false, seteff: group };
@@ -187,12 +188,17 @@ const BASE_TRIGGERED_SKILL_FIELDS = [
     'spellProc', 'procSkill', 'procSkill2', 'procStatusSkill', 'procFireSkillRate',
     'meleeHitSpell', 'onHitCastSkill', 'dragonStrike', 'hitEchoMagic',
     'procPoison', 'procPoisonPct', 'procBurstPoison', 'procBurn', 'procHealFlat',
-    'onHitEleDmg', 'windbladeProc', 'qiguProc', 'redSpecter', 'blueSpecter',
+    'onHitEleDmg', 'windbladeProc', 'qiguProc', 'redSpecter',
     'selfBreakProc', 'procInstakill', 'strawCurse',
 ];
-function weaponHasBaseTriggeredSkill(d) {
+// 純回魔（mpOnHit／blueSpecter）不屬於觸發技能；指定魔擊／魔爆武器依個別規則放行。
+const ATTR_MAGIC_ELIGIBLE_WEAPON_IDS = new Set([
+    'wpn_giltas_sword', 'wpn_giltas_wand', 'wpn_strwand', 'wpn_steel_manawand_red', 'wpn_priest_wand',
+]);
+function weaponHasBaseTriggeredSkill(d, itemId) {
     if (!d) return false;
     if (BASE_TRIGGERED_SKILL_FIELDS.some(key => d[key] != null && d[key] !== false && d[key] !== 0)) return true;
+    if (ATTR_MAGIC_ELIGIBLE_WEAPON_IDS.has(itemId)) return false;
     return d.eff === 'moonburst' || d.eff === 'magicstrike' || d.eff === 'magicburst' || d.eff === 'dice_death';
 }
 // 舊12代碼 → 新代碼（名稱身分不變：火之→fr1、爆炎→fr2、火靈→fr3…）。讀取路徑自動解析（含倉庫舊資料，零寫入）；
@@ -483,7 +489,7 @@ function useItem(u, silent = false) {
             _wand.cnt--; if (_wand.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== _wand.uid);   // 消耗失去魔力魔杖 ×1
             let _tEn = 0;   // 🏛️ v3.0.83 傳統模式已取消：重獲魔力的魔杖恆 +0（沿用手動強化）
             let _probe = { id:resultId, en:_tEn, bless:false, anc:false, attr:false, seteff:_seteff };
-            let _ex = _tEn > 0 ? null : player.inv.find(i => !i.lock && (i.en||0)===0 && sameItemSig(i, _probe));   // 🏛️ 自帶強化(en>0)獨立成堆、不併入 +0（比照 gainItem）；⚠️ 亦不併入鎖定堆疊
+            let _ex = _tEn > 0 ? null : player.inv.find(i => (i.en||0)===0 && sameItemSig(i, _probe));   // 🏛️ 自帶強化(en>0)獨立成堆、不併入 +0（比照 gainItem）；🔒 v3.6.92 併入鎖定堆疊
             if (_ex) _ex.cnt += 1;
             else player.inv.push({ id:resultId, uid:uid(), cnt:1, en:_tEn, bless:false, anc:false, attr:false, seteff:_seteff, lock:false, junk:false });
             logSys(`<span class="c-legend font-bold">靈魂之球與${powerlessName}發出強烈的銀色光芒！</span><span class="text-amber-200">你獲得了 ${_tEn>0?('+'+_tEn+' '):''}${resultName}${_seteff ? `（<span class="c-sherine font-bold">${_seteff}</span>）` : ''}！</span>`);
@@ -653,9 +659,7 @@ function isInvisible() {
 function returnEquipToInv(slot) {
     let e = player.eq[slot];
     if (!e) return;
-    let ex = player.inv.find(i => sameItemSig(i, e) && !i.lock && !i.junk);   // 🔧 架構#3：統一簽章比對
-    if (ex) ex.cnt += e.cnt;
-    else player.inv.push(e);
+    if (!invMergeBack(e)) player.inv.push(e);   // 🔧 架構#3：統一簽章比對（🔒 v3.6.92 併入鎖定疊·保護狀態擴散·單一真相 invMergeBack）
     player.eq[slot] = null;
 }
 
@@ -823,8 +827,8 @@ function syncShahaArrow() {
     let arrowIsShaha = !!(player.eq.arrow && player.eq.arrow.id === 'wpn_shaha_arrow');
     if (isShahaBow && !arrowIsShaha) {
         if (player.eq.arrow) {   // 先把原本的真實箭矢退回背包，再換上虛擬箭
-            let e = player.eq.arrow, ex = player.inv.find(i => sameItemSig(i, e) && !i.lock && !i.junk);
-            if (ex) ex.cnt += e.cnt; else player.inv.push(e);
+            let e = player.eq.arrow;
+            if (!invMergeBack(e)) player.inv.push(e);
         }
         player.eq.arrow = { id: 'wpn_shaha_arrow', cnt: 1, uid: uid() };
     } else if (!isShahaBow && arrowIsShaha) {
@@ -926,9 +930,7 @@ function equipItem(item) {
     // 若先快照數量再合併，整疊移除時舊箭會憑空消失（如身上500+背包1000 → 裝備後只剩1000）。
     if (player.eq[slot]) {
         let oldEq = player.eq[slot];
-        let ex = player.inv.find(i => sameItemSig(i, oldEq) && !i.lock && !i.junk);   // 🔧 架構#3：統一簽章比對
-        if(ex) ex.cnt += oldEq.cnt;
-        else player.inv.push(oldEq);
+        if (!invMergeBack(oldEq)) player.inv.push(oldEq);   // 🔧 架構#3：統一簽章比對（🔒 v3.6.92 單一真相 invMergeBack）
         player.eq[slot] = null;
     }
 
@@ -967,9 +969,7 @@ function unequipItem(slot) {
         if (e.id === 'wpn_shaha_arrow') {   // 🏝️ 沙哈之箭＝虛擬無限箭：卸下不回背包（避免外洩→販售/存倉/複製）；仍裝沙哈之弓則由 syncShahaArrow 重新注入
             player.eq[slot] = null;
         } else {
-            let ex = player.inv.find(i => sameItemSig(i, e) && !i.lock && !i.junk);   // 🔧 架構#3：統一簽章比對
-            if(ex) ex.cnt += e.cnt;
-            else player.inv.push(e);
+            if (!invMergeBack(e)) player.inv.push(e);   // 🔧 架構#3：統一簽章比對（🔒 v3.6.92 單一真相 invMergeBack）
             player.eq[slot] = null;
         }
         syncShahaArrow();   // 🏝️ 卸下沙哈之弓 → 移除無限箭

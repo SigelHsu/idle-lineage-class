@@ -1686,6 +1686,27 @@ button.classic-skill-cell { cursor:pointer; }
     opacity:.72;
     filter:drop-shadow(0 0 14px rgba(235,207,130,.28)) brightness(.86);
 }
+.load-offline-badge {
+    position:absolute;
+    z-index:2;
+    left:50%;
+    top:2.2%;
+    transform:translateX(-50%);
+    pointer-events:none;
+    white-space:nowrap;
+    padding:3px 8px;
+    border:1px solid rgba(74,222,128,.72);
+    border-radius:3px;
+    background:rgba(3,18,12,.88);
+    color:#86efac;
+    box-shadow:0 2px 5px rgba(0,0,0,.82), inset 0 1px 0 rgba(255,255,255,.08);
+    text-shadow:0 1px 2px #000, 0 0 5px rgba(34,197,94,.48);
+    font-family:"Microsoft JhengHei", sans-serif;
+    font-size:14px;
+    font-weight:700;
+    line-height:1.2;
+    letter-spacing:0;
+}
 .load-slot-card.selected::after {
     display:none;
 }
@@ -2067,6 +2088,7 @@ button.classic-skill-cell { cursor:pointer; }
         box-shadow: inset 0 0 20px rgba(0,0,0,.72);
     }
     .load-slot-card img { transform: scale(1.02); }
+    .load-offline-badge { top:6px; padding:2px 6px; font-size:12px; }
     .load-slot-card[data-key="m_warrior"] img,
     .load-slot-card[data-key="f_warrior"] img { transform: scale(1.16); }
     #load-page-tabs {

@@ -300,6 +300,14 @@ function migrateSaves(){
 }
 // 🗑️ v3.5.83 移除 anySaveExists()：唯一用途是顯示主選單的 #btn-load，而該按鈕早已從 HTML 移除
 //    （主選單只剩「開始遊戲」→ openLoadSelect），四處 `btnLoad &&` 守衛全部恆為 null 短路。
+function _summaryOfflineReady(p){
+    let hunt = p && p.offlineHunt;
+    let profile = hunt && hunt.profile;
+    let awaySince = Number(hunt && hunt.awaySince);
+    return !!(hunt && hunt.eligible === true && awaySince > 0 && hunt.map && profile
+        && String(profile.map || '') === String(hunt.map) && Number(profile.killsPerMin) > 0);
+}
+
 function _summaryFromRaw(s){
     if(!s) return null;
     s = _saveUnwrap(s).payload;   // 🛡️ 先解存檔簽章（摘要顯示不驗章、僅取 payload；舊明文檔原樣回傳）
@@ -313,6 +321,8 @@ function _summaryFromRaw(s){
             gold: p.gold || 0,
             classic: !!p.classicMode,
             avatar: p.avatar || null,
+            offlineReady: _summaryOfflineReady(p),
+            roleFp: _roleFingerprint(p),
             pledge: (typeof clanNameForPlayer === 'function' ? clanNameForPlayer(p) : '') || '',
             hp: p.hp || 0,
             mhp: p.mhp || p.maxHp || 0,
@@ -745,6 +755,10 @@ function renderLoadSelect(){
     const grid = document.getElementById('load-slot-grid');
     if(!grid) return;
     let html = '';
+    const activeRoleFps = new Set();
+    try {
+        _roleOtherActiveSessions().forEach(session => { if(session && session.fp) activeRoleFps.add(String(session.fp)); });
+    } catch(e){}
     const start = _loadPage * 4 + 1;
     for(let n = start; n <= start + 3; n++){
         const sum = slotSummary(n);
@@ -752,9 +766,11 @@ function renderLoadSelect(){
         const selected = n === _loadSelectedSlot;
         const empty = !sum;
         const frame = loadFirstFrame(key);
+        const offline = !!(sum && sum.offlineReady && (!sum.roleFp || !activeRoleFps.has(String(sum.roleFp))));
         const title = sum ? `角色 ${n} ${sum.cls} Lv.${sum.lv}` : `角色 ${n} 空`;
         html += `<button type="button" onclick="loadSelectSlot(${n})" data-slot="${n}" data-key="${key}" class="load-slot-card ${selected ? 'selected' : ''} ${empty ? 'empty' : 'filled'}" title="${loadEsc(title)}">`
             + `<img src="${loadFrameSrc(key, frame)}" alt="${loadEsc(title)}" draggable="false">`
+            + (offline ? `<span class="load-offline-badge">掛機中</span>` : '')
             + `</button>`;
     }
     grid.innerHTML = html;
@@ -1368,10 +1384,14 @@ function consolidateInventory() {
     player.inv.forEach(it => {
         if ((it.en || 0) !== 0) { out.push(it); return; }   // 強化品不合併
         if (it.gw) { out.push(it); return; }                // 巨靈願望戒指：逐只獨立
-        let key = itemSig(it) + '|' + (it.lock ? 1 : 0);   // 🔧 架構#3：統一簽章（祝福/詛咒/遠古變體/屬性/en 全部入鍵）＋鎖定狀態
+        let key = itemSig(it);   // 🔧 架構#3：統一簽章（祝福/詛咒/遠古變體/屬性/en 全部入鍵）
+        // 🔒 v3.6.92 鎖定狀態不再入鍵（取代 v3.6.57 的 `|lock` 分堆）：同簽章一律併成一格，任一方鎖定→整疊鎖定。
+        //    這是「再次獲得直接合併同一格」的收尾——舊存檔留下的「鎖定一疊＋未鎖定一疊」載入時自動歸併，
+        //    製作遞迴留下的中間物殘量（js/14 _lockMergeOff）也在此併回鎖定疊。
         if (seen[key]) {
             let base = seen[key];
-            base.cnt += (it.cnt || 1);   // 鎖定狀態已在 key 內 → 同 key 必同鎖定狀態，無須再合併旗標
+            base.cnt += (it.cnt || 1);
+            if (it.lock) base.lock = true;   // 任一來源鎖定→合併後維持保護（下方 forEach 會一併清掉 junk）
         } else {
             seen[key] = it;
             out.push(it);
@@ -1634,8 +1654,7 @@ function loadGame() {
             let _e = player.eq && player.eq[_sl]; if (!_e) return;
             let _ok = true; try { _ok = checkCanEquip(_e); } catch(err) { _ok = true; }
             if (!_ok) {
-                let _ex = player.inv.find(i => sameItemSig(i, _e) && !i.lock && !i.junk);
-                if (_ex) _ex.cnt += (_e.cnt || 1); else player.inv.push(_e);
+                if (!invMergeBack(_e)) player.inv.push(_e);   // 🔒 v3.6.92 單一真相 invMergeBack（js/01）
                 player.eq[_sl] = null;
                 logSys(`<span class="text-amber-300">因負重強化改版，無法再裝備的 ${DB.items[_e.id] ? DB.items[_e.id].n : '裝備'} 已自動卸下至背包。</span>`);
             }
