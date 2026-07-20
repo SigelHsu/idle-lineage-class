@@ -221,7 +221,11 @@ function gameLoop() {
     // ⏩ 補跑路徑（v3.6.95 重建 v3.2.78 時間預算榨乾制）：每次呼叫最多吃 FF_BUDGET_MS 計算時間就讓步，
     //    未還完的債留待下次呼叫（每 16 tick 量一次 performance.now·FF_HARD_CAP 保底防單次過量）。
     //    state.ff＝全域補跑閘（VFX/動畫/日誌/逐次重繪與存檔全部受抑制）；ffSmall＝≤2 秒小補跑放行擊殺特效/名條。
-    if (!_ffAcc) _ffAcc = { t0: Date.now(), ticks: 0, gold: (player.gold || 0) };   // ⏩ 補跑摘要：跨呼叫累計（還清時結算顯示）
+    if (!_ffAcc) _ffAcc = { t0: Date.now(), ticks: 0, gold: (player.gold || 0), items: {} };   // ⏩ 補跑摘要：跨呼叫累計（還清時結算顯示）
+    // 🎁 補跑期間 logSys 靜音 → 逐項「獲得物品:」訊息全被吞掉；沿用 v3.6.86 前舊制：每批補跑前後
+    //    快照背包數量、以淨增量累積到 _ffAcc.items，還清時以「掛機期間獲得：」格式統一輸出一次。
+    let _invBefore = {};
+    try { player.inv.forEach(i => { _invBefore[i.id] = (_invBefore[i.id] || 0) + i.cnt; }); } catch (e) {}
     state.ff = true;
     state.ffSmall = owed <= 20;
     let ran = 0, budget0 = now;
@@ -260,6 +264,15 @@ function gameLoop() {
         state.ff = false;
         state.ffSmall = false;
     }
+    // 🎁 將本批補跑的背包淨增量併入累積（含被消耗者的負值；輸出時只列淨正值）——tick 拋例外也照併，已入袋的不漏記
+    try {
+        let _invAfter = {};
+        player.inv.forEach(i => { _invAfter[i.id] = (_invAfter[i.id] || 0) + i.cnt; });
+        new Set([...Object.keys(_invBefore), ...Object.keys(_invAfter)]).forEach(id => {
+            let d = (_invAfter[id] || 0) - (_invBefore[id] || 0);
+            if (d !== 0) _ffAcc.items[id] = (_ffAcc.items[id] || 0) + d;
+        });
+    } catch (e) {}
     if (_tickDebt < TICK_MS) {   // 補跑完畢
         let _acc = _ffAcc;
         let _longCatchup = !!(_acc && _acc.ticks >= 30);
@@ -283,6 +296,16 @@ function gameLoop() {
                 let _sec = Math.round(_acc.ticks / 10);
                 let _dur = _sec >= 60 ? Math.floor(_sec / 60) + ' 分 ' + (_sec % 60) + ' 秒' : _sec + ' 秒';
                 logSys('<span class="text-cyan-300 font-bold">⏩ 掛機補跑完成：</span>已補上 ' + _dur + ' 的進度' + (_gd > 0 ? ('，金幣 +' + _gd.toLocaleString()) : '') + '。');
+                // 🎁 v3.6.86 前舊格式（用戶指示恢復）：補跑期間獲得物品彙整輸出（物品名依稀有度上色·頓號串接·只列淨正值）
+                let _gains = [];
+                for (let id in (_acc.items || {})) {
+                    if (_acc.items[id] > 0 && DB.items[id]) _gains.push({ id: id, n: _acc.items[id] });
+                }
+                if (_gains.length) {
+                    logSys(`<span class="sys-item-gain">掛機期間獲得：` + _gains
+                        .map(g => `<span class="${getItemColor({ id: g.id, en: 0 })} font-bold">${DB.items[g.id].n} ×${g.n}</span>`)
+                        .join('、') + `</span>`);
+                }
             } catch (e) {}
         }
         if (_acc && _acc.aborted && typeof logSys === 'function') {
@@ -1450,12 +1473,17 @@ function pvpPostKillWhisperTick() {
     pvpEnsureState();
     let now = Date.now();
     let changed = false;
-    (player.pvpKillWhispers || []).forEach(rec => {
-        if (!rec) return;
+    let list = player.pvpKillWhispers || [];
+    let kept = [];
+    let expiredNames = [];
+    list.forEach(rec => {
+        if (!rec) { changed = true; return; }
         if (!rec.awaitingRevenge && rec.expiresAt && now >= rec.expiresAt) {
-            if (pvpReleaseAlignLock(rec.n)) changed = true;
+            expiredNames.push(rec.n);
+            changed = true;
             return;
         }
+        kept.push(rec);
         if (rec.revengeCount >= PVP_KILL_WHISPER_REVENGE_MAX || rec.awaitingRevenge) return;
         if (!rec.nextCheckAt || now < rec.nextCheckAt || now >= rec.expiresAt) return;
         let dueCount = 1 + Math.floor((now - rec.nextCheckAt) / PVP_KILL_WHISPER_INTERVAL_MS);
@@ -1471,6 +1499,10 @@ function pvpPostKillWhisperTick() {
             _pvpKillWhisperLog(rec);
         }
     });
+    if (kept.length !== list.length) {
+        player.pvpKillWhispers = kept;
+        expiredNames.forEach(name => pvpReleaseAlignLock(name));
+    }
     if (changed) {
         try { if (typeof saveGame === 'function') saveGame(); } catch (e) {}
     }

@@ -1358,15 +1358,16 @@ function _updateUIImpl() {
         document.getElementById('mv-mp-fill').style.width = `${Math.max(0, (player.mp/player.mmp)*100)}%`;
         document.getElementById('mv-mp-txt').innerText = `${Math.floor(player.mp)}/${Math.floor(player.mmp)}`;
     } }
-    // 🏰 城堡護衛：狀態欄顯示名字＋HP
+    // 🏰 城堡護衛：狀態欄依類型顯示傭兵樣式的 HP／MP
     { let _gr = document.getElementById('castle-guard-row'), _g = player.castleGuard;
       if (_gr) { if (_g && siegeVictoryActive()) { _gr.classList.remove('hidden');
           let _heal = _g.mode === 'heal';
           let _cur = _heal ? _g.mp : _g.hp, _max = _heal ? _g.maxMp : _g.maxHp;
           document.getElementById('cg-name').innerText = _g.name + (_g.disabled ? (_heal ? '(耗盡)' : '(力竭)') : '');
-          document.getElementById('cg-txt').innerText = `${Math.floor(_cur)}/${_max} ${_heal ? 'MP' : ''}`.trim();
+          document.getElementById('cg-txt').innerText = `${Math.floor(_cur)}/${Math.floor(_max)}`;
           let _bar = document.getElementById('cg-bar');
-          _bar.className = `bar-fill ${_heal ? 'bg-green-500' : 'bg-amber-500'}`;
+          _bar.className = `bar-fill ${_heal ? 'bg-blue-600' : 'bg-red-600'}`;
+          _bar.parentElement.title = _heal ? 'MP' : 'HP';
           _bar.style.width = `${Math.max(0, (_cur/_max)*100)}%`;
         } else { _gr.classList.add('hidden'); } } }
     
