@@ -518,7 +518,7 @@
         #player-morph-sprite { position: absolute; bottom: 4px; height: 1px; z-index: 2; pointer-events: none; overflow: visible; }
         #player-morph-sprite img { position: absolute; left: 0; bottom: 0; image-rendering: crisp-edges; image-rendering: pixelated; }
         #player-morph-sprite .pm-shadow { mix-blend-mode: multiply; }
-        /* 🤝 v3.0.70 隊員戰場 sprite（隊員1~3·結構同 #player-morph-sprite·bottom/z-index 由 JS 依 aggro 權重排前後） */
+        /* 🤝 v3.0.70 隊員戰場 sprite（結構同 #player-morph-sprite·bottom/z-index 由 JS 依招募順序固定站位·v3.6.89 取消權重排位） */
         .party-sprite { position: absolute; bottom: 4px; height: 1px; z-index: 2; pointer-events: none; overflow: visible; }
         .party-sprite img { position: absolute; left: 0; bottom: 0; image-rendering: crisp-edges; image-rendering: pixelated; }
         .party-sprite .pm-shadow { mix-blend-mode: multiply; }
