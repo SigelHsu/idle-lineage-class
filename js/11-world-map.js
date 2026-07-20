@@ -2041,52 +2041,30 @@ function _townCastleCrownHtml(npc) {
         ? '<img class="tn-castle-crown" src="assets/ui/castle-crown.gif?v=v3.6.22" alt="" aria-hidden="true" draggable="false">'
         : '';
 }
-let _townCastleCrownBoxCache = {};
+// 👑 v3.6.76 城鎮 NPC 王冠錨點（tools/crown-anchor-gen.js 離線掃 idle 幀產出·勿手改）。
+//    值＝[頭頂質心x, 畫布底至頭頂px+2]，與 js/09 的 PM_CROWN_ANCHOR 同語意。3227＝依詩蒂(公主)／3225＝特羅斯(王子)。
+const TN_NPC_CROWN_ANCHOR = { '3227':[19,53], '3225':[18,87] };
+// ⚠️ v3.6.76 本函式**不得**再用 canvas getImageData 找頭頂：file:// 下本地圖片污染 canvas → 擲 SecurityError
+//    被 catch 吃掉 → 靜默落到 {x:寬/2, bottom:高} 粗略後備 → 王冠飄在頭頂正上方好幾十 px（叫賣王族玩家最明顯：
+//    公主畫布 144 高、真實頭頂只有 88 → 高出 56px）。一律查離線錨點表。
 function _townCastleCrownBox(img) {
     if (!img || !img.complete || !(img.naturalWidth > 0) || !(img.naturalHeight > 0)) return null;
     let src = img.currentSrc || img.src || '';
-    if (src && _townCastleCrownBoxCache[src]) return _townCastleCrownBoxCache[src];
-    let w = img.naturalWidth, h = img.naturalHeight;
     let srcText = '';
     try { srcText = decodeURIComponent(String(src || '')).replace(/\\/g, '/'); } catch (e) { srcText = String(src || '').replace(/\\/g, '/'); }
-    if (srcText.indexOf('/assets/npc/3227/') >= 0 || srcText.indexOf('/assets/npc/3225/') >= 0) {
-        let royalBox = { x: 18, bottom: h };
-        if (src) _townCastleCrownBoxCache[src] = royalBox;
-        return royalBox;
+    // 叫賣王族玩家 NPC：classanim <王子|公主><''|F|2> 的 unarmed_idle_ → 直接沿用 js/09 既有的 PM_CROWN_ANCHOR（同一批 sprite，不另建表）
+    let cm = srcText.match(/\/assets\/classanim\/([^/]+)\/unarmed_idle_/);
+    if (cm && typeof PM_CROWN_ANCHOR === 'object' && PM_CROWN_ANCHOR[cm[1] + ':unarmed']) {
+        let a = PM_CROWN_ANCHOR[cm[1] + ':unarmed'];
+        return { x: a[0], bottom: a[1] };
     }
-    let box = null;
-    try {
-        let cv = document.createElement('canvas');
-        cv.width = w; cv.height = h;
-        let ctx = cv.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(img, 0, 0);
-        let data = ctx.getImageData(0, 0, w, h).data;
-        let minY = h, maxY = -1;
-        for (let y = 0, p = 3; y < h; y++) {
-            for (let x = 0; x < w; x++, p += 4) {
-                if (data[p] > 8) {
-                    if (y < minY) minY = y;
-                    if (y > maxY) maxY = y;
-                }
-            }
-        }
-        if (maxY >= 0) {
-            let bandY = Math.min(h - 1, minY + Math.max(8, Math.round((maxY - minY) * 0.28)));
-            let sumX = 0, cnt = 0;
-            for (let y = minY; y <= bandY; y++) {
-                for (let x = 0; x < w; x++) {
-                    if (data[(y * w + x) * 4 + 3] > 8) { sumX += x; cnt++; }
-                }
-            }
-            box = { x: cnt ? Math.round(sumX / cnt) : Math.round(w / 2), bottom: Math.max(12, h - minY) };
-        }
-    } catch (e) {}
-    if (!box) box = { x: Math.round(w / 2), bottom: h };
-    if (src) {
-        if (Object.keys(_townCastleCrownBoxCache).length > 512) _townCastleCrownBoxCache = {};
-        _townCastleCrownBoxCache[src] = box;
+    // 固定 NPC：assets/npc/<gfx>/idle_
+    let nm = srcText.match(/\/assets\/npc\/([^/]+)\//);
+    if (nm && TN_NPC_CROWN_ANCHOR[nm[1]]) {
+        let a = TN_NPC_CROWN_ANCHOR[nm[1]];
+        return { x: a[0], bottom: a[1] };
     }
-    return box;
+    return { x: Math.round(img.naturalWidth / 2), bottom: img.naturalHeight };   // 表外安全網（正常不會走到：有王冠的 sprite 只有上面兩類）
 }
 function _townCastleCrownAlign(crown, bodyImg) {
     if (!crown || !bodyImg) return;
