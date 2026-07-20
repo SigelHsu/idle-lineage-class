@@ -1,3 +1,11 @@
+// 🥚 遺物蛋 → 孵出的寵物（單一真相·useItem 的分派表）：eff 欄位對應 js/00 的 relic_*_egg 定義，pet 必須是 js/22 PET_BOOK 既有型態名。
+//    aura＝碎裂訊息中的氣息名（「蛋殼在○○的氣息中碎裂……」）。新增蛋＝這裡加一列即可，分派邏輯不必動。
+const RELIC_EGG_PETS = {
+    cursedegg:   { pet: '詛咒蜥蜴', aura: '詛咒' },
+    doomegg:     { pet: '厄運蜥蜴', aura: '厄運' },
+    doomsdayegg: { pet: '破滅蜥蜴', aura: '破滅' },
+    calamityegg: { pet: '災厄蜥蜴', aura: '災厄' }
+};
 function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, deferUi=false) {   // ⚠️ v3.5.87 affixOld 已棄用（新舊詞綴制早已合一·恆走 rollAffixesNew）——參數槽保留只因第 6 參 deferUi 的呼叫點靠位置傳參，勿刪勿復用
     // 卷軸變祝福／詛咒機率：各 1%（互斥）
     if (!forceNormal && (id === 'scroll_weapon' || id === 'scroll_armor')) {
@@ -51,20 +59,34 @@ function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, de
     //    鎖定＝「這疊不要動」。若新獲得的物品被併進鎖定堆疊，它們就連帶變成不可消耗，
     //    而製作/任務的扣料路徑會跳過鎖定件 → 出現「底層材料被吃掉、中間物卻沒扣」的無限複製，
     //    以及「背包看得到 100 個卻被告知持有 0」。改為另開一疊未鎖定的，鎖定那疊維持原狀。
-    let ex = player.inv.find(i => !i.lock && sameItemSig(i, _probe));   // 🔧 架構#3：統一簽章比對（itemSig 已含 en→+0 只併 +0、+3 只併 +3，永不誤併不同強化值）
+    // 🏺 v3.6.44 巨靈的三個願望：獲得瞬間以 committed RNG 從 16 種能力抽 3 個（不重複）存於實體 gw（永不與其他堆疊合併——每只戒指願望各自獨立·calcStats 消費·tooltip 顯示）
+    let _gw = null;
+    if (id === 'relic_genie_wishes' && d && d.wishRing) {
+        let _pool = ['hp60','mp30','md3','rd3','mdmg2','sp6','hpr10','mpr5','dr3','ac3','mr6','str1','dex1','int1','wis1','con1','cha1'];   // 用戶規格 17 項能力
+        _gw = [];
+        for (let _k = 0; _k < 3; _k++) { let _ri = Math.floor(lootRng('geniewish') * _pool.length); _gw.push(_pool.splice(_ri, 1)[0]); }
+    }
+    let ex = _gw ? null : player.inv.find(i => !i.lock && sameItemSig(i, _probe));   // 🔧 架構#3：統一簽章比對（itemSig 已含 en→+0 只併 +0、+3 只併 +3，永不誤併不同強化值）
     if(ex) ex.cnt += cnt;   // 僅加數量、不更動既有堆疊的廢品狀態
-    else player.inv.push({ id: id, uid: uid(), cnt: cnt, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff, lock: false, junk: !!(player.junkPrefs && player.junkPrefs[itemSig(_probe)]) && !(d && d.noJunk) });   // 🔧 廢品記憶改以完整簽章比對：詞綴物品也可自動標記，但僅限「完全相同詞綴」者；🎴 noJunk(收集冊)永不自動標記
+    else { let _push = { id: id, uid: uid(), cnt: cnt, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff, lock: false, junk: !!(player.junkPrefs && player.junkPrefs[itemSig(_probe)]) && !(d && d.noJunk) }; if (_gw) _push.gw = _gw; player.inv.push(_push); }   // 🔧 廢品記憶改以完整簽章比對：詞綴物品也可自動標記，但僅限「完全相同詞綴」者；🎴 noJunk(收集冊)永不自動標記
 
     // 紀錄這次產生的物品屬性
     let itemInfo = { id: id, cnt: cnt, en: _tEn, bless: bless, anc: anc, attr: attr, seteff: seteff };
     
     if (!silent && d) {
+        // ✦ v3.6.69 物品日誌亮點：只有「傳說」與「遺物」才加亮點提示（傳說＝琥珀橘 c-legend／遺物＝海藍 c-relic）。
+        //   ⚠️ 一般掉落刻意維持 sys-item-gain 的統一米色（css 有 `#sys-log .sys-item-gain *` 的 !important 全域壓色），
+        //      因此稀有名稱必須另掛 sys-drop-rare 才不被壓成同色 —— 加 class 後務必實機量 computed 色。
+        let _rare = d.relic ? 'relic' : (d.legend ? 'legend' : '');
+        let _nameHtml = _rare
+            ? `<span class="sys-drop-rare sys-drop-${_rare}">✦ ${getItemFullName(itemInfo)}</span>`
+            : `<span class="font-bold">${getItemFullName(itemInfo)}</span>`;
         // 🐾 擊殺掉落來源怪物存在時→「怪名 給你 物品名 。」；其餘來源(商店/製作/NPC 兌換)維持「獲得物品:」
         if (_lootMobInfo) {
             let _mc = (typeof getMobColor === 'function') ? getMobColor(_lootMobInfo.lv) : '';
-            logSys(`<span class="sys-item-gain"><span class="${_mc}">${_lootMobInfo.n}</span> 給你 <span class="font-bold">${getItemFullName(itemInfo)}</span> 。</span>`);
+            logSys(`<span class="sys-item-gain"><span class="${_mc}">${_lootMobInfo.n}</span> 給你 ${_nameHtml} 。</span>`);
         } else {
-            logSys(`<span class="sys-item-gain">獲得物品: <span class="font-bold">${getItemFullName(itemInfo)}</span></span>`);
+            logSys(`<span class="sys-item-gain">獲得物品: ${_nameHtml}</span>`);
         }
     }
     if (!deferUi) renderTabs();
@@ -120,6 +142,57 @@ const ATTR_AFFIX = {
     ea5: { n: '馬普勒',   ele: 'earth', tier: 5, dmg: 9, mp: 9 },
 };
 const ATTR_ELE_PREFIX = { fire: 'fr', water: 'wa', wind: 'wi', earth: 'ea' };   // 元素 → 代碼字首（碧恩賦予/升階用）
+
+// 第5階屬性武器可由同屬性卷軸附加／重抽魔法；觸發率是魔法本身的效果，不是卷軸成功率。
+const ATTR_MAGIC_SKILLS = {
+    fire: [
+        { skId: 'sk_meteor', rate: 1 }, { skId: 'sk_fire_storm', rate: 2 },
+        { skId: 'sk_blaze', rate: 5 }, { skId: 'sk_fireball', rate: 5 },
+        { skId: 'sk_firearrow', rate: 10 },
+    ],
+    water: [
+        { skId: 'sk_blizzard', rate: 2 }, { skId: 'sk_ice_lance', rate: 5 },
+        { skId: 'sk_chill', rate: 6 }, { skId: 'sk_icearrow', rate: 10 },
+        { skId: 'sk_poison_curse', rate: 10 },
+    ],
+    wind: [
+        { skId: 'sk_thunder_storm', rate: 2 }, { skId: 'sk_tornado', rate: 3 },
+        { skId: 'sk_thunder', rate: 6 }, { skId: 'sk_windblade', rate: 10 },
+        { skId: 'sk_holy_dash', rate: 10 },
+    ],
+    earth: [
+        { skId: 'sk_quake', rate: 2 }, { skId: 'sk_earthquake', rate: 5 },
+        { skId: 'sk_rock_prison', rate: 6 }, { skId: 'sk_hell_fang', rate: 10 },
+        { skId: 'sk_slow', rate: 10 },
+    ],
+};
+const ATTR_MAGIC_BY_SKILL = (() => {
+    let out = {};
+    Object.entries(ATTR_MAGIC_SKILLS).forEach(([ele, pool]) => {
+        pool.forEach(proc => { out[proc.skId] = { ele, skId: proc.skId, rate: proc.rate }; });
+    });
+    return out;
+})();
+function getAttrMagicProc(item) {
+    if (!item || typeof item.attrMagic !== 'string') return null;
+    let proc = ATTR_MAGIC_BY_SKILL[item.attrMagic] || null;
+    let aff = getAttrAffix(item.attr);
+    return proc && aff && aff.tier === 5 && aff.ele === proc.ele ? proc : null;
+}
+
+// 原生「攻擊／命中時機率觸發」武器不可再附加屬性魔法；卷軸附加的 attrMagic 不列入，才能重抽。
+const BASE_TRIGGERED_SKILL_FIELDS = [
+    'spellProc', 'procSkill', 'procSkill2', 'procStatusSkill', 'procFireSkillRate',
+    'meleeHitSpell', 'onHitCastSkill', 'dragonStrike', 'hitEchoMagic',
+    'procPoison', 'procPoisonPct', 'procBurstPoison', 'procBurn', 'procHealFlat',
+    'onHitEleDmg', 'windbladeProc', 'qiguProc', 'redSpecter', 'blueSpecter',
+    'selfBreakProc', 'procInstakill', 'strawCurse',
+];
+function weaponHasBaseTriggeredSkill(d) {
+    if (!d) return false;
+    if (BASE_TRIGGERED_SKILL_FIELDS.some(key => d[key] != null && d[key] !== false && d[key] !== 0)) return true;
+    return d.eff === 'moonburst' || d.eff === 'magicstrike' || d.eff === 'magicburst' || d.eff === 'dice_death';
+}
 // 舊12代碼 → 新代碼（名稱身分不變：火之→fr1、爆炎→fr2、火靈→fr3…）。讀取路徑自動解析（含倉庫舊資料，零寫入）；
 // 玩家側（背包/裝備/傭兵）另由 loadGame 一次性實體改寫為新代碼（見 js/13）。
 const ATTR_LEGACY = {
@@ -262,7 +335,7 @@ function applyAncStats(d, anc, slot) {   // slot: 'wpn' | 'arm' | 'acc'
 function getItemFullName(item) {
     let d = DB.items[item.id];
     if(!d) return "未知的物品";
-    let segs = '';
+    let segs = getAttrMagicProc(item) ? '<span class="text-yellow-300 font-bold">★</span> ' : '';
     let aff = getAttrAffix(item.attr);
     if (aff) {
         let acls = 'c-attr-' + attrCanon(item.attr) + (aff.tier === 5 ? ' c-attr-glow' : '');
@@ -374,6 +447,15 @@ function useItem(u, silent = false) {
     if (d.eff === 'dragonegg') {
         if (silent) return;
         if (typeof petUseDragonEgg === 'function') petUseDragonEgg(item);
+        return;
+    }
+
+    // 🥚 遺物蛋（v3.6.44 詛咒→v3.6.47 厄運→v3.6.62 破滅／災厄）：使用後獲得對應蜥蜴——保管已滿則不消耗（js/22 petUseCursedEgg 內把關）。
+    //    ⚠️ 新增蛋只要在 RELIC_EGG_PETS 加一列＋js/00 定義對應 eff 即可，不要再複製一段 if 分派。
+    let _eggPet = RELIC_EGG_PETS[d.eff];
+    if (_eggPet) {
+        if (silent) return;
+        if (typeof petUseCursedEgg === 'function') petUseCursedEgg(item, _eggPet.pet, `<span class="text-purple-300 font-bold">蛋殼在${_eggPet.aura}的氣息中碎裂……</span>`);
         return;
     }
 

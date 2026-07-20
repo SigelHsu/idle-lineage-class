@@ -552,7 +552,7 @@ function renderWarehouseNPC(div){
     let _ns = document.getElementById('wh-store-list'); if(_ns) _ns.scrollTop = _whStoreScroll;
 }
 // 🚫 v3.2.17 舊「包武項圈保管」(PET_STORAGE_MAX=8/petStoreDeposit/petStoreWithdraw/renderPetStorageNPC) 已隨項圈系統移除——
-// 新寵物保管（上限20·同模式共通·出戰/鎖定/放生/進化）＝js/22-pets.js 的 renderPetStorageNPC（同名接手·js/11 路由不變）。
+// 新寵物保管（上限＝PET_STORAGE_MAX·同模式共通·出戰/鎖定/放生/進化）＝js/22-pets.js 的 renderPetStorageNPC（同名接手·js/11 路由不變）。
 // ===== 血盟 NPC：由玩家創立的盟主提供攻城入口 =====
 function renderPledgeNPC(div, faction) {
     _activePanel = null;

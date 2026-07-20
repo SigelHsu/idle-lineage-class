@@ -698,9 +698,13 @@ function openSiegeSelect(faction, targetEl) {
     if (s.active) { alert('攻城戰正在進行中！'); return; }
     faction = clan.faction;
     let held = (typeof clanGetCastleCity === 'function') ? clanGetCastleCity(player) : null;
-    let choice = (city, label, style) => held === city
-        ? `<button class="btn flex-1 py-4 text-lg font-bold bg-slate-700 border-slate-500 text-slate-400 opacity-60 cursor-not-allowed" disabled>${label}<span class="block text-xs font-normal mt-1">目前持有</span></button>`
-        : `<button class="btn flex-1 py-4 text-lg font-bold ${style}" onclick="startSiege('${faction}','${city}')">${label}</button>`;
+    let choice = (city, label, style) => {
+        let defender = typeof npcClanCastleDefender === 'function' ? npcClanCastleDefender(city, player) : null;
+        let defenderText = defender ? `<span class="block text-xs font-normal mt-1">守城血盟：${typeof clanEsc === 'function' ? clanEsc(defender.name) : defender.name}</span>` : '';
+        return held === city
+            ? `<button class="btn flex-1 py-4 text-lg font-bold bg-slate-700 border-slate-500 text-slate-400 opacity-60 cursor-not-allowed" disabled>${label}<span class="block text-xs font-normal mt-1">目前持有</span></button>`
+            : `<button class="btn flex-1 py-4 text-lg font-bold ${style}" onclick="startSiege('${faction}','${city}')">${label}${defenderText}</button>`;
+    };
     let el = targetEl || document.getElementById('interaction-content'); if (!el) return;
     el.innerHTML = `
         <div class="flex flex-col gap-4 p-2 items-center text-center">
@@ -729,14 +733,17 @@ function startSiege(faction, city) {
     if (typeof clanGetCastleCity === 'function' && clanGetCastleCity(player) === city) { alert(`你的血盟目前已持有${cfg.name}。`); return; }
     if (!confirm(`確定要對【${cfg.name}】宣戰嗎？限時 30 分鐘。`)) return;
     let accCdUntil = Number(s.accCdUntil) || 0;
-    player.siege = { active:true, city:city, gateKilled:false, towerKilled:false, endTime: Date.now() + 30*60*1000, kills:0, result:null, cooldownUntil:0, accCdUntil:accCdUntil };
-    logSys(`⚔ <span class="text-red-300 font-bold">攻城戰開始！</span>限時 30 分鐘。攻破【${cfg.gate}】後進攻【${cfg.innerName}】，於時限內擊殺【${cfg.tower}】即可獲勝！`);
+    let _defender = typeof npcClanCastleDefender === 'function' ? npcClanCastleDefender(city, player) : null;
+    player.siege = { active:true, city:city, gateKilled:false, towerKilled:false, endTime: Date.now() + 30*60*1000, kills:0, result:null, cooldownUntil:0, accCdUntil:accCdUntil, npcDefenderClanId:_defender ? _defender.id : null };
+    let _defenderMsg = _defender ? `守城方為 NPC 血盟【${typeof clanEsc === 'function' ? clanEsc(_defender.name) : _defender.name}】，敵軍重生速度加倍。` : '';
+    logSys(`⚔ <span class="text-red-300 font-bold">攻城戰開始！</span>限時 30 分鐘。${_defenderMsg}攻破【${cfg.gate}】後進攻【${cfg.innerName}】，於時限內擊殺【${cfg.tower}】即可獲勝！`);
     setMapSelectors(cfg.outer);
     changeMap(true);
     updateUI();
 }
 function endSiege(result) {
     let s = player.siege; if (!s || !s.active) return;
+    let _npcDefenderClanId = s.npcDefenderClanId || null;
     s.active = false; s.result = result;
     s.endTime = Date.now();   // 擊敗守護塔（獲勝）或時間到：攻城時間立即結束
     s.cooldownUntil = 0;   // ⚔️ v3.6.01 攻城冷卻取消（用戶拍板）：欄位保留=0 兼容舊存檔殘值
@@ -747,12 +754,14 @@ function endSiege(result) {
     if (result === 'win') {
         let setResult = (typeof clanSetCastle === 'function') ? clanSetCastle(_cfg.key) : { ok:false };
         if (setResult && setResult.ok) {
+            if (typeof npcClanOnSiegeResult === 'function') npcClanOnSiegeResult(_cfg.key, 'win', _npcDefenderClanId);
             let replaced = setResult.previous && setResult.previous !== _cfg.key && SIEGE_CITY[setResult.previous] ? `，原有的${SIEGE_CITY[setResult.previous].castleName}已放棄` : '';
             logSys(`🏆🏰 <span class="text-yellow-300 font-bold">攻城獲勝！</span>血盟已永久佔領${_cfg.castleName}${replaced}。同模式所有角色可使用城堡、全商店 8 折，回村按鈕改為回城。`);
         } else {
             logSys('<span class="text-red-400 font-bold">攻城獲勝，但城堡共用資料寫入失敗。</span>攻城已無冷卻，可立即再次宣戰重試佔領。');
         }
     } else {
+        if (typeof npcClanOnSiegeResult === 'function') npcClanOnSiegeResult(_cfg.key, 'lose', _npcDefenderClanId);
         logSys(`🏰 <span class="text-slate-300 font-bold">攻城失敗…</span>時間到，未能攻下${_cfg.tower}。`);
     }
     { let timer = document.getElementById('siege-timer'); if (timer) timer.classList.add('hidden'); }   // 結束隱藏倒數
@@ -1007,6 +1016,7 @@ function ismaelCursedExchange(kind) {
 // ===== 🔥 碧恩：屬性強化卷軸「賦予屬性」（v3.0.77 屬性強化系統改版·取代舊「祝福裝備」功能；克里斯特已移除） =====
 //   規則：只能用在「裝備中武器／副手武器(戰士限定)」；每次使用皆為獨立事件，成功率 7%；
 //   無屬性成功→1階、同屬性成功→+1階（最高5階）、不同屬性成功→變成該屬性1階；
+//   第5階同屬性卷軸：原生無攻擊觸發技能的非遺物武器可用 1% 機率附加／重抽屬性魔法；
 //   衝第4階需武器+10以上、第5階需+11以上（不符不消耗卷軸）；失敗僅消耗卷軸，武器不會消失。
 //   🎲 純機率 Math.random（與武器強化同政策·可 save/load 重抽）。經典/一般/傳統模式皆適用。
 const ATTR_SCROLLS = {
@@ -1027,15 +1037,34 @@ function doBianAttr(slotKey, ele) {
     let cur = getAttrAffix(item.attr);
     let same = !!(cur && cur.ele === ele);
     let nextTier = same ? cur.tier + 1 : 1;   // 同屬性→下一階；無屬性/不同屬性→該屬性1階
-    if (same && cur.tier >= 5) { logSys('<span class="text-amber-300">此武器已達該屬性最高階（第5階），無法再提升。</span>'); return; }   // 不消耗
+    if (same && cur.tier >= 5) {
+        if (weaponHasBaseTriggeredSkill(d)) { logSys('<span class="text-amber-300">此武器無法附加魔法。</span>'); return; }   // 原生已有攻擊／命中觸發技能，不消耗
+        let pool = ATTR_MAGIC_SKILLS[ele] || [];
+        if (!pool.length) return;
+        let oldMagic = getAttrMagicProc(item);
+        sc.cnt--; if (sc.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== sc.uid);
+        if (Math.random() < 0.01) {
+            let picked = pool[Math.floor(Math.random() * pool.length)];
+            item.attrMagic = picked.skId;
+            let skName = (DB.skills[picked.skId] && DB.skills[picked.skId].n) || picked.skId;
+            logSys(`<span class="text-yellow-300 font-bold">${oldMagic ? '重抽' : '附加'}魔法成功！</span>${getItemFullName(item)} 獲得「攻擊時 ${picked.rate}% 機率觸發${skName}」。`);
+        } else {
+            logSys(`<span class="text-slate-400">碧恩：魔法刻印沒有回應……${oldMagic ? '原有附加魔法保持不變，' : ''}僅消耗 1 張 ${cfg.n}。</span>`);
+        }
+        calcStats(); updateUI(); renderTabs(true); saveGame();
+        let _e5 = document.getElementById('interaction-content'); if (_e5) renderBianAttr(_e5);
+        return;
+    }
     let en = Number(item.en) || 0;
     if (nextTier === 4 && en < 10) { logSys('<span class="text-amber-300">武器需 +10 以上才能衝屬性第四階。</span>'); return; }   // 不消耗
     if (nextTier === 5 && en < 11) { logSys('<span class="text-amber-300">武器需 +11 以上才能衝屬性第五階。</span>'); return; }   // 不消耗
     sc.cnt--; if (sc.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== sc.uid);
     if (Math.random() < 0.07) {   // 🎲 7% 獨立事件（純機率·可 save/load 重抽·同強化政策）
+        let oldMagic = getAttrMagicProc(item);
         item.attr = ATTR_ELE_PREFIX[ele] + nextTier;
+        if (!same && oldMagic) delete item.attrMagic;   // 不同屬性成功→回到新屬性第1階，原屬性的附加魔法消失
         let aff = getAttrAffix(item.attr);
-        logSys(`<span class="text-yellow-300 font-bold">賦予屬性成功！</span>碧恩將 <span class="c-attr-${attrCanon(item.attr)}">${aff.n}</span> 之力銘刻於武器 → ${getItemFullName(item)}（屬性第${aff.tier}階：額外傷害+${aff.dmg}、額外魔法點數+${aff.mp}）。`);
+        logSys(`<span class="text-yellow-300 font-bold">賦予屬性成功！</span>碧恩將 <span class="c-attr-${attrCanon(item.attr)}">${aff.n}</span> 之力銘刻於武器 → ${getItemFullName(item)}（屬性第${aff.tier}階：額外傷害+${aff.dmg}、額外魔法點數+${aff.mp}）。${!same && oldMagic ? '<span class="text-slate-400"> 原有附加魔法已隨屬性轉換消失。</span>' : ''}`);
     } else {
         logSys(`<span class="text-slate-400">碧恩：元素之力潰散了……賦予屬性失敗（僅消耗 1 張 ${cfg.n}，武器安然無恙）。</span>`);
     }
@@ -1071,6 +1100,8 @@ function renderBianAttr(el) {
         let name = it ? getItemFullName(it) : '<span class="text-slate-500">（未裝備）</span>';
         let cur = it && getAttrAffix(it.attr);
         let curTxt = cur ? `<span class="c-attr-${attrCanon(it.attr)}">${cur.n}（第${cur.tier}階）</span>` : '<span class="text-slate-500">無屬性</span>';
+        let magic = it && getAttrMagicProc(it);
+        if (magic) curTxt += `｜<span class="text-yellow-300">★ ${(DB.skills[magic.skId] && DB.skills[magic.skId].n) || magic.skId} ${magic.rate}%</span>`;
         let btns = it ? Object.keys(ATTR_SCROLLS).map(e2 => {
             let c = ATTR_SCROLLS[e2], have = cnt(c.id);
             return have > 0
@@ -1091,8 +1122,9 @@ function renderBianAttr(el) {
     }).join('');
     el.innerHTML = `
         <div class="flex flex-col gap-2 p-1">
-            <div class="text-slate-300 text-sm leading-relaxed">碧恩：我能將四大元素之力銘刻於你手中的武器。每次賦予皆為獨立事件，<b>成功率 7%</b>；失敗僅消耗卷軸，武器不會消失。</div>
+            <div class="text-slate-300 text-sm leading-relaxed">碧恩：我能將四大元素之力銘刻於你手中的武器。屬性提升成功率為 <b>7%</b>；第5階使用同屬性卷軸附加／重抽魔法的成功率為 <b>1%</b>。失敗僅消耗卷軸，武器不會消失。</div>
             <div class="text-xs text-slate-400">無屬性成功→第1階；同屬性成功→提升1階（最高5階）；<b>不同屬性成功→變成該屬性第1階</b>。衝第4階需武器+10以上、第5階需+11以上。第1~5階：額外傷害/額外魔法點數 +1/+3/+5/+7/+9，一般攻擊轉為該屬性。</div>
+            <div class="text-xs text-slate-400">只有本身沒有攻擊／命中觸發技能的非遺物武器可附加魔法；已成功附加的武器可使用同屬性卷軸繼續重抽。</div>
             <div class="text-xs text-slate-400">持有卷軸：<span class="c-attr-fr3">火 ${cnt('scroll_attr_fire')}</span>｜<span class="c-attr-wa3">水 ${cnt('scroll_attr_water')}</span>｜<span class="c-attr-wi3">風 ${cnt('scroll_attr_wind')}</span>｜<span class="c-attr-ea3">地 ${cnt('scroll_attr_earth')}</span></div>
             ${rows}
             ${cursedRows ? `<div class="text-xs text-slate-400 mt-1">被詛咒的裝備（優先消耗 解除詛咒的卷軸，持有 ${cnt('new_item_uncurse')}；無卷軸時花費 100 萬金幣）：</div>${cursedRows}` : ''}
@@ -1119,6 +1151,7 @@ function changeMap(force) {
         logSys('你目前無法行動（石化／麻痺／冰凍／暈眩），無法切換地圖。');
         return;
     }
+    let _changeTarget = document.getElementById('map-select').value;
     saveSiegeBossHp();   // 切換地圖前，保存攻城塔/門的剩餘血量
     // 🔥 進入閘門前的權限總驗證（業務邏輯層，非僅 UI 下拉禁用）：任何被 mapOptDisabled 擋下的地圖（如未完成試煉的魔族神殿、炎魔友好度不足的炎魔謁見所、潔尼斯門檻、傳送符不足的傲慢之塔）一律不可進入。
     //    僅在「主動切換到不同地圖」時檢查（force 內部流程／原地不動除外）；以「尚未消耗鑰匙/傳送符」的原始狀態判定，故下方各自的鑰匙/卷軸消耗不受影響（持有者此處 mapOptDisabled=false 會放行）。siege/castle 動態地圖不在 MAP_CATEGORIES，_def 為 null 自動略過。
@@ -1168,6 +1201,7 @@ function changeMap(force) {
             }
         }
     }
+    if (_changeTarget !== mapState.current && typeof npcClanOnLeaveBattleArea === 'function') npcClanOnLeaveBattleArea();
     if (typeof giltasKeepOnLeave === 'function' && document.getElementById('map-select').value !== mapState.current) giltasKeepOnLeave();   // 🌑 v3.4.16 離開受詛咒聖地（回村/戰敗復活/切圖統一經此·helper 自帶地圖 gate）→ 吉爾塔斯 HP 保留判定＋提示
     mapState.current = document.getElementById('map-select').value;
     if (!mapState.current.startsWith('town_')) player.lastBattleMap = mapState.current;   // 🔧 記住最後所在的戰鬥地圖，供村莊「出發」按鈕一鍵返回

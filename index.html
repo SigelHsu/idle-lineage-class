@@ -14,7 +14,7 @@
     <title>放置天堂 - 日出之國</title>
     <link rel="icon" type="image/png" href="assets/favicon.png">   <!-- 🖼️ 瀏覽器分頁圖示(favicon)：把你的圖放到 assets/favicon.png 即生效；可改 href 路徑或副檔名(.ico/.svg) -->
 
-    <link rel="stylesheet" href="css/style.css?v=v3.6.22-crown-native-battle">
+    <link rel="stylesheet" href="css/style.css?v=v3.6.72-drop-log-rare">
     <link rel="stylesheet" href="css/floating-ui.css?v=v3.5.100-audit-tail">
     <link rel="stylesheet" href="css/tailwind-built.css"><!-- 🔧 預編譯 Tailwind（取代執行期 JIT tailwind.js）：只含實際用到的 class，省 407KB runtime + 移除持續掃描 DOM 的成本。置於 style.css 之後以保留原 cascade（utility 平手時勝過自訂 class，與舊 JIT 注入順序一致） -->
 </head>
@@ -257,12 +257,16 @@
                 </div>
             </div>
 
-            <!-- 📜 日誌列：戰鬥日誌(左) / 系統與物品日誌(右) 並排，各佔一半寬 -->
+            <!-- 📜 日誌列：戰鬥／系統日誌(左·分頁切換) / 世界頻道(右·NPC 對話＋提問輸入列) 並排，各佔一半寬 -->
             <div id="log-row" class="flex gap-4">
             <div id="combat-log-panel" class="panel flex-1 flex flex-col overflow-hidden relative">
                 <div class="panel-header text-slate-100 text-lg border-b border-red-900/40 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                    <span class="shrink-0">戰鬥日誌</span>
-                    <div class="flex items-center gap-1 flex-wrap justify-end">
+                    <!-- 🗂️ v3.6.50 戰鬥／系統日誌合併為同一視窗，由此切換（系統分頁有新訊息時顯示未讀點） -->
+                    <div class="shrink-0 flex items-center gap-1">
+                        <button id="logtab-btn-combat" onclick="switchLogTab('combat')" class="logtab-btn logtab-on">戰鬥日誌</button>
+                        <button id="logtab-btn-sys" onclick="switchLogTab('sys')" class="logtab-btn">系統日誌<span id="logtab-dot-sys" class="logtab-dot hidden"></span></button>
+                    </div>
+                    <div id="combat-filter-pills" class="flex items-center gap-1 flex-wrap justify-end">
                         <button id="cf-btn-hp" onclick="toggleMobHp()" class="cf-pill" style="color:#fca5a5;border-color:#64748b;background:rgba(71,85,105,.30)" title="點亮/點暗：怪物血量條">血量</button>
                         <button id="cf-btn-status" onclick="toggleMobStatus()" class="cf-pill" style="color:#e2e8f0;border-color:#64748b;background:rgba(71,85,105,.30)" title="點亮/點暗：怪物圖片上的異常狀態徽章與出血/鈍擊/硬皮等狀態標示">狀態</button>
                         <button id="cf-btn-enemy" onclick="toggleCombatFilter('enemy')" class="cf-pill" style="color:#fca5a5;border-color:#b91c1c;background:rgba(127,29,29,.30)" title="點亮/點暗：敵人的戰鬥訊息">敵人</button>
@@ -273,20 +277,30 @@
                     </div>
                 </div>
                 <div id="combat-log" class="flex-1 p-4 overflow-y-auto log-bg rounded-b-xl shadow-inner text-base tracking-wide"></div>
+                <!-- 🗂️ v3.6.50 系統日誌（含物品訊息）搬進本視窗，由標題列分頁鈕切換；預設隱藏 -->
+                <div id="sys-log" class="hidden flex-1 p-4 overflow-y-auto log-bg rounded-b-xl shadow-inner text-base"></div>
                 <!-- 🔒 戰鬥日誌捲動鎖定提示（向上捲動查看舊訊息時鎖定刷新，捲回底部自動解除） -->
                 <button id="combat-log-unlock" onclick="combatLogToBottom()" class="hidden absolute left-1/2 -translate-x-1/2 bottom-2 z-10 px-3 py-1 text-xs font-bold rounded-full shadow-lg bg-amber-700/90 hover:bg-amber-600 border border-amber-400 text-amber-50">🔒 已鎖定捲動 ▾ 回到最新</button>
+                <!-- 🔒 系統日誌捲動鎖定提示（同戰鬥日誌：向上捲動鎖定刷新、捲回底部自動解除） -->
+                <button id="sys-log-unlock" onclick="sysLogToBottom()" class="hidden absolute left-1/2 -translate-x-1/2 bottom-2 z-10 px-3 py-1 text-xs font-bold rounded-full shadow-lg bg-amber-700/90 hover:bg-amber-600 border border-amber-400 text-amber-50">🔒 已鎖定捲動 ▾ 回到最新</button>
             </div>
 
-            <div id="syslog-panel" class="panel h-1/3 flex flex-col overflow-hidden relative">
+            <!-- 🌐 v3.6.50 世界頻道：只放 NPC 對話（叫賣廣播／嗆聲／提問回覆）；底部輸入列可向全世界發問 -->
+            <div id="syslog-panel" class="panel flex-1 min-w-0 flex flex-col overflow-hidden relative">
                 <div class="panel-header text-slate-100 text-lg border-b border-blue-900/40 flex items-center justify-between gap-2">
-                    <span class="shrink-0">系統與物品日誌</span>
+                    <span class="shrink-0">世界頻道</span>
                     <span id="syslog-pandora" class="text-sm font-normal truncate text-right min-w-0"></span>
                 </div>
                 <!-- 📌 v3.5.77 NPC 叫賣釘選列：最多兩條常駐於日誌頂端，不會被其他訊息推走；空的時候由 CSS :empty 自動收起 -->
                 <div id="sys-log-pins"></div>
-                <div id="sys-log" class="flex-1 p-4 overflow-y-auto log-bg rounded-b-xl shadow-inner text-base"></div>
-                <!-- 🔒 系統與物品日誌捲動鎖定提示（同戰鬥日誌：向上捲動鎖定刷新、捲回底部自動解除） -->
-                <button id="sys-log-unlock" onclick="sysLogToBottom()" class="hidden absolute left-1/2 -translate-x-1/2 bottom-2 z-10 px-3 py-1 text-xs font-bold rounded-full shadow-lg bg-amber-700/90 hover:bg-amber-600 border border-amber-400 text-amber-50">🔒 已鎖定捲動 ▾ 回到最新</button>
+                <div id="world-log" class="flex-1 p-4 overflow-y-auto log-bg shadow-inner text-base"></div>
+                <!-- 💬 提問輸入列：Enter 或按鈕送出，隨機 NPC 回答（也可能只是來嘲笑）；點 NPC 名字可嘲諷／感謝 -->
+                <div id="world-input-row">
+                    <input id="world-input" type="text" maxlength="60" autocomplete="off" placeholder="向世界頻道發問（例：50級去哪練功？法師怎麼玩？大馬那裡打？）">
+                    <button id="world-send" onclick="worldChannelAsk()">發問</button>
+                </div>
+                <!-- 🔒 世界頻道捲動鎖定提示（同戰鬥日誌） -->
+                <button id="world-log-unlock" onclick="worldLogToBottom()" class="hidden absolute left-1/2 -translate-x-1/2 bottom-14 z-10 px-3 py-1 text-xs font-bold rounded-full shadow-lg bg-amber-700/90 hover:bg-amber-600 border border-amber-400 text-amber-50">🔒 已鎖定捲動 ▾ 回到最新</button>
             </div>
             </div><!-- /#log-row -->
         </div>
@@ -530,22 +544,22 @@
     </script>
 
     <script src="js/anim-manifest.js?v=v3.5.100-audit-tail"></script>
-    <script src="js/00-data.js?v=v3.6.36-crown-all-morphs"></script>
-<script src="js/01-drops-config.js?v=v3.6.00-clan-rework"></script>
-<script src="js/02-stats-recompute.js?v=v3.6.00-clan-rework"></script>
-    <script src="js/03-combat-core.js?v=v3.6.37-pvp-name-wrapper-rate"></script>
-    <script src="js/04-combat-attack.js?v=v3.6.38-siege-classic-no-exp-loss"></script>
-<script src="js/05-kill-progression.js?v=v3.6.38-siege-classic-no-exp-loss"></script>
-    <script src="js/06-status-allies.js?v=v3.6.20-troll-template2"></script>
-    <script src="js/07-skills-cast.js?v=v3.6.20-troll-template2"></script>
-<script src="js/08-items-equip.js?v=v3.6.36-crown-all-morphs"></script>
-<script src="js/09-vfx-render.js?v=v3.6.36-crown-all-morphs"></script>
-<script src="js/10-ui-tabs.js?v=v3.6.28-pvp-revenge-chat"></script>
-<script src="js/11-world-map.js?v=v3.6.32-siege-win-to-castle"></script>
-<script src="js/12-npc-quests.js?v=v3.6.04-wh-search-ime"></script>
-<script src="js/13-shop-save.js?v=v3.6.01-clan-audit-fix"></script>
+    <script src="js/00-data.js?v=v3.6.72-drop-log-rare"></script>
+<script src="js/01-drops-config.js?v=v3.6.63-attr-magic"></script>
+<script src="js/02-stats-recompute.js?v=v3.6.47-relic-batch20"></script>
+    <script src="js/03-combat-core.js?v=v3.6.71-pvp-align-penalty"></script>
+    <script src="js/04-combat-attack.js?v=v3.6.63-attr-magic"></script>
+<script src="js/05-kill-progression.js?v=v3.6.58-audit-exp-at-cap"></script>
+    <script src="js/06-status-allies.js?v=v3.6.63-attr-magic"></script>
+    <script src="js/07-skills-cast.js?v=v3.6.67-fireball-morph-gate"></script>
+<script src="js/08-items-equip.js?v=v3.6.72-drop-log-rare"></script>
+<script src="js/09-vfx-render.js?v=v3.6.49-clan-war-directions"></script>
+<script src="js/10-ui-tabs.js?v=v3.6.63-attr-magic"></script>
+<script src="js/11-world-map.js?v=v3.6.63-attr-magic"></script>
+<script src="js/12-npc-quests.js?v=v3.6.42-pet-storage-32"></script>
+<script src="js/13-shop-save.js?v=v3.6.57-unlock-restack"></script>
 <script src="js/14-craft-pandora.js?v=v3.5.102-blackmarket-comment"></script>
-<script src="js/15-cards.js?v=v3.5.100-audit-tail"></script>
+<script src="js/15-cards.js?v=v3.6.51-doll-batch-perf"></script>
 <script src="js/16-equip-book.js?v=v3.5.100-audit-tail"></script>
 <script src="js/18-misc-book.js?v=v3.5.100-audit-tail"></script>
 <script src="js/17-audio.js?v=v3.5.100-audit-tail"></script>
@@ -553,8 +567,9 @@
 <script src="js/20-warehouse-window.js?v=v3.5.100-audit-tail"></script>
 <script src="js/21-relic-book.js?v=v3.5.100-audit-tail"></script>
     <script src="js/23-summons.js?v=v3.5.100-audit-tail"></script>
-    <script src="js/22-pets.js?v=v3.6.34-kangaroo-dr-pierce"></script>
-    <script src="js/24-pandora-relic-market.js?v=v3.6.36-taunt-choice-pool"></script>
-    <script src="js/25-clan-system.js?v=v3.6.01-clan-audit-fix"></script>
+    <script src="js/22-pets.js?v=v3.6.47-relic-batch20"></script>
+    <script src="js/24-pandora-relic-market.js?v=v3.6.65-fake-name-unify"></script>
+    <script src="js/25-clan-system.js?v=v3.6.60-clan-name-variety"></script>
+    <script src="js/26-world-channel.js?v=v3.6.72-item-fuzzy"></script>
 </body>
 </html>

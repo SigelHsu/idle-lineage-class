@@ -31,25 +31,6 @@
         '王子', '公主', '男騎士', '女騎士', '男法師', '女法師', '男妖精', '女妖精',
         '男黑暗妖精', '女黑暗妖精', '男幻術士', '女幻術士', '男龍騎士', '女龍騎士', '男戰士', '女戰士'
     ];
-    const NAME_PREFIX = ['蒼', '緋', '玄', '墨', '銀', '白', '青', '赤', '紫', '碧', '幽', '夜', '月', '星', '霜', '雪', '風', '雲', '雷', '炎', '燼', '影', '夢', '幻', '孤', '醉', '逆', '零',
-        '煞氣ㄟ', '最愛', '闇の', '覚醒', '邪王', '漆黑', '魔眼', '天上天下', '超高校級', '無敵', '爆裂', '狂氣', '破滅', '終焉', '孤高', '霸氣', 'ㄎㄧㄤ爆', 'ㄅㄧㄤˋ', '神ってる', '真祖',
-        '野獸', '仲夏夜'];
-    const NAME_IMAGE = ['狼', '狐', '龍', '羽', '刃', '劍', '弦', '花', '葉', '海', '川', '山', '嵐', '歌', '月', '星', '塵', '魂', '心', '影', '光', '痕'];
-    const NAME_TITLE = ['行者', '旅人', '浪客', '劍士', '術士', '獵人', '守望者', '歸人', '逐風者', '追月者', '無眠', '未央', '長歌', '無雙',
-        '公主', '王子', '魔王', '霸主', '大人', 'さま', '先輩', '総長', '天才', '救世主', '煞星', '狂戰士', '龍傲天', '夜神', '封弊者', '中二王', 'ㄉㄧㄠ炸天', 'ㄎㄧㄤ王', '本命', '偶像',
-        '前輩', '之夢'];
-    const NAME_SURNAME = ['南宮', '上官', '司徒', '慕容', '東方', '北辰', '長孫', '令狐', '歐陽', '夏侯'];
-    const NAME_GIVEN = ['無月', '長歌', '聽雪', '清風', '流雲', '暮雨', '星河', '青鋒', '白夜', '未央', '若水', '凌霜'];
-    const NAME_CASUAL = ['小隊長', '老玩家', '別打我', '路過', '掛機中', '求組隊', '練功中', '只收不賣', '佛系玩家'];
-    const NAME_SHORT = NAME_PREFIX.concat(NAME_TITLE).filter((name, index, list) => name.length === 2 && list.indexOf(name) === index);
-    const NAME_WRAPPERS = [
-        ['Oo', 'oO'], ['oO', 'Oo'], ['O0', '0O'], ['Xx', 'xX'], ['xX', 'Xx'], ['Xxx', 'xxX'],
-        ['卍', '卍'], ['乂', '乂'], ['一', '一'], ['丨', '丨'], ['灬', '灬'], ['丶', '丶'],
-        ['メ', 'メ'], ['ミ', 'ミ'], ['彡', '彡'], ['艸', '艸'], ['ㄨ', 'ㄨ'], ['★', '★'],
-        ['☆', '☆'], ['◆', '◆'], ['◇', '◇'], ['煞氣a', 'a煞氣'], ['可愛a', 'a可愛'],
-        ['霸氣a', 'a霸氣'], ['最愛a', 'a最愛'], ['闇夜a', 'a闇夜'], ['神之', '之神'],
-        ['惡魔a', 'a惡魔'], ['天使a', 'a天使'], ['戀愛a', 'a戀愛']
-    ];
     const SILENCE_COMPLAINTS = [
         '吵死了', '安靜一點', '別再喊了', '不要一直廣播', '別洗了', '可以停一下嗎', '別再洗頻了', '安靜啦',
         '不要重複喊', '我已經看到了', '別一直刷訊息', '可以閉嘴了', '讓頻道安靜一下', '不要再洗版', '停一下好嗎', '夠了喔',
@@ -237,7 +218,8 @@
     const RELIC_CATEGORIES = {
         weapon: { label: '武器遺物', short: '武器' },
         armor: { label: '防具遺物', short: '防具' },
-        accessory: { label: '飾品遺物', short: '飾品' }
+        accessory: { label: '飾品遺物', short: '飾品' },
+        unknown: { label: '未知遺物', short: '未知' }   // 🥚 v3.6.48 不限類型·必定搜到「圖鑑未收錄」的遺物（武防飾看 relicDex·蛋等道具型看 miscDex）；充滿詛咒/厄運氣息的蛋只進這個池
     };
 
     let _lastBroadcastCycles = Object.create(null);
@@ -640,22 +622,9 @@
         let history = new Set(st.nameHistory || []);
         let made = '';
         for (let tries = 0; tries < 12; tries++) {
-            let mode = _rand(st, 'name-mode');
-            if (mode < 0.45) {
-                made = _pick(st, NAME_SHORT, 'name-short');
-            } else if (mode < 0.70) {
-                made = _pick(st, NAME_CASUAL, 'name-casual');
-            } else if (mode < 0.85) {
-                made = _pick(st, NAME_PREFIX, 'name-prefix2') + _pick(st, NAME_GIVEN, 'name-given2');
-            } else if (mode < 0.95) {
-                made = _pick(st, NAME_PREFIX, 'name-prefix') + _pick(st, NAME_IMAGE, 'name-image') + _pick(st, NAME_TITLE, 'name-title');
-            } else {
-                made = _pick(st, NAME_SURNAME, 'name-surname') + _pick(st, NAME_GIVEN, 'name-given');
-            }
-            if (_rand(st, 'name-wrapper-chance') < 0.4) {
-                let wrapper = _pick(st, NAME_WRAPPERS, 'name-wrapper');
-                made = wrapper[0] + made + wrapper[1];
-            }
+            made = (typeof pvpRandomNameWith === 'function')
+                ? pvpRandomNameWith(() => _rand(st, 'name-pvp'))
+                : (typeof pvpRandomName === 'function' ? pvpRandomName() : ('玩家' + Math.floor(_rand(st, 'name-fallback') * 100000)));
             if (!history.has(made)) break;
         }
         st.nameHistory.push(made);
@@ -753,7 +722,7 @@
         if (cycle > 0 && _pinnedWandererIds().has(w.id)) { _lastBroadcastCycles[w.id] = cycle; return; }
         _lastBroadcastCycles[w.id] = cycle;
         // 名稱可點擊；可傳送、嘲諷，選擇「吵死了」後只會停止這名玩家後續的廣播。
-        logSys(_broadcastLineHTML(w));
+        logWorld(_broadcastLineHTML(w));
     }
 
     // ===== 📌 v3.5.77 叫賣訊息釘選列（用戶指定）=====
@@ -1122,18 +1091,18 @@
         }
         let reply = _buildOfflineNpcReply(w, choice);
         if (typeof logSys === 'function') {
-            logSys(
+            logWorld(
                 `<span class="wander-chat-out"><span class="wander-chat-arrow">-&gt;</span> ` +
                 `<span class="wander-chat-target">[${_wandererNameHtml(w)}]</span> ${_esc(choice.text)}</span>`
             );
-            logSys(
+            logWorld(
                 `<span class="wander-chat-in"><span class="wander-chat-speaker">[${_wandererNameHtml(w)}]</span> ` +
                 `${_esc(reply)}</span>`
             );
         }
         if (Math.random() < _tauntChaseRate(w.alignmentValue)) {
             if (_startWandererChase(w) && typeof logSys === 'function') {
-                logSys(`<span class="text-rose-400 font-bold">[${_wandererNameHtml(w)}] 惡狠狠地記住了你……</span>`);
+                logWorld(`<span class="text-rose-400 font-bold">[${_wandererNameHtml(w)}] 惡狠狠地記住了你……</span>`);
             }
             return;
         }
@@ -1193,18 +1162,18 @@
 
         _lastBroadcastCycles[w.id] = 'quiet';
         if (typeof logSys === 'function') {
-            logSys(
+            logWorld(
                 `<span class="wander-chat-out"><span class="wander-chat-arrow">-&gt;</span> ` +
                 `<span class="wander-chat-target">[${_wandererNameHtml(w)}]</span> ${_esc(complaint)}</span>`
             );
-            logSys(
+            logWorld(
                 `<span class="wander-chat-in"><span class="wander-chat-speaker">[${_wandererNameHtml(w)}]</span> ` +
                 `${_esc(apology)}</span>`
             );
         }
         // 😤 白目玩家系統：NPC 嗆聲回覆→正式版 20% 記仇；若叫賣者是紅名，玩家選「吵死了」必定反嗆並追殺。
         if (_reply.spicy && (forceSpicy || TEST_BUILD || Math.random() < 0.2) && _startWandererChase(w)) {   // 🧪 TEST版：回嗆必定記仇（正式版 20%；紅名 100%）
-            if (typeof logSys === "function") logSys(`<span class="text-rose-400 font-bold">[${_wandererNameHtml(w)}] 惡狠狠地記住了你……</span>`);
+            if (typeof logWorld === "function") logWorld(`<span class="text-rose-400 font-bold">[${_wandererNameHtml(w)}] 惡狠狠地記住了你……</span>`);
         }
     }
 
@@ -1241,7 +1210,7 @@
         _lastBroadcastCycles[w.id] = 'quiet';
 
         if (typeof logSys === 'function') {
-            logSys(
+            logWorld(
                 `<span class="wander-chat-out"><span class="wander-chat-arrow">-&gt;</span> ` +
                 `<span class="wander-chat-target">[${_wandererNameHtml(w)}]</span> 馬上到</span>`
             );
@@ -1471,15 +1440,28 @@
         return ids;
     }
 
+    // 🥚 v3.6.48 未知遺物用：該遺物是否已收錄圖鑑（武防飾→遺物收集冊 relicDex；type:'etc' 蛋等道具型→道具收集冊 miscDex）
+    function _relicDexKnown(id) {
+        let d = DB.items[id] || {};
+        if (d.type === 'etc') return typeof miscDexHas === 'function' && miscDexHas(id);
+        return typeof relicDexHas === 'function' && relicDexHas(id);
+    }
+
     function _makeRelicContract(st, category) {
         let active = new Set();
         st.boards.forEach(b => { if (b.contract && b.contract.relicId) active.add(b.contract.relicId); });
         let owned = _ownedRelicIds();
         let relicPool = Object.keys(DB.items).filter(id => {
             let d = DB.items[id];
-            return _relicCategoryOf(d) === category && !active.has(id) && (TEST_BUILD || !owned.has(id));
+            if (!d || !d.relic || active.has(id)) return false;
+            // 🥚 未知遺物：不限類型（含武防飾＋type:'etc' 蛋——蛋在黑市只有這個管道能搜到）·必定挑「圖鑑未收錄」者
+            if (category === 'unknown') {
+                if (!_relicCategoryOf(d) && d.type !== 'etc') return false;   // 排除既非裝備也非道具型的異常定義
+                return TEST_BUILD || !_relicDexKnown(id);
+            }
+            return _relicCategoryOf(d) === category && (TEST_BUILD || !owned.has(id));
         });
-        if (!relicPool.length) return { error: '此類別目前沒有可搜尋的新遺物。' };
+        if (!relicPool.length) return { error: category === 'unknown' ? '所有遺物都已收錄圖鑑，目前沒有可搜尋的未知遺物。' : '此類別目前沒有可搜尋的新遺物。' };
         let relicId = _pick(st, relicPool, 'relic-target|' + category);
         let craftable = _craftableIds();
         let base = Object.keys(DB.items).filter(id => {
@@ -1599,7 +1581,7 @@
             });
         }
         if (!category && name === '遺物') {
-            _setPandoraNotice('error', '請先從候補選擇武器遺物、防具遺物或飾品遺物。');
+            _setPandoraNotice('error', '請先從候補選擇武器遺物、防具遺物、飾品遺物或未知遺物。');
             _rerenderPandora();
             return true;
         }
