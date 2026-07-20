@@ -194,7 +194,16 @@ function gameLoop() {
     // 🔀 v3.6.95 混合制：背景期間（分頁還開著）不跑也不清帳——時間由 js/01 的 visibilitychange 錨點
     //    在回前景時整段記入 _tickDebt，這裡的補跑路徑再全額償還（補幀）。真正關閉網頁＝js/27 離線收益。
     if (typeof document !== 'undefined' && document.hidden) return;
-    if (!state.running || player.dead) { _tickDebt = 0; return; }
+    if (!state.running || player.dead) {
+        _tickDebt = 0;
+        _ffAcc = null;
+        _ffErrorStreak = 0;
+        state.ff = false;
+        state.ffSmall = false;
+        state.inTick = false;
+        if (typeof takeCatchupSaveRequest === 'function') takeCatchupSaveRequest();
+        return;
+    }
 
     if (!Number.isFinite(elapsed) || elapsed < 0) elapsed = 0;
     _tickDebt += Math.min(elapsed, FF_MAX_ELAPSED_MS);   // 單次呼叫吸收上限 5 分鐘（防時鐘異常；背景大段時間走錨點、不經這裡）
@@ -218,36 +227,69 @@ function gameLoop() {
     let ran = 0, budget0 = now;
     try {
         while (ran < owed && ran < FF_HARD_CAP) {
+            let tickError = null;
             state.inTick = true;
-            try { tick(); } finally { state.inTick = false; settleDeadMobs(); }
-            ran++;
+            try {
+                tick();
+            } catch (e) {
+                tickError = e;
+            } finally {
+                state.inTick = false;
+                try { settleDeadMobs(); } catch (e) { if (!tickError) tickError = e; }
+                ran++;   // 無論 tick／死亡結算是否丟例外，這一個時間單位都已嘗試過，必須扣帳
+            }
+            if (tickError) {
+                _ffErrorStreak++;
+                _ffAcc.failed = true;
+                try { console.error('[catchup] tick failed', tickError); } catch (e) {}
+                break;
+            }
+            _ffErrorStreak = 0;
             if ((ran & 15) === 0) {
                 let t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
                 if (t - budget0 >= FF_BUDGET_MS) break;
             }
         }
     } finally {
-        _tickDebt -= ran * TICK_MS;   // 🚨 只扣真跑掉的·放 finally（v3.4.32 硬化：tick 拋例外也要扣帳，否則債只增不減滾成死迴圈）
+        _tickDebt = Math.max(0, _tickDebt - ran * TICK_MS);
         _ffAcc.ticks += ran;
+        if (_ffErrorStreak >= FF_ERROR_STREAK_MAX) {
+            _tickDebt = 0;
+            _ffAcc.aborted = true;
+        }
         state.ff = false;
         state.ffSmall = false;
     }
     if (_tickDebt < TICK_MS) {   // 補跑完畢
-        if (_ffAcc && _ffAcc.ticks >= 30) {   // ≥3 秒的補跑（回前景補幀）：統一刷新＋存檔＋摘要
+        let _acc = _ffAcc;
+        let _longCatchup = !!(_acc && _acc.ticks >= 30);
+        let _deferredSave = typeof takeCatchupSaveRequest === 'function' && takeCatchupSaveRequest();
+        if (_longCatchup) {   // ≥3 秒的補跑（回前景補幀）：統一刷新＋存檔＋摘要
             try { renderMobs(); updateUI(); renderTabs(true); } catch (e) {}
-            try { saveGame(); } catch (e) {}
+        } else {
+            flushTickRender();
+        }
+        let _needsSave = _longCatchup || _deferredSave || (_acc && _acc.failed);
+        let _saveOk = false;
+        if (_needsSave) {
+            try { _saveOk = saveGame() === true; } catch (e) {}
+        }
+        if (_saveOk && typeof window !== 'undefined' && typeof window.offlineCatchupSaveCommitted === 'function') {
+            try { window.offlineCatchupSaveCommitted(); } catch (e) {}
+        }
+        if (_longCatchup) {
             try {
-                let _gd = (player.gold || 0) - _ffAcc.gold;
-                let _sec = Math.round(_ffAcc.ticks / 10);
+                let _gd = (player.gold || 0) - _acc.gold;
+                let _sec = Math.round(_acc.ticks / 10);
                 let _dur = _sec >= 60 ? Math.floor(_sec / 60) + ' 分 ' + (_sec % 60) + ' 秒' : _sec + ' 秒';
                 logSys('<span class="text-cyan-300 font-bold">⏩ 掛機補跑完成：</span>已補上 ' + _dur + ' 的進度' + (_gd > 0 ? ('，金幣 +' + _gd.toLocaleString()) : '') + '。');
             } catch (e) {}
-        } else {
-            // ⚠️ 前景微卡頓的小補跑（owed 2~29·開面板/GC/重繪都會觸發）只補常規重繪，絕不存檔：
-            //    saveGame 的 LZ 壓縮本身會卡出下一次 owed≥2 → 存檔→卡頓→再存檔的自我延續迴圈（v3.6.96 修連續自動存檔）。
-            flushTickRender();
+        }
+        if (_acc && _acc.aborted && typeof logSys === 'function') {
+            logSys('<span class="text-red-400 font-bold">補跑連續發生錯誤，已停止剩餘補跑，避免進度卡在重複補跑；請重新整理後確認。</span>');
         }
         _ffAcc = null;
+        _ffErrorStreak = 0;
     } else {
         flushTickRender();
     }
@@ -256,7 +298,9 @@ function gameLoop() {
 const FF_BUDGET_MS = 40;
 const FF_HARD_CAP = 6000;
 const FF_MAX_ELAPSED_MS = 300000;
+const FF_ERROR_STREAK_MAX = 3;
 let _ffAcc = null;   // 補跑摘要累計（跨多次 gameLoop 呼叫·還清時歸零）
+let _ffErrorStreak = 0;
 
 // 🛡️ 絕對屏障：與世界隔絕——無法攻擊/施法/用道具、不自然恢復、不受任何傷害（持續期間 player.buffs.sk_abs_barrier>0）
 function inAbsBarrier() { return !!(player.buffs && player.buffs.sk_abs_barrier > 0); }

@@ -2,8 +2,8 @@
 // 公式：同地圖最近實戰每分鐘產出 × 可結算分鐘 × 70%。
 // 最短離線 1 分鐘、最多結算 12 小時；依實戰怪物組成抽取一般掉落與卡片。
 // 頭目、PVP、任務專用品與活動事件不做離線抽取，避免事件重複觸發。
-// 🔀 v3.6.95 混合制（用戶拍板）：本檔只負責「真正關閉網頁後重開」（loadGame／pageshow bfcache 還原）；
-//    「網頁還開著」的切分頁/縮小＝js/01 錨點＋js/03 state.ff 補跑全額補幀，本檔於回前景時只重置不結算。
+// 🔀 混合制：「真正關閉網頁後重開」才走離線收益；切分頁、縮小與 bfcache 還原都由 js/01＋js/03 全額補跑。
+//    若玩家在背景中直接關頁，關頁前的背景時間會另存為補跑債，離線收益只從真正關頁時刻開始，避免兩軌混算。
 (function () {
     'use strict';
 
@@ -26,6 +26,7 @@
     let _offlineLoading = false;
     let _offlineSettling = false;
     let _offlineInternalSave = false;
+    let _offlineRestoredCatchupKey = '';
     // ⚠️ 背景分頁期間任何存檔（js/01 每 5 分鐘自動存檔在背景仍會觸發）都不得把 awaySince／
     //    checkpoint.lastActive 往後推，否則離線時長永遠湊不滿 1 分鐘下限、資格也會因
     //    「最後擊殺超過 5 分鐘」被翻成 false → 回前景永遠結不了帳。
@@ -64,6 +65,19 @@
         try {
             if (typeof _lsSet === 'function') return _lsSet(key, value) !== false;
             localStorage.setItem(key, value);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function _offlineStorageRemove(key) {
+        try {
+            if (typeof _lsRemove === 'function') {
+                _lsRemove(key);
+                return true;
+            }
+            localStorage.removeItem(key);
             return true;
         } catch (e) {
             return false;
@@ -343,24 +357,73 @@
         });
     }
 
-    function _offlinePrepareSnapshot(now) {
-        if (_offlineHiddenAt > 0 && now > _offlineHiddenAt) now = _offlineHiddenAt;
+    function _offlinePrepareSnapshot(now, closingPage) {
+        now = Math.max(0, Math.floor(_offlineFinite(now, _offlineNow())));
+        let activityNow = now;
+        if (_offlineHiddenAt > 0 && activityNow > _offlineHiddenAt) activityNow = _offlineHiddenAt;
+        let snapshotNow = closingPage === true ? now : activityNow;
         let st = _offlineEnsureState();
         if (!st) return null;
-        let profile = _offlineCommitProfile(now, st);
-        let eligible = _offlineCanSnapshot(now, profile);
+        let profile = _offlineCommitProfile(activityNow, st);
+        let eligible = _offlineCanSnapshot(activityNow, profile);
         st.eligible = eligible;
-        st.awaySince = now;
+        st.awaySince = snapshotNow;
         st.map = eligible ? String(mapState.current) : '';
         st.mapName = eligible ? _offlineMapName(mapState.current) : '';
         let checkpoint = {
             v: OFFLINE_VERSION,
-            lastActive: now,
+            lastActive: snapshotNow,
             snapshot: JSON.parse(JSON.stringify(st))
         };
         _offlineWriteJson(_offlineStoreKey('checkpoint'), checkpoint);
         return st;
     }
+
+    function _offlineRememberPendingCatchup(closedAt) {
+        let key = _offlineStoreKey('catchup');
+        if (!key) return false;
+        let runtimeMs = typeof catchupPendingMs === 'function' ? catchupPendingMs() : 0;
+        let hiddenMs = _offlineHiddenAt > 0 ? Math.max(0, closedAt - _offlineHiddenAt) : 0;
+        let previous = _offlineReadJson(key);
+        // 已排入本頁記憶體的舊債不可再取 max，否則中途關頁會把已補過的部分再次帶回。
+        let previousMs = _offlineRestoredCatchupKey === key ? 0 :
+            (previous ? Math.max(0, Math.floor(_offlineFinite(previous.ms, 0))) : 0);
+        let ms = Math.max(previousMs, Math.floor(Math.max(0, runtimeMs) + hiddenMs));
+        if (ms < TICK_MS) {
+            _offlineStorageRemove(key);
+            return false;
+        }
+        return _offlineWriteJson(key, {
+            v: OFFLINE_VERSION,
+            ms: ms,
+            closedAt: Math.max(0, Math.floor(closedAt))
+        });
+    }
+
+    function _offlineRestorePendingCatchup() {
+        let key = _offlineStoreKey('catchup');
+        let pending = _offlineReadJson(key);
+        if (!key || !pending) return false;
+        if (_offlineRestoredCatchupKey === key) return false;
+        let ms = Math.max(0, Math.floor(_offlineFinite(pending.ms, 0)));
+        if (ms < TICK_MS) {
+            _offlineStorageRemove(key);
+            return false;
+        }
+        if (typeof queueCatchupMs !== 'function' || !queueCatchupMs(ms)) return false;
+        _offlineRestoredCatchupKey = key;
+        if (typeof deferCatchupSave === 'function') deferCatchupSave();
+        return true;
+    }
+
+    function _offlineCommitRestoredCatchup() {
+        if (!_offlineRestoredCatchupKey) return false;
+        let key = _offlineRestoredCatchupKey;
+        if (!_offlineStorageRemove(key)) return false;
+        _offlineRestoredCatchupKey = '';
+        return true;
+    }
+    window.offlineCatchupSaveCommitted = _offlineCommitRestoredCatchup;
 
     function _offlineReadClaimAt(now) {
         let obj = _offlineReadJson(_offlineStoreKey('claim'));
@@ -811,6 +874,7 @@
             _offlineShowSummary(result);
             return true;
         } finally {
+            try { _offlineRestorePendingCatchup(); } catch (e) {}
             _offlineSettling = false;
         }
     }
@@ -850,6 +914,10 @@
     const _offlineOriginalSaveGame = window.saveGame;
     if (typeof _offlineOriginalSaveGame === 'function') {
         window.saveGame = function () {
+            if (!_offlineInternalSave && typeof catchupActive === 'function' && catchupActive()) {
+                if (typeof deferCatchupSave === 'function') return deferCatchupSave();
+                return false;
+            }
             if (!_offlineInternalSave && !_offlineLoading && typeof player !== 'undefined' && player && player.cls) {
                 _offlinePrepareSnapshot(_offlineNow());
             }
@@ -881,14 +949,23 @@
         finally { _offlineInternalSave = false; }
     }
 
+    function _offlineCloseAndSave() {
+        if (typeof player === 'undefined' || !player || !player.cls || _offlineLoading || _offlineSettling) return;
+        let now = _offlineNow();
+        _offlineRememberPendingCatchup(now);
+        _offlinePrepareSnapshot(now, true);
+        _offlineInternalSave = true;
+        try { _offlineOriginalSaveGame(); } catch (e) {}
+        finally { _offlineInternalSave = false; }
+    }
+
     if (typeof document !== 'undefined' && document.addEventListener) {
         document.addEventListener('visibilitychange', function () {
             if (document.hidden) {
                 if (!_offlineHiddenAt) _offlineHiddenAt = _offlineNow();
                 _offlinePauseAndSave();
             } else {
-                // 🔀 v3.6.95 混合制（用戶拍板）：分頁還開著時切回前景＝js/03 補幀全額補跑，這裡「只重置、不結算」。
-                //    離線結算只留給「真正關閉網頁後重開」（loadGame）與 bfcache 還原（pageshow）兩個入口。
+                // 分頁仍開著時回前景只重置離線快照；實際背景進度交由補跑軌處理。
                 //    ⚠️ 重置（awaySince 拉回現在＋清空取樣 runtime）不可省——補幀已 100% 補過的時段若留著舊 awaySince，
                 //       之後一關頁就會被離線結算再算一次（重複入帳）；runtime 不清則取樣窗跨過背景空窗、速率被稀釋。
                 _offlineHiddenAt = 0;
@@ -898,13 +975,20 @@
         });
     }
     if (typeof window !== 'undefined' && window.addEventListener) {
-        window.addEventListener('pagehide', _offlinePauseAndSave);
-        window.addEventListener('beforeunload', _offlinePauseAndSave);
-        window.addEventListener('pageshow', function () {
-            if (!document.hidden) {
-                _offlineHiddenAt = 0;
-                setTimeout(function () { _offlineSettle('pageshow'); }, 0);
+        window.addEventListener('pagehide', function (ev) {
+            if (ev && ev.persisted) _offlinePauseAndSave();
+            else _offlineCloseAndSave();
+        });
+        window.addEventListener('beforeunload', _offlineCloseAndSave);
+        window.addEventListener('pageshow', function (ev) {
+            if (document.hidden) return;
+            _offlineHiddenAt = 0;
+            if (ev && ev.persisted) {
+                _offlineResetRuntime(typeof mapState !== 'undefined' && mapState ? mapState.current : '');
+                _offlinePrepareSnapshot(_offlineNow());
+                return;
             }
+            setTimeout(function () { _offlineSettle('pageshow'); }, 0);
         });
     }
 
