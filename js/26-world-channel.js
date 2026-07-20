@@ -46,11 +46,15 @@ function _wcSpawnNpc() {
             entry = npcClanAssignOpponent(entry, { onFieldNames: Object.keys(_wcNpcs).map(k => _wcNpcs[k] && _wcNpcs[k].name).filter(Boolean) }) || entry;
         } catch (e) {}
     }
+    // 🔒 v3.6.81 初次在頻道發言＝記錄該名字的性向值（已有鎖則沿用舊值）→ 之後記仇／野外遭遇全程同一個顏色
+    let _lockedAlign = (typeof pvpLockAlignment === 'function')
+        ? pvpLockAlignment(entry.n, entry.alignmentValue, entry.clanId)
+        : _wcAlignmentValue(entry.alignmentValue);
     _wcNpcs[id] = {
         name: entry.n,
         persona: _wcPick(WC_PERSONAS),
         cls: _wcPick(clsKeys),
-        alignmentValue: entry.alignmentValue,
+        alignmentValue: _lockedAlign,
         clanName: entry.clanName || '',
         clanLeader: !!entry.clanLeader,
         thanked: false,
@@ -880,7 +884,9 @@ const WC_TOPICS = [
                 '經典模式死掉的經驗可以去亞丁找聖使阿卡塔花金幣買回一半，紀錄筆數有限，別拖太久。',
                 '一直死就是等級或裝備跟不上：退一張圖練、把自動喝水的門檻調高，比原地送頭有效。',
                 '攻城區不管是邪惡玩家還是敵人死亡，都不會噴裝備；經典模式在攻城區死亡也不扣經驗。',
-                '紅名低於很深的邪惡值才有死亡掉物品風險，攻城區不吃這條。'
+                '紅名低於很深的邪惡值才有死亡掉物品風險，攻城區不吃這條。',
+                '邪惡狀態噴掉的裝備別放棄：亞丁的聖使阿卡塔會記錄最近遺失的幾件，花龍之鑽石就能指定贖回其中一件，強化值跟詞綴都照原樣回來。',   // 🕊️ v3.6.86 裝備贖回
+                '阿卡塔的裝備贖回一般模式也能用，不用經典；只有「死亡經驗買回」那段才是經典限定。'
             ];
         }
     },
@@ -1898,6 +1904,7 @@ function worldChannelThank(id) {
                 return !isWorldGrudge;
             });
             if (!removed) return;
+            if (typeof pvpReleaseAlignLock === 'function') pvpReleaseAlignLock(npc.name);   // 🔒 v3.6.81 消氣＝判定不會再追殺 → 解除性向值鎖（宣戰凍結者不解）
             logWorld(`<span class="wc-sys">${nameHtml} 好像沒那麼氣了。</span>`);
             if (typeof saveGame === 'function') saveGame();
         }
@@ -1918,7 +1925,7 @@ function _wcAddGrudge(npc) {
             avatar: avatarByCls[npc.cls] || (male ? '男戰士' : '女戰士'),
             source: 'worldChannel',
             wcGrudge: true,
-            alignmentValue: _wcAlignmentValue(npc.alignmentValue),
+            alignmentValue: (typeof pvpLockedAlignment === 'function') ? pvpLockedAlignment(npc.name, npc.alignmentValue) : _wcAlignmentValue(npc.alignmentValue),   // 🔒 v3.6.81 沿用初次發言鎖住的值
             until: Date.now() + 2 * 60 * 60 * 1000
         });
         logWorld(`<span class="text-rose-400 font-bold">[${_wcStaticNameHtml(npc.name, npc.alignmentValue)}] 惡狠狠地記住了你……</span>`);

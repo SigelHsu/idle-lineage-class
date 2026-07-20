@@ -56,10 +56,10 @@ const PET_BOOK = {
     // ===== 黃金龍（v3.2.63：任一「一般型態」＋勝利果實可直接進化取得·與高等型態並列·Lv1 起·最終型態不可再進化）=====
     '黃金龍':       { kind:'spec', tier:2, lv0:1, hpUp:[8,12],  mpUp:[2,4], hpReg:8,  mpReg:4,  apm:72,    capm:45,    stun:0.58, cha:20, evo:null, sk:[{ n:'火焰噴射', mp:15, kind:'magic', d:[1,15], ele:'fire', aoe:true, w:50 }, { n:'火球', mp:10, kind:'magic', d:[2,10], ele:'fire', w:50 }] },
     // ===== 蜥蜴四型態（🦎 v3.6.43 用戶規格·獲得管道待補·tier0＋evo:null＝無法進化·魅力 15 比照龍系〔規格未給·暫定〕）=====
-    '厄運蜥蜴': { kind:'spec', tier:0, lv0:5, hp0:150, mp0:40, hpUp:[12,24], mpUp:[5,8],  hpReg:15, mpReg:10, apm:72, capm:48, stun:0.58, cha:15, evo:null, sk:[{ n:'火焰噴射', mp:20, kind:'magic', d:[1,25], ele:'fire',  aoe:true, w:90 }, { n:'炎爪', mp:0, kind:'dot', dot:'burn',   dps:10, dur:6, w:10 }] },
-    '災厄蜥蜴': { kind:'spec', tier:0, lv0:5, hp0:160, mp0:20, hpUp:[12,26], mpUp:[5,7],  hpReg:15, mpReg:10, apm:60, capm:48, stun:0.50, cha:15, evo:null, sk:[{ n:'大地震裂', mp:20, kind:'magic', d:[1,25], ele:'earth', aoe:true, w:90 }, { n:'堅硬', mp:0, kind:'selfbuff', dr:10, dur:6, w:10 }] },
-    '破滅蜥蜴': { kind:'spec', tier:0, lv0:5, hp0:150, mp0:40, hpUp:[12,22], mpUp:[5,7],  hpReg:15, mpReg:10, apm:90, capm:48, stun:0.58, cha:15, evo:null, sk:[{ n:'龍捲風', mp:20, kind:'magic', d:[1,25], ele:'wind',  aoe:true, w:90 }, { n:'風刃', mp:0, kind:'dot', dot:'bleed',  dps:10, dur:6, w:10 }] },
-    '詛咒蜥蜴': { kind:'spec', tier:0, lv0:5, hp0:120, mp0:60, hpUp:[10,20], mpUp:[6,10], hpReg:10, mpReg:15, apm:60, capm:48, stun:0.58, cha:15, evo:null, sk:[{ n:'冰雪暴', mp:20, kind:'magic', d:[1,25], ele:'water', aoe:true, freezeCh:3, w:90 }, { n:'汙濁', mp:0, kind:'dot', dot:'poison', dps:10, dur:6, w:10 }] }
+    '厄運蜥蜴': { kind:'spec', tier:0, goldenAtk:1.60, goldenMagic:1.60, lv0:5, hp0:150, mp0:40, hpUp:[12,24], mpUp:[5,8],  hpReg:15, mpReg:10, apm:72, capm:48, stun:0.58, cha:15, evo:null, sk:[{ n:'火焰噴射', mp:20, kind:'magic', d:[1,25], ele:'fire',  aoe:true, w:90 }, { n:'炎爪', mp:0, kind:'dot', dot:'burn',   dps:10, dur:6, w:10 }] },
+    '災厄蜥蜴': { kind:'spec', tier:0, goldenAtk:2.05, goldenMagic:2.05, acMod:-5, mrBonus:20, lv0:5, hp0:160, mp0:20, hpUp:[12,26], mpUp:[5,7],  hpReg:15, mpReg:10, apm:60, capm:48, stun:0.50, cha:15, evo:null, sk:[{ n:'大地震裂', mp:20, kind:'magic', d:[1,25], ele:'earth', aoe:true, w:90 }, { n:'堅硬', mp:0, kind:'selfbuff', dr:10, dur:6, w:10 }] },
+    '破滅蜥蜴': { kind:'spec', tier:0, goldenAtk:2.10, goldenMagic:1.05, drPierce:0.35, lv0:5, hp0:150, mp0:40, hpUp:[12,22], mpUp:[5,7],  hpReg:15, mpReg:10, apm:90, capm:48, stun:0.58, cha:15, evo:null, sk:[{ n:'龍捲風', mp:20, kind:'magic', d:[1,25], ele:'wind',  aoe:true, w:90 }, { n:'風刃', mp:0, kind:'dot', dot:'bleed',  dps:10, dur:6, w:10 }] },
+    '詛咒蜥蜴': { kind:'spec', tier:0, goldenAtk:1.35, goldenMagic:2.60, lv0:5, hp0:120, mp0:60, hpUp:[10,20], mpUp:[6,10], hpReg:10, mpReg:15, apm:60, capm:48, stun:0.58, cha:15, evo:null, sk:[{ n:'冰雪暴', mp:20, kind:'magic', d:[1,25], ele:'water', aoe:true, freezeCh:3, w:90 }, { n:'汙濁', mp:0, kind:'dot', dot:'poison', dps:10, dur:6, w:10 }] }
 };
 const PET_KIND_WEIGHT = { phys: 4, spec: 3, mag: 2 };   // 受擊權重（怪物一般攻擊選目標）
 const PET_KIND_LABEL = { phys: '物理型', spec: '特殊型', mag: '魔法型' };
@@ -91,28 +91,41 @@ const PET_DMG_TUNE = { basic: 1.20, skill: 1.10 };
 const PET_TIER_DMG_MULT = [1.14, 1.46, 1.00];   // 🐾 與下方生存力曲線合併後：一般平均總傷約+20%、高等約+50%；黃金龍維持原值
 const PET_HIT_TUNE = 5;                         // 🐾 全寵物命中補強（仍受等級差、目標 AC 與骰 1 必失影響）
 function _petClamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function _petPowerCurve(def, lv) {
+    let g = _PET_G[def.kind], t = def.tier || 0;
+    let speedMul = _petClamp(Math.sqrt(60 / Math.max(1, def.apm)), 0.80, 1.25);
+    let hpAvg = ((def.hpUp && def.hpUp[0]) || 0) / 2 + ((def.hpUp && def.hpUp[1]) || 0) / 2;
+    let oldDurableMul = hpAvg <= 5 ? 1.05 : (hpAvg <= 8 ? 1 : (hpAvg <= 11 ? 0.92 : 0.85));
+    let durableMul = t === 2 ? oldDurableMul : 1;
+    let skills = def.sk || [];
+    let hasMagic = skills.some(s => s.kind === 'magic');
+    let hasExtra = skills.some(s => s.kind === 'extra');
+    let hasDebuff = skills.some(s => s.kind === 'debuff');
+    let skillMul = !skills.length ? 1.08 : (hasMagic ? 0.72 : (hasExtra ? 0.85 : (hasDebuff ? 0.98 : 1)));
+    let tierAtk = [1, 1.18, 1.35][t] || 1;
+    let castMul = def.capm > 0 ? _petClamp(Math.sqrt(50 / def.capm), 0.80, 1.25) : 1;
+    let skillTier = [1, 1.15, 1.25][t] || 1;
+    return { avgAtk: Math.max(1, (g.atk0 + lv * g.atkG) * speedMul * durableMul * skillMul * tierAtk * PET_DMG_TUNE.basic),
+        skillFlat: Math.floor(lv * g.skillG * castMul * skillTier * PET_DMG_TUNE.skill) };
+}
 function petDerive(p) {
     let def = PET_BOOK[p.form]; if (!def) return null;
     let g = _PET_G[def.kind], lv = p.lv || 1, t = def.tier || 0;
-    let speedMul = _petClamp(Math.sqrt(60 / Math.max(1, def.apm)), 0.80, 1.25);
     let hpAvg = ((def.hpUp && def.hpUp[0]) || 0) / 2 + ((def.hpUp && def.hpUp[1]) || 0) / 2;
-    const oldDurableMul = hpAvg <= 5 ? 1.05 : (hpAvg <= 8 ? 1 : (hpAvg <= 11 ? 0.92 : 0.85));
     // 生存力換輸出：低血成長寵物明顯偏攻擊，高血成長寵物偏坦；一般／高等的普攻與技能都套用。
     const survivalDmgMult = hpAvg <= 5 ? 1.25 : (hpAvg <= 8 ? 1.08 : (hpAvg <= 11 ? 0.90 : 0.75));
-    const durableMul = t === 2 ? oldDurableMul : 1;   // 黃金龍只有單一型態，保留既有基本傷害，不參與同階血量取向比較
     let hpAc = hpAvg > 11 ? -2 : (hpAvg > 8 ? -1 : (hpAvg <= 5 ? 1 : 0));
     let hpDr = hpAvg > 11 ? 2 : (hpAvg > 8 ? 1 : 0);
-    let hasMagic = def.sk.some(s => s.kind === 'magic');
-    let hasExtra = def.sk.some(s => s.kind === 'extra');
-    let hasDebuff = def.sk.some(s => s.kind === 'debuff');
-    let skillMul = !def.sk.length ? 1.08 : (hasMagic ? 0.72 : (hasExtra ? 0.85 : (hasDebuff ? 0.98 : 1)));
-    let tierAtk = [1, 1.18, 1.35][t] || 1;
-    let avgAtk = Math.max(1, (g.atk0 + lv * g.atkG) * speedMul * durableMul * skillMul * tierAtk * PET_DMG_TUNE.basic);
+    let power = _petPowerCurve(def, lv);
+    if ((def.goldenAtk || def.goldenMagic) && PET_BOOK['黃金龍']) {
+        let golden = _petPowerCurve(PET_BOOK['黃金龍'], lv);
+        if (def.goldenAtk) power.avgAtk = Math.max(power.avgAtk, golden.avgAtk);
+        if (def.goldenMagic) power.skillFlat = Math.max(power.skillFlat, golden.skillFlat);
+    }
+    let avgAtk = power.avgAtk;
     let flat = Math.floor(avgAtk * 0.35), dice = Math.max(1, Math.ceil(avgAtk * 1.30));
     let speedHit = _petClamp(Math.round((60 - def.apm) / 12), -3, 3);
     let elite = t === 2 ? { hit:2, ac:-4, dr:2, mr:10 } : { hit:0, ac:0, dr:0, mr:0 };
-    let castMul = def.capm > 0 ? _petClamp(Math.sqrt(50 / def.capm), 0.80, 1.25) : 1;
-    let skillTier = [1, 1.15, 1.25][t] || 1;
     let mr = g.mr0 + Math.floor(lv * g.mrG) + t * g.mrTier + elite.mr;
     // 🛡️ v3.2.37 寵物個別防具（p.eq.arm）：petAc(+強化每+1再-1)→AC、petMr→MR、petInt→技能傷害+1/點、petWis→MP上限+5·MP恢復+1/點
     let _ga = (p.eq && p.eq.arm) ? DB.items[p.eq.arm.id] : null;
@@ -124,14 +137,16 @@ function petDerive(p) {
         kind: def.kind, tier: t,
         dice: dice,
         flat: flat,
+        attackMult: Math.max(1, def.goldenAtk || 1),
+        magicMult: Math.max(1, def.goldenMagic || 1),
         drPierce: Math.max(0, Math.min(0.95, def.drPierce || 0)),
-        damageMult: (t === 2 ? 1 : (PET_TIER_DMG_MULT[t] || 1) * survivalDmgMult) * petMasteryDmgMult(),   // 👑 夥伴精通 ×1.5 折於此＝普攻(petAttackOnce)／傷害技能(petCastSkill)／extra技(走普攻) 三路徑一次覆蓋
+        damageMult: ((def.goldenAtk || def.goldenMagic) ? 1 : (t === 2 ? 1 : (PET_TIER_DMG_MULT[t] || 1) * survivalDmgMult)) * petMasteryDmgMult(),   // 🦎 四蜥蜴以黃金龍為基準，普攻／魔法各自套用角色倍率；👑 夥伴精通 ×1.5
         hit: Math.floor((g.hit0 + Math.floor(lv * g.hitG) + speedHit + t * 3 + elite.hit + PET_HIT_TUNE) * petMasteryHitMult()),   // 👑 夥伴精通 ×1.5
-        skillFlat: Math.floor(lv * g.skillG * castMul * skillTier * PET_DMG_TUNE.skill) + _gInt,
-        ac: 10 - Math.floor(lv / g.acDiv) - t * g.acTier + hpAc + elite.ac - _gAc,
+        skillFlat: power.skillFlat + _gInt,
+        ac: 10 - Math.floor(lv / g.acDiv) - t * g.acTier + hpAc + elite.ac + (def.acMod || 0) - _gAc,
         dr: Math.floor(lv / g.drDiv) + t * g.drTier + hpDr + elite.dr,
         er: Math.min(g.erCap, Math.floor(lv / g.erDiv)),                // ER
-        mr: Math.min(t === 2 ? 110 : g.mrCap, mr) + (_ga ? (_ga.petMr || 0) : 0),
+        mr: Math.min(t === 2 ? 110 : g.mrCap, mr + (def.mrBonus || 0)) + (_ga ? (_ga.petMr || 0) : 0),
         mmpBonus: _gWis * 5,                                            // 精神：MP 上限 +5/點（regen/施放/顯示用有效上限）
         mpRegBonus: _gWis,                                              // 精神：MP 恢復 +1/點
         atkItv: Math.max(3, Math.round(600 / def.apm)),                 // 攻擊間隔（ticks·600=每分鐘tick數）
@@ -931,7 +946,8 @@ function petAttackOnce(p, d, target, forceCrit, addDmg, skName) {
             let targetDr = Math.floor((target.dr || 0) * (1 - (d.drPierce || 0)));
             let dmg = (heavy ? d.dice : roll(1, d.dice)) + d.flat + cb.dmg + (addDmg || 0) + pg.dmg + (_ia ? _ia.ed : 0) + (petDevotionGuardOn(p) ? 8 : 0) - targetDr - (_pst.weaken > 0 ? 5 : 0);   // 🏺 v3.6.44 珍愛夥伴的執念：復活後 8 秒額外傷害 +8
             dmg = Math.max(1, Math.floor(dmg));
-            dmg = Math.max(1, Math.floor(dmg * (d.damageMult || 1)));   // 🐾 型態增傷＋低血高傷取向（普攻／extra 技能共用）
+            let atkMult = (d.damageMult || 1) * (d.attackMult || 1);
+            dmg = Math.max(1, (d.attackMult || 1) > 1 ? Math.ceil(dmg * atkMult) : Math.floor(dmg * atkMult));   // 🦎 蜥蜴普攻以同級黃金龍為底再套角色倍率；其餘寵物維持原取整
             if (skName && typeof _relicPetSkillMult === 'function') dmg = Math.max(1, Math.floor(dmg * _relicPetSkillMult()));
             markBossPhysicalHit(target);
             target.curHp -= dmg; if (typeof terrorVisageOnDamage === 'function') terrorVisageOnDamage(target, dmg, skName ? 'magic' : 'melee'); target.justHit = 'none'; mobWake(target);   // 🌅 巨大骷髏：寵物普攻＝近距離、寵物技能＝魔法
@@ -979,7 +995,7 @@ function petCastSkill(p, d, target) {
                 logCombat(`寵物 [${p.form}] 施放 <span class="text-pink-300 font-bold">${sk.n}</span>，<span class="${getMobColor(target.lv)}">${target.n}</span> 陷入${sk.debuff === 'slow' ? '緩速' : sk.debuff === 'weaken' ? '弱化' : '疾病'}！（命中率 ${Math.round(ch)}%）`, 'player-special');
             } else logCombat(`寵物 [${p.form}] 施放 <span class="text-pink-300 font-bold">${sk.n}</span>，但被抵抗了。（命中率 ${Math.round(ch)}%）`, 'miss');
         } else if (sk.kind === 'dot') {   // 🦎 v3.6.43 蜥蜴固定 DoT（必中·每秒 dps 點固定傷害·dur 秒）：burn=_burnDot／bleed=bleeds 層／poison=st.poison*（皆走既有 tick 管線·DPS 歸 'pet'）
-            let _t = (sk.dur || 6) * 10, _dm = sk.dps || 10;
+            let _t = (sk.dur || 6) * 10, _dm = (sk.dps || 10) + Math.floor(Math.max(1, p.lv || 1) / 5);
             if (sk.dot === 'burn') target._burnDot = { left: _t, dmg: _dm, tick: 10, src: 'pet' };
             else if (sk.dot === 'bleed') {
                 target.bleeds = target.bleeds || [];
@@ -999,9 +1015,10 @@ function petCastSkill(p, d, target) {
             mobWake(target);
             logCombat(`寵物 [${p.form}] 施放 <span class="text-pink-300 font-bold">${sk.n}</span>，<span class="${getMobColor(target.lv)}">${target.n}</span> 陷入${sk.dot === 'burn' ? '灼燒' : sk.dot === 'bleed' ? '出血' : '中毒'}！（每秒 ${_dm} 點·持續 ${sk.dur || 6} 秒）`, 'player-special');
         } else if (sk.kind === 'selfbuff') {   // 🦎 災厄蜥蜴堅硬：自身傷害減免 +dr·dur 秒（petHardenDr 於受擊時消費·runtime 欄位不入桶）
-            p._hardenDr = sk.dr || 10;
+            let _hd = (sk.dr || 10) + Math.floor(Math.max(1, p.lv || 1) / 10);
+            p._hardenDr = _hd;
             p._hardenUntil = (state.ticks || 0) + (sk.dur || 6) * 10;
-            logCombat(`寵物 [${p.form}] 施放 <span class="text-pink-300 font-bold">${sk.n}</span>，傷害減免 +${sk.dr || 10}！（持續 ${sk.dur || 6} 秒）`, 'player-special');
+            logCombat(`寵物 [${p.form}] 施放 <span class="text-pink-300 font-bold">${sk.n}</span>，傷害減免 +${_hd}！（持續 ${sk.dur || 6} 秒）`, 'player-special');
         } else {   // magic：骰值+技能傷害加成·吃魔抗/DR/屬性剋制；必定命中
             let targets = sk.aoe ? mapState.mobs.filter(m => m && m.curHp > 0) : [target];
             let texts = [];
@@ -1012,7 +1029,8 @@ function petCastSkill(p, d, target) {
                 let dmg = Math.floor(core * mrMult(effMr));
                 if (sk.ele && sk.ele !== 'none' && m.e && m.e !== 'none' && typeof elementCounterMult === 'function') dmg = Math.floor(dmg * elementCounterMult(sk.ele, m.e));
                 dmg = Math.max(1, dmg - (m.dr || 0));
-                dmg = Math.max(1, Math.floor(dmg * (d.damageMult || 1)));   // 🐾 傷害技能同享型態增傷＋低血高傷取向
+                let magicMult = (d.damageMult || 1) * (d.magicMult || 1);
+                dmg = Math.max(1, (d.magicMult || 1) > 1 ? Math.ceil(dmg * magicMult) : Math.floor(dmg * magicMult));   // 🦎 蜥蜴魔法以同級黃金龍為底再套角色倍率；其餘寵物維持原取整
                 if (typeof _relicPetSkillMult === 'function') dmg = Math.max(1, Math.floor(dmg * _relicPetSkillMult()));   // 🏺 馴獸師的訓狗棒：寵物技能×1.5
                 if (sk.n && sk.n.includes('冰錐') && typeof equipSkillDmgMult === 'function') dmg = Math.max(1, Math.floor(dmg * equipSkillDmgMult(DB.skills.sk_ice_spike, 'sk_ice_spike')));   // 🏺 v3.2.35 暴走兔最愛的胡蘿蔔：攜帶的暴走兔/高等暴走兔施放的冰錐也 ×1.5（掃玩家裝備 skillDmgMult.sk_ice_spike·與訓狗棒相乘）
                 m.curHp -= dmg; if (typeof terrorVisageOnDamage === 'function') terrorVisageOnDamage(m, dmg, 'magic'); m.justHit = sk.ele || 'none'; mobWake(m);   // 🌅 巨大骷髏：寵物傷害技能視為魔法
@@ -1259,7 +1277,7 @@ function renderPetStorageNPC(div, confirmUid) {
                 <span class="font-bold ${isOut ? 'text-emerald-300' : 'text-white'}">${p.form}</span>
                 <span class="text-amber-300"> Lv.${p.lv}</span>
                 <span class="text-slate-400 text-xs">（${PET_KIND_LABEL[def.kind] || ''}·魅力${need}${isOut ? '·本角色出戰中' : (otherOut ? '·其他角色出戰中' : '')}）</span><br>
-                <span class="text-xs text-slate-300">HP ${p.hp}/${p.mhp}　MP ${p.mp}/${p.mmp + (d.mmpBonus || 0)}　EXP ${expPct}%　攻1D${Math.max(1, Math.round(d.dice * (d.damageMult || 1)))}+${Math.round((d.flat + cb.dmg) * (d.damageMult || 1))} 命中${d.hit + cb.hit} AC${d.ac} 減免${d.dr} ER${d.er} MR${d.mr}</span>
+                <span class="text-xs text-slate-300">HP ${p.hp}/${p.mhp}　MP ${p.mp}/${p.mmp + (d.mmpBonus || 0)}　EXP ${expPct}%　攻1D${Math.max(1, Math.round(d.dice * (d.damageMult || 1) * (d.attackMult || 1)))}+${Math.round((d.flat + cb.dmg) * (d.damageMult || 1) * (d.attackMult || 1))} 命中${d.hit + cb.hit} AC${d.ac} 減免${d.dr} ER${d.er} MR${d.mr}</span>
             </span>
             <span class="flex gap-1 shrink-0 flex-wrap justify-end" style="max-width:210px">
                 ${!otherOut && canEvo && p.lv >= 30 ? `<button onclick="petEvolve('${p.uid}')" class="btn px-2 py-1 text-xs font-bold" style="background:linear-gradient(135deg,#713f12,#ca8a04);color:#fef9c3;border-color:#eab308;" title="進化：${_evoTip}（兩種果實都有可選擇）">進化</button>` : ''}

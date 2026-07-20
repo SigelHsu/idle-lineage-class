@@ -1223,7 +1223,9 @@ function buildItemDescHTML(item) {
     let _attrMagic = getAttrMagicProc(item);
     if (_attrMagic) {
         let _attrMagicName = (DB.skills[_attrMagic.skId] && DB.skills[_attrMagic.skId].n) || _attrMagic.skId;
-        desc += `<br><span class="text-yellow-300 font-bold">★ 屬性附加魔法：攻擊時 ${_attrMagic.rate}% 機率觸發${_attrMagicName}。</span>`;
+        let _attrMagicStars = '★'.repeat(_attrMagic.star);
+        let _attrMagicRateNote = _attrMagic.star > 1 ? `（基礎 ${_attrMagic.baseRate}% × ${_attrMagic.star}）` : '';
+        desc += `<br><span class="text-yellow-300 font-bold">${_attrMagicStars} 屬性附加魔法：攻擊時 ${_attrMagic.rate}% 機率觸發${_attrMagicName}${_attrMagicRateNote}。</span>`;
     }
 
     // 🪄 授予技能（力量／敏捷／治癒魔法頭盔等 grantSkills 裝備）：列出可額外使用的魔法。

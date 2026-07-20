@@ -23,6 +23,11 @@
     let _offlineLoading = false;
     let _offlineSettling = false;
     let _offlineInternalSave = false;
+    // ⚠️ 背景分頁期間任何存檔（js/01 每 5 分鐘自動存檔在背景仍會觸發）都不得把 awaySince／
+    //    checkpoint.lastActive 往後推，否則離線時長永遠湊不滿 5 分鐘下限、資格也會因
+    //    「最後擊殺超過 5 分鐘」被翻成 false → 回前景永遠結不了帳。
+    //    快照時間一律夾回「進入背景那一刻」（visibilitychange 設定／清除）。
+    let _offlineHiddenAt = (typeof document !== 'undefined' && document.hidden) ? Date.now() : 0;
 
     function _offlineNow() {
         return Date.now();
@@ -292,6 +297,7 @@
     }
 
     function _offlinePrepareSnapshot(now) {
+        if (_offlineHiddenAt > 0 && now > _offlineHiddenAt) now = _offlineHiddenAt;
         let st = _offlineEnsureState();
         if (!st) return null;
         let profile = _offlineCommitProfile(now);
@@ -830,8 +836,10 @@
     if (typeof document !== 'undefined' && document.addEventListener) {
         document.addEventListener('visibilitychange', function () {
             if (document.hidden) {
+                if (!_offlineHiddenAt) _offlineHiddenAt = _offlineNow();
                 _offlinePauseAndSave();
             } else {
+                _offlineHiddenAt = 0;
                 setTimeout(function () { _offlineSettle('visible'); }, 0);
             }
         });
@@ -840,7 +848,10 @@
         window.addEventListener('pagehide', _offlinePauseAndSave);
         window.addEventListener('beforeunload', _offlinePauseAndSave);
         window.addEventListener('pageshow', function () {
-            if (!document.hidden) setTimeout(function () { _offlineSettle('pageshow'); }, 0);
+            if (!document.hidden) {
+                _offlineHiddenAt = 0;
+                setTimeout(function () { _offlineSettle('pageshow'); }, 0);
+            }
         });
     }
 

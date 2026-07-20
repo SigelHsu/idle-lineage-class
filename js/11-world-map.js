@@ -1016,7 +1016,7 @@ function ismaelCursedExchange(kind) {
 // ===== 🔥 碧恩：屬性強化卷軸「賦予屬性」（v3.0.77 屬性強化系統改版·取代舊「祝福裝備」功能；克里斯特已移除） =====
 //   規則：只能用在「裝備中武器／副手武器(戰士限定)」；每次使用皆為獨立事件，成功率 7%；
 //   無屬性成功→1階、同屬性成功→+1階（最高5階）、不同屬性成功→變成該屬性1階；
-//   第5階同屬性卷軸：原生無攻擊觸發技能的非遺物武器可用 1% 機率附加／重抽屬性魔法；
+//   第5階同屬性卷軸：原生無攻擊觸發技能的非遺物武器可用 1% 機率附加／重抽屬性魔法；同技能升星、不同技能回1星，最高3星；
 //   衝第4階需武器+10以上、第5階需+11以上（不符不消耗卷軸）；失敗僅消耗卷軸，武器不會消失。
 //   🎲 純機率 Math.random（與武器強化同政策·可 save/load 重抽）。經典/一般/傳統模式皆適用。
 const ATTR_SCROLLS = {
@@ -1045,9 +1045,17 @@ function doBianAttr(slotKey, ele) {
         sc.cnt--; if (sc.cnt <= 0) player.inv = player.inv.filter(i => i.uid !== sc.uid);
         if (Math.random() < 0.01) {
             let picked = pool[Math.floor(Math.random() * pool.length)];
+            let sameMagic = !!(oldMagic && oldMagic.skId === picked.skId);
+            let oldStar = oldMagic ? oldMagic.star : 0;
+            let nextStar = sameMagic ? Math.min(3, oldStar + 1) : 1;
             item.attrMagic = picked.skId;
+            item.attrMagicStar = nextStar;
             let skName = (DB.skills[picked.skId] && DB.skills[picked.skId].n) || picked.skId;
-            logSys(`<span class="text-yellow-300 font-bold">${oldMagic ? '重抽' : '附加'}魔法成功！</span>${getItemFullName(item)} 獲得「攻擊時 ${picked.rate}% 機率觸發${skName}」。`);
+            let stars = '★'.repeat(nextStar);
+            let result = !oldMagic ? `獲得 ${stars} ${skName}` :
+                sameMagic ? (nextStar > oldStar ? `${skName} 升為 ${stars}` : `${skName} 維持 ${stars}`) :
+                    `改為 ★ ${skName}`;
+            logSys(`<span class="text-yellow-300 font-bold">${oldMagic ? '重抽' : '附加'}魔法成功！</span>${getItemFullName(item)} ${result}，「攻擊時 ${picked.rate * nextStar}% 機率觸發」。`);
         } else {
             logSys(`<span class="text-slate-400">碧恩：魔法刻印沒有回應……${oldMagic ? '原有附加魔法保持不變，' : ''}僅消耗 1 張 ${cfg.n}。</span>`);
         }
@@ -1062,7 +1070,7 @@ function doBianAttr(slotKey, ele) {
     if (Math.random() < 0.07) {   // 🎲 7% 獨立事件（純機率·可 save/load 重抽·同強化政策）
         let oldMagic = getAttrMagicProc(item);
         item.attr = ATTR_ELE_PREFIX[ele] + nextTier;
-        if (!same && oldMagic) delete item.attrMagic;   // 不同屬性成功→回到新屬性第1階，原屬性的附加魔法消失
+        if (!same && (item.attrMagic || item.attrMagicStar)) { delete item.attrMagic; delete item.attrMagicStar; }   // 不同屬性成功→原屬性附加魔法與星級一併消失
         let aff = getAttrAffix(item.attr);
         logSys(`<span class="text-yellow-300 font-bold">賦予屬性成功！</span>碧恩將 <span class="c-attr-${attrCanon(item.attr)}">${aff.n}</span> 之力銘刻於武器 → ${getItemFullName(item)}（屬性第${aff.tier}階：額外傷害+${aff.dmg}、額外魔法點數+${aff.mp}）。${!same && oldMagic ? '<span class="text-slate-400"> 原有附加魔法已隨屬性轉換消失。</span>' : ''}`);
     } else {
@@ -1101,7 +1109,7 @@ function renderBianAttr(el) {
         let cur = it && getAttrAffix(it.attr);
         let curTxt = cur ? `<span class="c-attr-${attrCanon(it.attr)}">${cur.n}（第${cur.tier}階）</span>` : '<span class="text-slate-500">無屬性</span>';
         let magic = it && getAttrMagicProc(it);
-        if (magic) curTxt += `｜<span class="text-yellow-300">★ ${(DB.skills[magic.skId] && DB.skills[magic.skId].n) || magic.skId} ${magic.rate}%</span>`;
+        if (magic) curTxt += `｜<span class="text-yellow-300">${'★'.repeat(magic.star)} ${(DB.skills[magic.skId] && DB.skills[magic.skId].n) || magic.skId} ${magic.rate}%</span>`;
         let btns = it ? Object.keys(ATTR_SCROLLS).map(e2 => {
             let c = ATTR_SCROLLS[e2], have = cnt(c.id);
             return have > 0
@@ -1124,7 +1132,7 @@ function renderBianAttr(el) {
         <div class="flex flex-col gap-2 p-1">
             <div class="text-slate-300 text-sm leading-relaxed">碧恩：我能將四大元素之力銘刻於你手中的武器。屬性提升成功率為 <b>7%</b>；第5階使用同屬性卷軸附加／重抽魔法的成功率為 <b>1%</b>。失敗僅消耗卷軸，武器不會消失。</div>
             <div class="text-xs text-slate-400">無屬性成功→第1階；同屬性成功→提升1階（最高5階）；<b>不同屬性成功→變成該屬性第1階</b>。衝第4階需武器+10以上、第5階需+11以上。第1~5階：額外傷害/額外魔法點數 +1/+3/+5/+7/+9，一般攻擊轉為該屬性。</div>
-            <div class="text-xs text-slate-400">只有本身沒有攻擊／命中觸發技能的非遺物武器可附加魔法；已成功附加的武器可使用同屬性卷軸繼續重抽。</div>
+            <div class="text-xs text-slate-400">只有本身沒有攻擊／命中觸發技能的非遺物武器可附加魔法；成功時從該屬性5種魔法中抽選。同技能升1星並使觸發率乘上星數，最高3星；抽到不同技能則改為新技能1星。</div>
             <div class="text-xs text-slate-400">持有卷軸：<span class="c-attr-fr3">火 ${cnt('scroll_attr_fire')}</span>｜<span class="c-attr-wa3">水 ${cnt('scroll_attr_water')}</span>｜<span class="c-attr-wi3">風 ${cnt('scroll_attr_wind')}</span>｜<span class="c-attr-ea3">地 ${cnt('scroll_attr_earth')}</span></div>
             ${rows}
             ${cursedRows ? `<div class="text-xs text-slate-400 mt-1">被詛咒的裝備（優先消耗 解除詛咒的卷軸，持有 ${cnt('new_item_uncurse')}；無卷軸時花費 100 萬金幣）：</div>${cursedRows}` : ''}
@@ -1592,12 +1600,59 @@ function renderArkataBuyback(el) {
                 <button class="btn ${ok ? 'bg-yellow-700 hover:bg-yellow-600 border-yellow-500' : 'bg-slate-600 border-slate-500 opacity-60 cursor-not-allowed'} py-2 px-4 font-bold shrink-0" ${ok ? '' : 'disabled'} onclick="arkataBuyback(${i})">買回</button>
             </div>`;
     }).join('');
+    // 🕊️ v3.6.84 裝備贖回（兩模式皆可）：邪惡狀態死亡遺失的裝備（player.pvpLostItems·上限 5 件）花 1000 龍鑽指定贖回一件
+    let lost = Array.isArray(player.pvpLostItems) ? player.pvpLostItems : [];
+    let dia = (typeof pandoraGetSharedDiamonds === 'function') ? pandoraGetSharedDiamonds() : 0;
+    let itemRows = lost.map((r, i) => {
+        let d = r && r.item && DB.items[r.item.id];
+        if (!d) return '';
+        let nm = (typeof getItemFullName === 'function') ? getItemFullName(r.item) : d.n;
+        let cl = (typeof getItemColor === 'function') ? getItemColor(r.item) : 'text-white';
+        let when = r.t ? new Date(r.t).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+        let ok = dia >= ARKATA_REDEEM_COST;
+        return `
+            <div class="flex items-center justify-between gap-2 bg-slate-800/60 border border-slate-600 rounded p-3">
+                <div class="text-sm leading-relaxed"><span class="${cl} font-bold">${nm}</span>${when ? `<span class="text-xs text-slate-500">（${when} 遺失）</span>` : ''}<br>
+                    <span class="text-xs text-slate-400">贖回費用 <span class="text-sky-300 font-bold">${ARKATA_REDEEM_COST.toLocaleString()}</span> 龍之鑽石</span></div>
+                <button class="btn ${ok ? 'bg-sky-800 hover:bg-sky-700 border-sky-500' : 'bg-slate-600 border-slate-500 opacity-60 cursor-not-allowed'} py-2 px-4 font-bold shrink-0" ${ok ? '' : 'disabled'} onclick="arkataRedeemItem(${i})">贖回</button>
+            </div>`;
+    }).join('');
     el.innerHTML = `
         <div class="flex flex-col gap-3 p-1">
-            <div class="text-slate-300 text-sm leading-relaxed">聖使阿卡塔：逝者的經驗不會真正消散——我能以聖光為你凝聚回來。每筆死亡紀錄可花費「死亡時等級×等級×1000」金幣，取回實際損失經驗的一半。</div>
-            <div class="text-xs text-slate-400">死亡紀錄：${log.length} / 10（滿 10 筆後新的死亡會擠掉最舊的一筆）・持有金幣：<span class="text-yellow-300">${(player.gold || 0).toLocaleString()}</span></div>
-            ${rows || '<div class="text-slate-500 text-sm bg-slate-800/40 border border-slate-700 rounded p-4 text-center">目前沒有死亡紀錄。願聖光持續眷顧你。</div>'}
+            <div class="text-slate-300 text-sm leading-relaxed">聖使阿卡塔：逝者失去的事物不會真正消散——我能以聖光為你凝聚回來。</div>
+
+            <div class="text-sky-300 font-bold text-sm border-b border-sky-900/60 pb-1">裝備贖回</div>
+            <div class="text-xs text-slate-400">邪惡狀態下死亡遺失的裝備會被記錄：${lost.length} / 5（滿 5 件後新的遺失會擠掉最舊的一筆）・持有龍之鑽石：<span class="text-sky-300">${dia.toLocaleString()}</span></div>
+            ${itemRows || '<div class="text-slate-500 text-sm bg-slate-800/40 border border-slate-700 rounded p-4 text-center">目前沒有遺失的裝備紀錄。</div>'}
+            ${player.classicMode ? `
+            <div class="text-amber-300 font-bold text-sm border-b border-amber-900/60 pb-1 mt-2">死亡經驗買回</div>
+            <div class="text-xs text-slate-400">每筆死亡紀錄可花費「死亡時等級×等級×1000」金幣，取回實際損失經驗的一半。死亡紀錄：${log.length} / 10（滿 10 筆後新的死亡會擠掉最舊的一筆）・持有金幣：<span class="text-yellow-300">${(player.gold || 0).toLocaleString()}</span></div>
+            ${rows || '<div class="text-slate-500 text-sm bg-slate-800/40 border border-slate-700 rounded p-4 text-center">目前沒有死亡紀錄。願聖光持續眷顧你。</div>'}` : ''}
         </div>`;
+}
+const ARKATA_REDEEM_COST = 1000;   // 🕊️ v3.6.84 裝備贖回費用（龍之鑽石）
+// 🕊️ v3.6.84 指定贖回一件遺失裝備：扣 1000 龍鑽 → 以**完整快照**還原（強化值/祝福/遠古/屬性全保留），紀錄即銷毀。
+//   ⚠️ 先驗物品有效性、再扣款、最後才 splice+回灌——順序顛倒會出現「扣了鑽石卻沒拿到東西」。
+function arkataRedeemItem(i) {
+    let list = Array.isArray(player.pvpLostItems) ? player.pvpLostItems : [];
+    let rec = list[i];
+    let host = document.getElementById('interaction-content');
+    if (!rec || !rec.item || !DB.items[rec.item.id]) { list.splice(i, 1); if (host) renderArkataBuyback(host); return; }   // 防呆：物品定義已不存在→銷毀無效紀錄
+    if (typeof pandoraGetSharedDiamonds !== 'function' || typeof pandoraAdjustSharedDiamonds !== 'function') { logSys('<span class="text-red-400">龍之鑽石系統尚未載入，請重新整理後再試。</span>'); return; }
+    if (pandoraGetSharedDiamonds() < ARKATA_REDEEM_COST) { logSys(`<span class="text-red-400">龍之鑽石不足（需要 ${ARKATA_REDEEM_COST.toLocaleString()}）。</span>`); return; }
+    let pay = pandoraAdjustSharedDiamonds(-ARKATA_REDEEM_COST);
+    if (!pay || !pay.ok) { logSys(`<span class="text-red-400">${(pay && pay.error) || '扣款失敗，請再試一次。'}</span>`); return; }
+    let snap = JSON.parse(JSON.stringify(rec.item));
+    list.splice(i, 1);   // 先銷毀紀錄再回灌，杜絕重複贖回
+    snap.uid = uid(); snap.cnt = 1; snap.lock = false; snap.junk = false;
+    player.inv.push(snap);
+    if (typeof registerEquipObtained === 'function') registerEquipObtained(snap.id);   // 直推 inv 繞過 gainItem → 手動補收集冊登錄與掉落統計
+    if (typeof auditTrackGain === 'function') auditTrackGain({ id: snap.id, cnt: 1 });
+    let nm = (typeof getItemFullName === 'function') ? getItemFullName(snap) : (DB.items[snap.id] ? DB.items[snap.id].n : snap.id);
+    logSys(`<span class="text-sky-300">聖使阿卡塔以聖光為你尋回了 <span class="font-bold">${nm}</span>（花費 ${ARKATA_REDEEM_COST.toLocaleString()} 龍之鑽石）。</span>`);
+    if (typeof renderTabs === 'function') renderTabs();
+    updateUI(); saveGame();
+    if (host) renderArkataBuyback(host);
 }
 function arkataBuyback(i) {
     if (!player || !player.classicMode) return;   // 🕊️ 經典限定（縱深防護）

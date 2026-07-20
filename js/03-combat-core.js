@@ -816,9 +816,68 @@ function _pvpNormalizeKillWhisperRecord(raw) {
         updatedAt: Math.max(0, Math.floor(Number(raw.updatedAt) || 0))
     };
 }
+// 🔒 v3.6.81 NPC 性向值鎖（用戶規格）：NPC **初次在世界頻道發言**時記錄該「名字」的性向值，
+//   之後記仇／野外遭遇／復仇名單一律沿用同一個值，直到下列任一條件才解鎖、允許改變：
+//     (a) 判定不會再追殺 —— 記仇到期被清、或玩家道謝消氣
+//     (b) 與玩家進入戰鬥 —— 野外實際遭遇該 NPC（spawn 當下解鎖，故戰後的復仇名單才可改寫）
+//   ⚠️ 例外：該 NPC 的血盟正與玩家交戰（宣戰期間）→ 上面兩個條件都**不**解鎖，性向值全程凍結。
+const PVP_ALIGN_LOCK_MAX = 200;   // 世界頻道會不斷產生新名字 → 上限保護；淘汰最舊且未凍結者
+function pvpAlignLockAll() {
+    if (!player.pvpAlignLock || typeof player.pvpAlignLock !== 'object' || Array.isArray(player.pvpAlignLock)) player.pvpAlignLock = {};
+    return player.pvpAlignLock;
+}
+// 宣戰凍結：鎖上記的血盟目前「與玩家」交戰中。
+// ⚠️ 必須走 npcClanWarIds（有 2 秒快取）而非 npcClanGetById——後者每次都 _clanReadState() 重讀＋解壓 localStorage，
+//    淘汰迴圈逐筆呼叫會變成 O(n²) 次儲存讀取，實測 230 筆就把分頁卡死。
+function pvpAlignLockFrozen(rec) {
+    if (!rec || !rec.c) return false;
+    try {
+        if (typeof npcClanWarIds !== 'function') return false;
+        return npcClanWarIds(player).indexOf(rec.c) >= 0;
+    } catch (e) { return false; }
+}
+function pvpLockAlignment(name, align, clanId) {   // 初次發言才建立；已有鎖則回傳既有值、不覆寫
+    if (!player || !player.cls || !name) return pvpClampAlignment(align);
+    let all = pvpAlignLockAll(), key = String(name).slice(0, 24);
+    if (all[key]) return pvpClampAlignment(all[key].v);
+    let keys = Object.keys(all);
+    if (keys.length >= PVP_ALIGN_LOCK_MAX) {
+        keys.sort((a, b) => (Number(all[a] && all[a].t) || 0) - (Number(all[b] && all[b].t) || 0));
+        for (let i = 0; i < keys.length && Object.keys(all).length >= PVP_ALIGN_LOCK_MAX; i++) {
+            if (!pvpAlignLockFrozen(all[keys[i]])) delete all[keys[i]];   // 交戰盟的鎖不淘汰
+        }
+    }
+    all[key] = { v: pvpClampAlignment(align), t: Date.now(), c: clanId || null };
+    return all[key].v;
+}
+function pvpLockedAlignment(name, fallback) {
+    if (!player || !player.cls || !name) return pvpClampAlignment(fallback);
+    let rec = pvpAlignLockAll()[String(name).slice(0, 24)];
+    return rec ? pvpClampAlignment(rec.v) : pvpClampAlignment(fallback);
+}
+function pvpIsAlignLocked(name) {
+    if (!player || !player.cls || !name) return false;
+    return !!pvpAlignLockAll()[String(name).slice(0, 24)];
+}
+function pvpReleaseAlignLock(name) {   // 解鎖；宣戰凍結中一律不解（回傳是否真的解掉）
+    if (!player || !player.cls || !name) return false;
+    let all = pvpAlignLockAll(), key = String(name).slice(0, 24), rec = all[key];
+    if (!rec || pvpAlignLockFrozen(rec)) return false;
+    delete all[key];
+    return true;
+}
 function pvpEnsureState() {
     if (!player || !player.cls) return;
     player.alignmentValue = pvpClampAlignment(player.alignmentValue);
+    {   // 🔒 v3.6.81 性向值鎖正規化（舊存檔無此欄位／型別異常一律重建）
+        let all = pvpAlignLockAll();
+        for (let k in all) {
+            let r = all[k];
+            if (!r || typeof r !== 'object' || !Number.isFinite(Number(r.v))) { delete all[k]; continue; }
+            r.v = pvpClampAlignment(r.v);
+            r.t = Number(r.t) || Date.now();
+        }
+    }
     if (player.pvpOn === undefined) player.pvpOn = false;
     if (typeof npcClanWarActive === 'function' && npcClanWarActive(player)) player.pvpOn = true;
     if (!Array.isArray(player.pvpRevengeList)) player.pvpRevengeList = [];
@@ -1037,7 +1096,8 @@ function pvpAddRevengeFromMob(mob) {
     if (!mob || !mob.trollPlayer || !mob.n) return;
     pvpEnsureState();
     let align = pvpClampAlignment(mob._pvpAlignment || 0);
-    if (pvpClampAlignment(player.alignmentValue) > PVP_ALIGN_EVIL) align = Math.min(align, -12000);
+    // 🔒 v3.6.81 仍在鎖上（＝宣戰凍結中，一般情況遭遇當下就已解鎖）→ 不做「玩家正義則強制壓成邪惡」的改寫
+    if (pvpClampAlignment(player.alignmentValue) > PVP_ALIGN_EVIL && !pvpIsAlignLocked(mob.n)) align = Math.min(align, -12000);
     let avatar = mob._pvpAvatar || '男戰士';
     let list = player.pvpRevengeList || [];
     let old = list.find(r => r && r.n === mob.n);
@@ -1534,11 +1594,22 @@ function spawnMob(idx) {
         if (player.trollPlayers && player.trollPlayers.length) {
             let _now = Date.now();
             let _tl = player.trollPlayers.filter(t => t && (t.noExpire || t.pvpRevenge || t.until > _now));
-            if (_tl.length !== player.trollPlayers.length) player.trollPlayers = _tl;
+            if (_tl.length !== player.trollPlayers.length) {
+                // 🔒 v3.6.81 記仇到期被清＝「判定不會再追殺」→ 解除該名字的性向值鎖（宣戰凍結者不解）
+                let _keep = new Set(_tl.map(t => t && t.n));
+                player.trollPlayers.forEach(t => { if (t && t.n && !_keep.has(t.n) && typeof pvpReleaseAlignLock === 'function') pvpReleaseAlignLock(t.n); });
+                player.trollPlayers = _tl;
+            }
             if (_tl.length && !PURE_BOSS_MAPS.includes(mapState.current) && !isSiegeArea(mapState.current) && Math.random() < ((typeof window !== 'undefined' && window.__FB5_TEST_BUILD) ? 1 : 0.05)) {   // 🧪 TEST版：野外重生必定遭遇（正式版 5%）
                 let _onF = mapState.mobs.filter(m => m).map(m => m.n);
                 let _cand = _tl.filter(t => !_onF.includes(t.n));
-                if (_cand.length) { let _t = _cand[Math.floor(Math.random() * _cand.length)]; mobId = trollPickClassMob(_t.avatar); mapState._trollSpawn = _t; }   // 😤 v3.6.20 70%/30% 模板抽選
+                if (_cand.length) {
+                    let _t = _cand[Math.floor(Math.random() * _cand.length)]; mobId = trollPickClassMob(_t.avatar); mapState._trollSpawn = _t;   // 😤 v3.6.20 70%/30% 模板抽選
+                    // 🔒 v3.6.81 與玩家進入戰鬥：先把鎖上的性向值套進這次遭遇（頻道看到什麼顏色、打起來就是什麼顏色），
+                    //    再解鎖 → 戰後的復仇名單／再次遭遇才允許改變。宣戰凍結者解不掉，全程維持同一值。
+                    if (typeof pvpLockedAlignment === 'function') _t.alignmentValue = pvpLockedAlignment(_t.n, _t.alignmentValue);
+                    if (typeof pvpReleaseAlignLock === 'function') pvpReleaseAlignLock(_t.n);
+                }
             }
         }
     }

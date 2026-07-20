@@ -143,7 +143,7 @@ const ATTR_AFFIX = {
 };
 const ATTR_ELE_PREFIX = { fire: 'fr', water: 'wa', wind: 'wi', earth: 'ea' };   // 元素 → 代碼字首（碧恩賦予/升階用）
 
-// 第5階屬性武器可由同屬性卷軸附加／重抽魔法；觸發率是魔法本身的效果，不是卷軸成功率。
+// 第5階屬性武器可由同屬性卷軸附加／重抽魔法；同技能升星使觸發率×星數，最高3星，不同技能回到1星。
 const ATTR_MAGIC_SKILLS = {
     fire: [
         { skId: 'sk_meteor', rate: 1 }, { skId: 'sk_fire_storm', rate: 2 },
@@ -177,7 +177,9 @@ function getAttrMagicProc(item) {
     if (!item || typeof item.attrMagic !== 'string') return null;
     let proc = ATTR_MAGIC_BY_SKILL[item.attrMagic] || null;
     let aff = getAttrAffix(item.attr);
-    return proc && aff && aff.tier === 5 && aff.ele === proc.ele ? proc : null;
+    if (!proc || !aff || aff.tier !== 5 || aff.ele !== proc.ele) return null;
+    let star = Math.max(1, Math.min(3, Math.floor(Number(item.attrMagicStar) || 1)));
+    return { ele: proc.ele, skId: proc.skId, baseRate: proc.rate, star: star, rate: proc.rate * star };
 }
 
 // 原生「攻擊／命中時機率觸發」武器不可再附加屬性魔法；卷軸附加的 attrMagic 不列入，才能重抽。
@@ -335,7 +337,8 @@ function applyAncStats(d, anc, slot) {   // slot: 'wpn' | 'arm' | 'acc'
 function getItemFullName(item) {
     let d = DB.items[item.id];
     if(!d) return "未知的物品";
-    let segs = getAttrMagicProc(item) ? '<span class="text-yellow-300 font-bold">★</span> ' : '';
+    let _attrMagic = getAttrMagicProc(item);
+    let segs = _attrMagic ? `<span class="text-yellow-300 font-bold">${'★'.repeat(_attrMagic.star)}</span> ` : '';
     let aff = getAttrAffix(item.attr);
     if (aff) {
         let acls = 'c-attr-' + attrCanon(item.attr) + (aff.tier === 5 ? ' c-attr-glow' : '');
