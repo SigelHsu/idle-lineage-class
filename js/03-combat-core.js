@@ -960,7 +960,7 @@ function pvpRandomName() {
             : style === 2 ? `${h}${c}${t}`
             : `${c}oO${h}`;
     }
-    if (Math.random() < 0.4) {
+    if (Math.random() < 0.15) {
         let wrapper = PVP_NAME_WRAPPERS[Math.floor(Math.random() * PVP_NAME_WRAPPERS.length)];
         name = wrapper[0] + name + wrapper[1];
     }
