@@ -3094,11 +3094,14 @@ button.classic-skill-cell { cursor:pointer; }
 }
 .logtab-btn:hover { color: #e2e8f0; background: rgba(71,85,105,.55); }
 .logtab-btn.logtab-on { color: #fde68a; border-color: #b45309; background: rgba(120,53,15,.55); }
-/* 未讀點：切到戰鬥分頁時系統日誌有新訊息 → 標題鈕右上角亮點 */
+/* 未讀點：📌 v3.6.73 改為「只有傳說／遺物掉落」才亮（用戶指示：其餘訊息不顯示紅點）→ 顏色一律由 logtab-dot-legend/relic 指定，
+   底色留著只是保險（沒有稀有度 class 時不會變成透明的隱形點）。 */
 .logtab-dot {
     position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; border-radius: 9999px;
-    background: #f87171; box-shadow: 0 0 6px rgba(248,113,113,.9);
+    background: #f0a020; box-shadow: 0 0 6px rgba(240,160,32,.9);
 }
+.logtab-dot-legend { background: #f0a020; box-shadow: 0 0 6px rgba(240,160,32,.95), 0 0 12px rgba(217,138,4,.6); }
+.logtab-dot-relic  { background: #4cc9f0; box-shadow: 0 0 6px rgba(76,201,240,.95), 0 0 12px rgba(56,189,248,.6); }
 
 /* 世界頻道輸入列（釘在面板底部，與日誌區同寬） */
 #world-input-row {

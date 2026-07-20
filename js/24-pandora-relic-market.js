@@ -9,7 +9,8 @@
     const STORE_VERSION = 3;
     const CHECK_MS = 10 * 60 * 1000;
     const WANDERER_LIFE_MS = 2 * 60 * 60 * 1000;
-    const BROADCAST_MS = 3 * 60 * 1000;
+    const BROADCAST_MS = 5 * 60 * 1000;
+    const GOLD_BROADCAST_OFFSET_MS = 1 * 60 * 1000;   // 龍鑽先喊；金幣延後 1 分鐘，兩者仍各自每 5 分鐘廣播
     const BROADCAST_PIN_MAX = 2;   // 📌 v3.5.77 叫賣訊息常駐在「系統與物品日誌」頂端的最大條數（超出者排隊，前面的人被互動/離場後自動遞補）
     const BOARD_COOLDOWN_MS = 24 * 60 * 60 * 1000;
     const RELIC_SEARCH_COST = 100;
@@ -223,6 +224,10 @@
     };
 
     let _lastBroadcastCycles = Object.create(null);
+    let _wanderBroadcastQueue = [];
+    let _wanderBroadcastQueuedIds = new Set();
+    let _wanderBroadcastTimer = null;
+    let _wanderBroadcastLastAt = 0;
     let _lastMapSignature = '';
     let _classFrameCache = Object.create(null);
     let _wanderingShoutMenu = null;
@@ -707,22 +712,67 @@
         return _findWandererForTown(st, townId);
     }
 
+    function _wanderBroadcastGapMs() {
+        return 10000 + Math.floor(Math.random() * 10001);
+    }
+
+    function _queuedLiveWanderer(wandererId) {
+        if (typeof player === 'undefined' || !player || typeof logWorld !== 'function') return null;
+        if (typeof state !== 'undefined' && state && state.ff) return null;
+        let live = _findWanderer(_readState(), wandererId);
+        return _wandererPresent(live) && !live.broadcastStopped ? live : null;
+    }
+
+    function _runWanderBroadcastQueue() {
+        _wanderBroadcastTimer = null;
+        let live = null;
+        while (_wanderBroadcastQueue.length && !live) {
+            let wandererId = _wanderBroadcastQueue.shift();
+            _wanderBroadcastQueuedIds.delete(wandererId);
+            live = _queuedLiveWanderer(wandererId);
+        }
+        if (live) {
+            logWorld(_broadcastLineHTML(live));
+            _wanderBroadcastLastAt = Date.now();
+        }
+        if (!_wanderBroadcastQueue.length) return;
+        _wanderBroadcastTimer = setTimeout(_runWanderBroadcastQueue, _wanderBroadcastGapMs());
+    }
+
+    function _queueWanderBroadcast(w) {
+        let wandererId = String(w && w.id || '');
+        if (!wandererId || _wanderBroadcastQueuedIds.has(wandererId)) return;
+        _wanderBroadcastQueuedIds.add(wandererId);
+        _wanderBroadcastQueue.push(wandererId);
+        if (_wanderBroadcastTimer) return;
+
+        let sinceLast = Date.now() - _wanderBroadcastLastAt;
+        if (!_wanderBroadcastLastAt || sinceLast >= 10000) {
+            _runWanderBroadcastQueue();
+            return;
+        }
+        _wanderBroadcastTimer = setTimeout(_runWanderBroadcastQueue, _wanderBroadcastGapMs());
+    }
+
     function _announceWanderer(w) {
         // ⚠️ 到期守衛放在這裡＝單一真相：tick 路徑（_normalizeState 已濾）與 storage 多開同步路徑共用。
-        //    WANDERER_LIFE_MS(2h) 剛好是 BROADCAST_MS(3min) 的整數倍，cycle 邊界正好落在到期瞬間，
+        //    WANDERER_LIFE_MS(2h) 剛好是 BROADCAST_MS(5min) 的整數倍，cycle 邊界正好落在到期瞬間，
         //    去重必然放行 → 另一分頁寫入時會替「已到期但本頁還沒 tick 清掉」的叫賣者重播喊話。
         if (!_wandererPresent(w) || w.broadcastStopped) return;
         if (typeof player === 'undefined' || !player || typeof logSys !== 'function') return;
         if (typeof state !== 'undefined' && state && state.ff) return;
         let spawnedAt = Math.max(0, Number(w.spawnedAt) || Date.now());
-        let cycle = Math.max(0, Math.floor((Date.now() - spawnedAt) / BROADCAST_MS));
+        let offset = _wandererCurrency(w) === 'gold' ? GOLD_BROADCAST_OFFSET_MS : 0;
+        let elapsed = Date.now() - spawnedAt - offset;
+        if (elapsed < 0) return;
+        let cycle = Math.floor(elapsed / BROADCAST_MS);
         if (_lastBroadcastCycles[w.id] === cycle) return;
         // 📌 v3.5.77 已釘在日誌頂端者不再重複廣播（訊息本來就一直看得到，重播只會洗版）；
-        //    首次到場的喊話仍照舊進日誌，排隊中（第 3 位以後）也維持原本每 3 分鐘的廣播，才不會完全看不到。
+        //    首次到場的喊話仍照舊進日誌，排隊中（第 3 位以後）也維持每 5 分鐘的廣播，才不會完全看不到。
         if (cycle > 0 && _pinnedWandererIds().has(w.id)) { _lastBroadcastCycles[w.id] = cycle; return; }
         _lastBroadcastCycles[w.id] = cycle;
         // 名稱可點擊；可傳送、嘲諷，選擇「吵死了」後只會停止這名玩家後續的廣播。
-        logWorld(_broadcastLineHTML(w));
+        _queueWanderBroadcast(w);
     }
 
     // ===== 📌 v3.5.77 叫賣訊息釘選列（用戶指定）=====

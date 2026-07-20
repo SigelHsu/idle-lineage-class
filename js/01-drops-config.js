@@ -1714,7 +1714,10 @@ function initSysLogLock() {
     el.addEventListener('touchmove', onScroll, { passive: true });
 }
 
-function logSys(msg) {
+// 📌 v3.6.73 未讀點改為「只有傳說／遺物掉落才亮」（用戶指示：其餘訊息一律不顯示紅點）。
+//    第二參 rare＝'legend'｜'relic'，只有這兩種才點亮並帶對應顏色（傳說橘／遺物藍）。
+//    ⚠️ 既有 471 個呼叫端不傳第二參＝不亮點，無須逐一修改。
+function logSys(msg, rare) {
     if(state.ff) return; // 補跑期間不洗版
     const el = document.getElementById('sys-log');
     if (!el) return;
@@ -1723,7 +1726,10 @@ function logSys(msg) {
     let _max = _sysLogLocked ? SYS_LOG_MAX_LOCKED : SYS_LOG_MAX;
     while(el.children.length > _max && el.children.length > 1) el.removeChild(el.firstChild);
     if(!_sysLogLocked) el.scrollTop = el.scrollHeight;   // 鎖定時不自動捲到底，保留玩家檢視位置
-    if (_logTab !== 'sys') { let d = document.getElementById('logtab-dot-sys'); if (d) d.classList.remove('hidden'); }   // 🗂️ v3.6.50 不在系統分頁時亮未讀點
+    if (_logTab !== 'sys' && (rare === 'legend' || rare === 'relic')) {   // 🗂️ v3.6.73 只有稀有掉落才亮未讀點（不在系統分頁時）
+        let d = document.getElementById('logtab-dot-sys');
+        if (d) { d.classList.remove('hidden', 'logtab-dot-legend', 'logtab-dot-relic'); d.classList.add('logtab-dot-' + rare); }   // 後到的稀有度覆蓋前一顆（點只有一顆）
+    }
 }
 
 // 🗂️ v3.6.50 戰鬥／系統日誌合併於同一視窗：標題列分頁鈕切換（過濾 pill 只在戰鬥分頁顯示）。
@@ -1742,7 +1748,7 @@ function switchLogTab(tab) {
     let cu = document.getElementById('combat-log-unlock'); if (cu && onSys) cu.classList.add('hidden');
     let su = document.getElementById('sys-log-unlock'); if (su && !onSys) su.classList.add('hidden');
     if (onSys) {
-        let d = document.getElementById('logtab-dot-sys'); if (d) d.classList.add('hidden');   // 進系統分頁＝已讀
+        let d = document.getElementById('logtab-dot-sys'); if (d) { d.classList.add('hidden'); d.classList.remove('logtab-dot-legend', 'logtab-dot-relic'); }   // 進系統分頁＝已讀（連稀有度顏色一併清掉，下次才不會沿用舊色）
         if (sl && !_sysLogLocked) sl.scrollTop = sl.scrollHeight;
         initSysLogLock();
     } else if (cl && !_combatLogLocked) cl.scrollTop = cl.scrollHeight;

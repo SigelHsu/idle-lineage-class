@@ -2275,7 +2275,7 @@ function pledgeBonusDrop(mob, rate) {
     }
     let fullName = getItemFullName(item);
     let colorClass = getItemColor(item);
-    logSys(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 攜帶的 <span class="${colorClass} font-bold">${fullName}</span> 掉落了！`);
+    logSys(`<span class="${getMobColor(mob.lv)}">${mob.n}</span> 攜帶的 <span class="${colorClass} font-bold">${fullName}</span> 掉落了！`, (DB.items[item.id] && DB.items[item.id].relic) ? 'relic' : ((DB.items[item.id] && DB.items[item.id].legend) ? 'legend' : ''));   // 📌 v3.6.73 稀有才亮未讀點
 }
 
 // ⚖️ v3.6.16 玩家 NPC 噴裝率依「該 NPC 的性向值」決定（用戶拍板）：越邪惡（負值）掉得越多、越正義（正值）掉得越少。
@@ -2314,7 +2314,7 @@ function playerNpcRelicDrop(mob) {
     let info = gainItem(id, 1, true, false);   // 靜默取得（遺物本就不附詞綴/不強化）→ 下方自行顯示掉落訊息；收集冊登錄由 gainItem 內部處理
     let item = info || { id: id, en: 0, bless: false, anc: false, attr: false, cnt: 1 };
     try { if (typeof vfxRareDrop === 'function') vfxRareDrop(DB.items[id].n); } catch (e) {}   // ✨ 遺物 gachaWeight 恆 0 → 不會被 gainItem 的稀有閃光判定接住，這裡顯式補播
-    logSys(`<span class="text-amber-300 font-bold">✦ 極稀有！</span><span class="${getMobColor(mob.lv)}">${mob.n}</span> 掉落了遺物 <span class="${getItemColor(item)} font-bold">${getItemFullName(item)}</span>！`);
+    logSys(`<span class="text-amber-300 font-bold">✦ 極稀有！</span><span class="${getMobColor(mob.lv)}">${mob.n}</span> 掉落了遺物 <span class="${getItemColor(item)} font-bold">${getItemFullName(item)}</span>！`, 'relic');   // 📌 v3.6.73 遺物→藍色未讀點
 }
 
 // ===== 內建效率/掉落統計（接在 killMob/gainItem，換地圖重置；不靠函數劫持）=====

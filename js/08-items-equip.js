@@ -84,9 +84,9 @@ function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, de
         // 🐾 擊殺掉落來源怪物存在時→「怪名 給你 物品名 。」；其餘來源(商店/製作/NPC 兌換)維持「獲得物品:」
         if (_lootMobInfo) {
             let _mc = (typeof getMobColor === 'function') ? getMobColor(_lootMobInfo.lv) : '';
-            logSys(`<span class="sys-item-gain"><span class="${_mc}">${_lootMobInfo.n}</span> 給你 ${_nameHtml} 。</span>`);
+            logSys(`<span class="sys-item-gain"><span class="${_mc}">${_lootMobInfo.n}</span> 給你 ${_nameHtml} 。</span>`, _rare);
         } else {
-            logSys(`<span class="sys-item-gain">獲得物品: ${_nameHtml}</span>`);
+            logSys(`<span class="sys-item-gain">獲得物品: ${_nameHtml}</span>`, _rare);
         }
     }
     if (!deferUi) renderTabs();
