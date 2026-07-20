@@ -183,84 +183,35 @@ function gameLoop() {
     // 🛡️ 反盜用：非官方網域時橫幅若被移除則自動重掛（官方/本機為快取布林值判定，成本可忽略）
     if (typeof _origEnforce === 'function') _origEnforce();
     let now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-    if(_loopLast == null) _loopLast = now;
+    if (_loopLast == null) {
+        _loopLast = now;
+        _tickDebt = 0;
+        return;
+    }
     let elapsed = now - _loopLast;
     _loopLast = now;
 
-    // 遊戲未進行 / 角色死亡：不累積也不補跑（丟棄這段時間）
-    if(!state.running || player.dead) { _tickDebt = 0; return; }
-
-    if(elapsed < 0) elapsed = 0;
-    if(elapsed > MAX_CATCHUP_MS) elapsed = MAX_CATCHUP_MS; // 上限保護
-    _tickDebt += elapsed;
-
-    // 補跑排程：owed = 目前積欠的 tick 數。即時遊玩恆為 1；切分頁/背景降速回來時可能累積上千。
-    let owed = Math.floor(_tickDebt / TICK_MS);
-    if(owed <= 0) return;
-
-    if(owed === 1) {           // 正常情況：每 100ms 跑一個 tick
-        _tickDebt -= TICK_MS;
-        // 🔧 前景即時遊玩不顯示金幣（金幣不逐殺輸出，也不在即時累積）；金幣僅於背景補跑回來時由 flushAwaySummary 彙整顯示。
-        flushAwaySummary(); // 回到即時：若先前累積了補跑所得，於此統一輸出一次
-        state.inTick = true;   // 🔧 架構#2：tick 期間的擊殺只標記，結束後統一清算
-        try { tick(); } finally { state.inTick = false; settleDeadMobs(); }
-        flushTickRender();   // 🚀 重繪合併：把本 tick 內累積的 updateUI/renderMobs 統一重繪一次
+    // 背景分頁、尚未進行或角色死亡時直接丟棄經過時間。
+    if ((typeof document !== 'undefined' && document.hidden) || !state.running || player.dead) {
+        _tickDebt = 0;
         return;
     }
 
-    // 需要補跑多個 tick：期間關閉逐 tick 的畫面刷新與戰鬥訊息，跑完再統一刷新一次
-    // 補跑期間 logSys 被靜音，先記錄背包與金幣，補跑後把增量「累積」起來（不立即輸出，
-    // 避免計時抖動/背景降速造成每次小補跑都洗一行訊息）。達門檻並回到即時後由 flushAwaySummary 統一輸出。
-    // 🚀 v3.2.78 補跑改「計算時間預算」榨乾：因 state.ff 期間已完全壓掉重繪/動畫/特效，每個 tick 很便宜，
-    //   不再硬性 100 tick/次上限（舊制會讓長時間離開回來後每次迴圈只補 100 tick、要慢慢跑好幾秒甚至十幾秒）。
-    //   改成一路補到本次呼叫累計花掉 ~CATCHUP_BUDGET_MS 才讓步，剩下的留給下一個 100ms 迴圈。
-    //   掛機收益一格不少（不裁切 _tickDebt，只扣真正跑掉的 tick），只是追平得更快、且 UI 仍保持回應。
-    const CATCHUP_BUDGET_MS = 40;   // 每次呼叫最多花在補跑的主執行緒時間（其餘留給點擊/存檔/瀏覽器繪製）
-    const HARD_TICK_CAP = 6000;     // 單次呼叫保底硬上限（防極端情況一次迴圈跑過久）
-    const _catchStart = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-    const _invBefore = {};
-    player.inv.forEach(i => { _invBefore[i.id] = (_invBefore[i.id] || 0) + i.cnt; });
-    const _goldBefore = player.gold;
+    if (!Number.isFinite(elapsed) || elapsed < 0) elapsed = 0;
+    _tickDebt += Math.min(elapsed, TICK_MS);
+    if (_tickDebt < TICK_MS) return;
 
-    state.ff = true;
-    state.ffSmall = owed <= 20;   // 🩹 v3.4.49 「小補跑」旗標(≤2秒)：前景微卡頓(GC/存檔LZ壓縮/開大面板)也會觸發 owed>=2 補跑，該批擊殺原本被 vfxKill 的 ff 閘全部瞬消（用戶回報「死亡動畫有時不播」主因）。小批次放行死亡殘影(仍受 _deathGhostCount<12 節流)；長背景補跑維持全靜音免回前景爆量。
-    state.inTick = true;   // 🔧 架構#2：補跑期間同樣每個 tick 結束才清算死亡
-    let ran = 0;
+    // 每次排程最多吸收並執行一個 tick；前次不足 100ms 的正常計時餘量仍保留。
+    // 即使瀏覽器節流數分鐘或主執行緒長時間卡頓，也不會在恢復後高速追跑。
+    _tickDebt -= TICK_MS;
+    state.inTick = true;
     try {
-        while(ran < owed && ran < HARD_TICK_CAP) {
-            if(!state.running || player.dead) break;
-            tick();
-            settleDeadMobs();   // 每個 tick 結束即清算，下一個 tick 以遞補完成的場面開始
-            ran++;
-            if((ran & 15) === 0) {   // 每 16 tick 量一次時間（省 performance.now 呼叫成本）；達預算即讓步
-                let _el = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - _catchStart;
-                if(_el >= CATCHUP_BUDGET_MS) break;
-            }
-        }
+        tick();
     } finally {
-        state.ff = false;   // 保證即使 tick() 拋例外也會解除補跑旗標，避免畫面/出怪永久凍結
-        state.ffSmall = false;   // 🩹 v3.4.49 小補跑旗標一併復位
         state.inTick = false;
-        settleDeadMobs();   // 保底：例外中斷時也完成清算
-        _tickDebt -= ran * TICK_MS;   // 只扣真正跑掉的 tick；未跑完的留待下一個迴圈繼續補
-        //   ⚠️ 必須在 finally 內：若 tick() 拋例外（如某傭兵技能的程式錯誤），這行原本會被跳過→已跑掉的 tick 沒從時間帳扣掉
-        //   → _tickDebt 只增不減、owed 越滾越大，每次迴圈都重跑一次巨量補跑再度拋例外＝遊戲時間永遠追不平、畫面卡住。
+        settleDeadMobs();
     }
-
-    // 將這次補跑的淨增量併入累積（以前後數量差計算，含被消耗者的負值，最終只輸出淨正值）
-    const _invAfter = {};
-    player.inv.forEach(i => { _invAfter[i.id] = (_invAfter[i.id] || 0) + i.cnt; });
-    let _ids = new Set([...Object.keys(_invBefore), ...Object.keys(_invAfter)]);
-    _ids.forEach(id => {
-        let delta = (_invAfter[id] || 0) - (_invBefore[id] || 0);
-        if (delta !== 0) _awayAcc.items[id] = (_awayAcc.items[id] || 0) + delta;
-    });
-    let _goldGain = player.gold - _goldBefore;
-    if (_goldGain > 0) _awayAcc.gold += _goldGain;
-    _awayAcc.ticks += ran;
-
-    // 補跑結束，統一刷新畫面（累積所得於下一個即時 tick 開頭由 flushAwaySummary 統一輸出）
-    updateUI(); renderMobs(); renderTabs();
+    flushTickRender();
 }
 
 // 🛡️ 絕對屏障：與世界隔絕——無法攻擊/施法/用道具、不自然恢復、不受任何傷害（持續期間 player.buffs.sk_abs_barrier>0）

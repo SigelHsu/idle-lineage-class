@@ -29,11 +29,30 @@ function _wcSpawnNpc() {
     let alignmentValue = (typeof pvpRandomAlignment === 'function')
         ? pvpRandomAlignment()
         : Math.floor(-32767 + Math.random() * 65535);
+    // 🛡️ v3.6.77 世界頻道 NPC 也接血盟世界（原本只有野外遭遇的玩家 NPC 有）：50% 隨機入盟、其餘為無盟散人。
+    //   ⚠️ 成員資格是**以名字為 key** 存在血盟共用桶（world.memberships），而 _wcMakeName 與野外遭遇同樣走 pvpRandomName()
+    //      → 同一個名字在世界頻道／叫賣／野外遇到都是同一個盟，世界觀自動一致，不需要另外同步。
+    //   ⚠️ npcClanAssignOpponent 有 8% 機率把這位換成該盟盟主（連名字一起換）→ **必須用回傳的 n**，不能沿用原本產的名字。
+    //      沒有 player.cls（登入畫面）時它原樣返回，clanName 留空＝不顯示，安全。
+    let entry = {
+        n: _wcMakeName(),
+        avatar: (typeof PVP_AVATARS !== 'undefined' && PVP_AVATARS.length) ? PVP_AVATARS[Math.floor(Math.random() * PVP_AVATARS.length)] : '男戰士',
+        alignmentValue: alignmentValue,
+        levelOffset: (typeof pvpRandomLevelOffset === 'function') ? pvpRandomLevelOffset() : 0,
+        pvpRandom: true
+    };
+    if (typeof npcClanAssignOpponent === 'function') {
+        try {
+            entry = npcClanAssignOpponent(entry, { onFieldNames: Object.keys(_wcNpcs).map(k => _wcNpcs[k] && _wcNpcs[k].name).filter(Boolean) }) || entry;
+        } catch (e) {}
+    }
     _wcNpcs[id] = {
-        name: _wcMakeName(),
+        name: entry.n,
         persona: _wcPick(WC_PERSONAS),
         cls: _wcPick(clsKeys),
-        alignmentValue: alignmentValue,
+        alignmentValue: entry.alignmentValue,
+        clanName: entry.clanName || '',
+        clanLeader: !!entry.clanLeader,
         thanked: false,
         taunted: false,
         blocked: false
@@ -922,7 +941,7 @@ const WC_TOPICS = [
             return [
                 '角色管理在登入畫面：要先刪除角色才能創新或匯入，匯出進度也在那邊，記得定期備份。',
                 '版本更新後畫面怪怪的、圖沒換新，就按 Ctrl+Shift+R 硬重載，把快取的舊檔清掉。',
-                '這遊戲要開著分頁才會跑，沒有離線掛機；怕進度不見就常按匯出進度留一份檔。',
+                '分頁切到背景或關閉後不會補跑戰鬥；在一般狩獵區累積實戰樣本後，離線滿 5 分鐘會按最近每分鐘收益的 70% 結算經驗與金幣，最多 12 小時，不會抽裝備、卡片、頭目或 PVP 獎勵。',
                 '存檔會自動進行，也可以手動點儲存；角色突然不見先確認瀏覽器沒清除網站資料，有匯出檔就能救回來。',
                 '倉庫搜尋輸入兩個字以上就會做模糊搜尋，名字記不完整也找得到。',
                 '匯出會帶角色、倉庫跟龍之鑽石；匯入時照選項還原倉庫與寵物資料，隊伍狀態會整理避免跨角色出戰錯亂。',
@@ -1785,7 +1804,12 @@ function worldChannelNpcMenu(id, ev) {
     menu.id = 'world-channel-npc-menu';
     menu.className = 'wandering-shout-menu';
     menu.dataset.npc = id;
+    // 🛡️ v3.6.77 點名字時一併顯示血盟（用戶要求）：無盟＝整條不出現，不留空行也不寫「無血盟」。
+    let clanRow = npc.clanName
+        ? `<div class="wc-menu-clan">［${npc.clanLeader ? '盟主・' : ''}${_wcEsc(npc.clanName)}］</div>`
+        : '';
     menu.innerHTML =
+        clanRow +
         `<button type="button" class="wandering-taunt-entry" onclick="worldChannelTaunt('${id}')">嘲諷</button>` +
         `<button type="button" onclick="worldChannelThank('${id}')">感謝</button>` +
         `<button type="button" onclick="worldChannelCloseMenu()">算了</button>`;

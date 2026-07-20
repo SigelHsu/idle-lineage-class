@@ -2819,6 +2819,12 @@ button.classic-skill-cell { cursor:pointer; }
     color: #f4df9e;
 }
 .wandering-shout-menu .wandering-taunt-entry { color: #f3b5a9; }
+/* 🛡️ v3.6.77 世界頻道點名字時的血盟標頭（無盟不輸出這個元素→不佔位） */
+.wandering-shout-menu .wc-menu-clan {
+    padding: 5px 14px 6px; margin-bottom: 3px;
+    border-bottom: 1px solid rgba(183, 146, 62, .35);
+    color: #a5f3fc; font-size: 12px; font-weight: bold; white-space: nowrap; text-align: left;
+}
 .wandering-shout-menu .wandering-taunt-entry:hover {
     background: rgba(153, 63, 51, .24);
     color: #ffd2c8;

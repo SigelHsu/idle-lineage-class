@@ -1203,15 +1203,14 @@ let _echoFree = false;        // 🏅 迴響精通：免費連發旗標（連發
 let _royalFreeCast = false;   // 👑 魔法精通：一般攻擊命中 10% 免MP額外施放選定攻擊技的旗標
 
 let state = { running: false, ticks: 0, pDmgTick: 0, ff: false, inTick: false };
-// 主迴圈計時（依真實經過時間補跑 tick）
+// 主迴圈只維持前景即時 tick；背景、睡眠與長卡頓期間不補跑。
 const TICK_MS = 100;                 // 一個邏輯 tick 代表的真實時間
 const JUNK_AUTOSELL_TICKS = 100;    // 🗑️ 廢品自動賣出間隔：10 秒（100 tick × 100ms·2026-07-01 由 1800/3分鐘改快）；玩家手動標示廢品會把倒數重置為此值（標完 10 秒無新動作才賣）。⚠️自動賣出這條路徑不 saveGame(見 autoSellJunk)，靠其他既有存檔點落地
 const MERC_EXP_SHARE = 0.5;          // ⚠️v3.0.86 已停用：傭兵經驗改「主玩家＋未倒地傭兵」4 人均分制（見 js/05 partyExpShareCount／killMob）；常數保留避免外部殘留引用報錯
 // 🤝 Phase4：設為「全體」的怪物攻擊技能名（依 mag.skn 比對·同名全部生效）→ 同時打玩家＋全部非倒地傭兵。其餘怪物傷害/狀態魔法仍可依仇恨權重隨機打單一目標(玩家或某傭兵)。
 const MOB_PARTY_AOE_SKILLS = new Set(['闇黑波動','毒霧','鐮刀波動','火焰之舞','燃燒的火球','火焰之陣','地面震裂','跳躍波動','冰雪暴','震裂術','咆哮','燃燒立方','火焰噴吐','流星雨','火牢','寒冰噴吐','巨水炮','大地怒吼','毒氣風暴','閃電風暴','火焰雨','寒冰吐息','地獄犬噴吐','火風暴','龍捲風','爆炎的火球','噴火','漩渦','防身電擊','震裂踏擊','火焰放射','黑霧','火焰氣息','黑暗流星雨','放射斬','迴旋鞭打','衝擊波動','千刃破軍','靈魂波動','火焰爆發','迴旋斬','龍的一擊','地獄火','黑魔法力場','鐮刀劍氣斬','腐蝕之血','冰錐流星雨','水氣爆裂','集體衝暈','巨石爆裂','地面障礙','邪靈之氣','血夜月彎刀','夜魔飛襲','幻象光線','集體相消','劇毒龍捲風','麻痺蜘蛛網','雷霆風暴','沙塵暴','震裂重擊','冰雪颶風','衝擊之暈','岩漿流星雨','火焰散落','鎌鼬旋風','寒冰氣息','妖狐之火','牛鬼突進','大地崩裂','幽魂怨念','枯竭詛咒']);   // 🐍 提卡爾杰弗雷庫雙BOSS 全體技能；🌑 v3.3.33 聖地；🌅 枯竭詛咒對每位玩家/傭兵各自以 MR 判定藥水霜化
-const MAX_CATCHUP_MS = 5 * 60 * 1000; // 單次最多補算 5 分鐘，避免長時間離開後一次模擬過久
 let _loopLast = null;                // 上次主迴圈時間戳 (performance.now)
-let _tickDebt = 0;                   // 尚未換算成 tick 的累積時間 (ms)
+let _tickDebt = 0;                   // 前景未滿一個 tick 的時間餘量；完整逾期 tick 不保留
 let _gameLoopId = null;              // 主迴圈 setInterval id（用於避免重複註冊）
 let _saveLoopId = null;             // 自動存檔 setInterval id
 let currentSlot = 1;                // 目前所在的存檔位（1~4）
@@ -1229,36 +1228,16 @@ function startGameTimers() {
     if (typeof _initTabGuard === 'function') _initTabGuard();           // 🚀 綁定分頁面板點擊保護＋重繪節流（避免狩獵時 賣出/強化 按鈕卡頓、點擊失效）
 }
 
-// 補跑（掛機/背景）所得累積：補跑期間 logSys 被靜音，先把所得累積起來，
-// 等真正回到即時（n===1）且累積時間達門檻時，才統一輸出一次，避免每次小補跑都洗版。
-const AWAY_SUMMARY_MIN_MS = 3000;    // 累積補跑時間達 3 秒才輸出「掛機期間獲得」訊息
-let _awayAcc = { ticks: 0, gold: 0, items: {} };
-// 🕶️ v3.4.44 「掛機期間獲得」訊息只在分頁確實切到背景時才輸出。gameLoop 的補跑(state.ff)判定純看「距上次 loop 過了多久」，
-//   前景一次長卡頓(saveGame 的 LZ 壓縮／開大量物品面板／GC)也會累積成補跑→原本會誤印掛機訊息。改用 visibilitychange
-//   記「本次累積窗口是否確實隱藏過」(sticky 旗標)：收益照計入 player.gold/inv、只 gate 這行訊息。
-let _awaySawHidden = false;
-if (typeof document !== 'undefined' && document.addEventListener) {
-    document.addEventListener('visibilitychange', function () { if (document.hidden) _awaySawHidden = true; });
+// 分頁恢復、頁面快取還原時重設迴圈時鐘，避免把不可見期間算成逾期 tick。
+function _resetGameLoopClock() {
+    _loopLast = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    _tickDebt = 0;
 }
-function flushAwaySummary() {
-    if (_awayAcc.ticks <= 0) { _awaySawHidden = false; return; }   // 無累積：順手清掉「短暫隱藏但沒補跑」留下的旗標，避免下次前景卡頓被誤判為掛機
-    if (_awayAcc.ticks * TICK_MS >= AWAY_SUMMARY_MIN_MS && _awaySawHidden) {   // 🕶️ v3.4.44 加「確實隱藏過」條件：前景卡頓造成的補跑不印訊息（收益仍已入袋）
-        let gains = [];
-        for (let id in _awayAcc.items) {
-            if (_awayAcc.items[id] > 0 && DB.items[id]) gains.push({ id, n: _awayAcc.items[id] });
-        }
-        if (gains.length) {
-            logSys(`<span class="sys-item-gain">掛機期間獲得：` + gains
-                .map(g => `<span class="${getItemColor({ id: g.id, en: 0 })} font-bold">${DB.items[g.id].n} ×${g.n}</span>`)
-                .join('、') + `</span>`);
-        }
-        if (_awayAcc.gold > 0) {
-            /* 🔧 掛機期間獲得的金幣不輸出日誌（已計入 player.gold、即時顯示於左側面板）；賣出/花費/消耗等金幣訊息仍保留 */
-        }
-    }
-    // 無論是否達門檻都清空（未達門檻者視為一般即時遊玩的計時抖動，不輸出）
-    _awayAcc = { ticks: 0, gold: 0, items: {} };
-    _awaySawHidden = false;
+if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('visibilitychange', _resetGameLoopClock);
+}
+if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('pageshow', _resetGameLoopClock);
 }
 
 let player = {
