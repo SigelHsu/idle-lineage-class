@@ -1354,7 +1354,9 @@ function saveGame() {
     // ⏩ v3.7.30 補跑存檔延後（接上 v3.7.25 就設計好但漏接線的 deferCatchupSave）：真補跑會殺 BOSS（v3.7.24），
     //    killMob 的頭目存檔點每殺必全量存檔（sanitize＋LZ＋寫入）拖慢補跑並造成卡頓尖峰；
     //    補跑期間一律改記 _ffSavePending，還清後由 gameLoop 收尾的 takeCatchupSaveRequest 統一補存一次。
-    if (typeof catchupActive === 'function' && catchupActive() && typeof deferCatchupSave === 'function') return deferCatchupSave();
+    if (typeof catchupActive === 'function' && catchupActive() && typeof deferCatchupSave === 'function'
+        && !(typeof window !== 'undefined' && window.__fb5CloseFlush)) return deferCatchupSave();   // 🔚 v3.7.31 __fb5CloseFlush＝關頁最終存檔（js/27 _offlineCloseAndSave）不延後
+
     if (!_roleSaveAllowed()) {
         if(!_saveFailureNotified && typeof logSys === 'function') {
             _saveFailureNotified = true;

@@ -472,7 +472,16 @@
         let key = _offlineStoreKey('catchup');
         if (!key) return false;
         let runtimeMs = typeof catchupPendingMs === 'function' ? catchupPendingMs() : 0;
-        let hiddenMs = _offlineHiddenAt > 0 ? Math.max(0, closedAt - _offlineHiddenAt) : 0;
+        // 🔄 v3.7.31 背景增量補跑架構修正：隱藏期間 gameLoop 仍被節流喚醒逐 tick 處理（且 5 分鐘自動存檔可能已落地），
+        //    舊公式 hiddenMs＝closedAt−_offlineHiddenAt（整段隱藏時間）會把「已處理＋已存檔」的部分在重開時重複結算（雙重入帳）。
+        //    未處理殘額＝runtime 債務（catchupPendingMs）＋「最後一次 gameLoop 之後」的尾段（同 js/01 差額錨點口徑）；
+        //    _loopLast 從未跑過（隱藏中載入等）才退回整段隱藏時間。⚠️_loopLast/_perfNow＝performance.now 時域，勿與 closedAt(Date.now) 相減。
+        let hiddenMs;
+        if (typeof _loopLast !== 'undefined' && Number.isFinite(_loopLast) && _loopLast > 0 && typeof _perfNow === 'function') {
+            hiddenMs = Math.max(0, _perfNow() - _loopLast);
+        } else {
+            hiddenMs = _offlineHiddenAt > 0 ? Math.max(0, closedAt - _offlineHiddenAt) : 0;
+        }
         let previous = _offlineReadJson(key);
         // 已排入本頁記憶體的舊債不可再取 max，否則中途關頁會把已補過的部分再次帶回。
         let previousMs = _offlineRestoredCatchupKey === key ? 0 :
@@ -1299,8 +1308,9 @@
         _offlineRememberPendingCatchup(now);
         _offlinePrepareSnapshot(now, true);
         _offlineInternalSave = true;
+        window.__fb5CloseFlush = true;   // 🔚 v3.7.31 關頁最終存檔＝final flush：繞過 js/13 的補跑存檔延後閘（背景節流喚醒間 _tickDebt 常 ≥100ms，不繞過＝最終進度不落地）
         try { _offlineOriginalSaveGame(); } catch (e) {}
-        finally { _offlineInternalSave = false; }
+        finally { _offlineInternalSave = false; window.__fb5CloseFlush = false; }
     }
 
     if (typeof document !== 'undefined' && document.addEventListener) {

@@ -202,6 +202,7 @@ function gameLoop() {
         else {
             _ffAcc = null;
             if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();
+            _ffProgressHide();
         }
         _ffErrorStreak = 0;
         state.ff = false;
@@ -228,12 +229,19 @@ function gameLoop() {
     }
 
     // ⏩ 補跑路徑（v3.6.95 重建 v3.2.78 時間預算榨乾制）：每次呼叫最多吃 FF_BUDGET_MS 計算時間就讓步，
-    //    未還完的債留待下次呼叫（每 16 tick 量一次 performance.now·FF_HARD_CAP 保底防單次過量）。
+    //    未還完的債留待下次呼叫（每 4 tick 量一次 performance.now·FF_HARD_CAP 保底防單次過量）。
     //    state.ff＝全域補跑閘（VFX/動畫/音效/日誌/逐次重繪與存檔全部受抑制）；ffSmall 保留相容但固定 false。
     if (!_ffAcc) {
         if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();
         _ffAcc = { t0: Date.now(), ticks: 0, gold: (player.gold || 0), invStart: _ffInventoryCounts() };   // ⏩ 整段補跑只在起點與終點各掃一次背包
         try { if (typeof _vfxClearAll === 'function') _vfxClearAll(); } catch (e) {}   // 補跑只保留最終收益，立即釋放尚未播完的戰鬥特效
+    }
+    // 長補跑先讓瀏覽器畫出進度提示再開始重運算；只做一次，不增加每批額外等待。
+    if (!_hidden && !_ffAcc.progressPrimed && (_ffAcc.ticks * TICK_MS + _tickDebt) >= FF_PROGRESS_MIN_MS) {
+        _ffAcc.progressPrimed = true;
+        _ffProgressUpdate(_ffAcc, _tickDebt);
+        _ffScheduleNext();
+        return;
     }
     // 真實補跑固定每次只抵 1 tick，不抽樣放大任何收益。
     if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();   // 每批重建，隔離 8ms 讓步期間可能發生的背包操作
@@ -262,7 +270,7 @@ function gameLoop() {
             }
             if (player.dead) break;   // 真實補跑戰敗即停止；死亡後的背景時間不得繼續產生收益
             _ffErrorStreak = 0;
-            if ((ran & 15) === 0) {
+            if ((ran & 3) === 0) {
                 let t = (typeof performance !== 'undefined' ? performance.now() : Date.now());
                 if (t - budget0 >= FF_BUDGET_MS) break;
             }
@@ -278,6 +286,7 @@ function gameLoop() {
         state.ffSmall = false;
     }
     if (player.dead) _tickDebt = 0;   // 進入下方統一收尾與最終重繪，不留下死亡後的補跑債務
+    if (!_hidden) _ffProgressUpdate(_ffAcc, _tickDebt);
     if (_tickDebt < TICK_MS) {   // 補跑完畢
         if (!_hidden) _ffFinishCatchup();   // 背景已追平也先保留摘要；回到前景後才重繪、存檔與顯示一次
     } else {
@@ -329,6 +338,7 @@ function _ffFinishCatchup() {
     _ffAcc = null;
     if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();
     _ffErrorStreak = 0;
+    _ffProgressHide();
 }
 // ⏩ 補跑專用快速排程：每批最多運算 80ms、讓出 8ms 後續跑；仍逐 tick 真實結算。
 const FF_BUDGET_MS = 80;
@@ -336,9 +346,70 @@ const FF_YIELD_MS = 8;
 const FF_HARD_CAP = 6000;
 const FF_MAX_ELAPSED_MS = 300000;
 const FF_ERROR_STREAK_MAX = 3;
+const FF_PROGRESS_MIN_MS = 3000;
 let _ffAcc = null;   // 補跑摘要累計（跨多次 gameLoop 呼叫·還清時歸零）
 let _ffErrorStreak = 0;
 let _ffResumeTimer = null;
+let _ffProgressEl = null;
+
+function _ffProgressEnsure() {
+    if (typeof document === 'undefined' || !document.body) return null;
+    if (_ffProgressEl && _ffProgressEl.isConnected) return _ffProgressEl;
+    if (!document.getElementById('ff-progress-style')) {
+        let style = document.createElement('style');
+        style.id = 'ff-progress-style';
+        style.textContent = `
+            @keyframes ffProgressSpin { to { transform: rotate(360deg); } }
+            #ff-progress-indicator { position:fixed; left:50%; bottom:max(18px, env(safe-area-inset-bottom)); z-index:90; width:min(360px, calc(100vw - 28px)); transform:translate(-50%, 12px); opacity:0; pointer-events:none; transition:opacity .16s ease, transform .16s ease; padding:10px 12px; border:1px solid rgba(180,140,62,.72); border-radius:6px; color:#f5e7bd; background:rgba(20,18,24,.94); box-shadow:0 6px 22px rgba(0,0,0,.5); font-size:14px; }
+            #ff-progress-indicator.is-visible { opacity:1; transform:translate(-50%, 0); }
+            #ff-progress-indicator .ff-progress-head { display:flex; align-items:center; gap:9px; min-width:0; }
+            #ff-progress-indicator .ff-progress-spinner { width:16px; height:16px; flex:0 0 16px; border:2px solid rgba(245,231,189,.28); border-top-color:#e5bd63; border-radius:50%; animation:ffProgressSpin .75s linear infinite; }
+            #ff-progress-indicator .ff-progress-title { flex:1 1 auto; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-weight:700; }
+            #ff-progress-indicator .ff-progress-percent { flex:0 0 auto; color:#f8d477; font-variant-numeric:tabular-nums; font-weight:700; }
+            #ff-progress-indicator .ff-progress-track { height:5px; margin-top:8px; overflow:hidden; border-radius:3px; background:#34303a; }
+            #ff-progress-indicator .ff-progress-fill { height:100%; width:0; border-radius:inherit; background:linear-gradient(90deg, #9b6e27, #e4bd62); transition:width .12s linear; }
+            @media (prefers-reduced-motion: reduce) { #ff-progress-indicator, #ff-progress-indicator .ff-progress-fill { transition:none; } #ff-progress-indicator .ff-progress-spinner { animation:none; } }
+        `;
+        document.head.appendChild(style);
+    }
+    let el = document.createElement('div');
+    el.id = 'ff-progress-indicator';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    el.setAttribute('aria-atomic', 'true');
+    el.innerHTML = '<div class="ff-progress-head"><span class="ff-progress-spinner" aria-hidden="true"></span><span class="ff-progress-title">補跑中</span><span class="ff-progress-percent">0%</span></div><div class="ff-progress-track"><div class="ff-progress-fill"></div></div>';
+    document.body.appendChild(el);
+    _ffProgressEl = el;
+    return el;
+}
+
+function _ffProgressDuration(ms) {
+    let seconds = Math.max(0, Math.ceil((Number(ms) || 0) / 1000));
+    if (seconds >= 60) return Math.floor(seconds / 60) + ' 分 ' + (seconds % 60) + ' 秒';
+    return seconds + ' 秒';
+}
+
+function _ffProgressUpdate(acc, remainingMs) {
+    if (!acc || typeof document === 'undefined' || document.hidden) return;
+    let doneMs = Math.max(0, Number(acc.ticks) || 0) * TICK_MS;
+    let remainMs = Math.max(0, Math.floor((Number(remainingMs) || 0) / TICK_MS) * TICK_MS);
+    let totalMs = doneMs + remainMs;
+    if (totalMs < FF_PROGRESS_MIN_MS) { _ffProgressHide(); return; }
+    let el = _ffProgressEnsure();
+    if (!el) return;
+    let percent = remainMs < TICK_MS ? 100 : Math.max(1, Math.min(99, Math.floor(doneMs * 100 / Math.max(TICK_MS, totalMs))));
+    let title = el.querySelector('.ff-progress-title');
+    let pct = el.querySelector('.ff-progress-percent');
+    let fill = el.querySelector('.ff-progress-fill');
+    if (title) title.textContent = remainMs >= TICK_MS ? '補跑中，剩餘 ' + _ffProgressDuration(remainMs) : '補跑完成，正在整理收益';
+    if (pct) pct.textContent = percent + '%';
+    if (fill) fill.style.width = percent + '%';
+    el.classList.add('is-visible');
+}
+
+function _ffProgressHide() {
+    if (_ffProgressEl) _ffProgressEl.classList.remove('is-visible');
+}
 
 function _ffScheduleNext() {
     if (_ffResumeTimer !== null || _tickDebt < TICK_MS || !state || !state.running || !player || player.dead) return;
