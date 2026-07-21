@@ -1141,6 +1141,7 @@ function applyMobMagicToPet(mob, sk, p) {
     petMarkDirty();
 }
 function petTryPotion(p) {   // HP<X% 用治癒藥水（邏輯同傭兵 allyTryPotion：喝「隊長設定的藥水」·缺貨且勾自動購買→補到100瓶）
+    if (typeof pvpArenaPotionBlocked === 'function' && pvpArenaPotionBlocked()) return;   // 🚫 v3.7.17 決鬥中禁治癒藥水（⚠️寵物不像傭兵會被移到場邊·決鬥時仍在場上→這道閘是真的會擋到東西的那一個）
     if (!(p.potPct > 0) || p._downed) return;
     if ((p._potCd || 0) > 0) { p._potCd--; return; }
     if (p.hp <= 0 || p.hp > p.mhp * (p.potPct / 100)) return;

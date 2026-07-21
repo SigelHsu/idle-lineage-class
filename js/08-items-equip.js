@@ -517,6 +517,13 @@ function useItem(u, silent = false) {
             if (!silent) logSys(`無法使用 ${d.n}，職業不符。`);
             return;
         }
+        // 🚫 v3.7.17 決鬥禁治癒藥水（用戶：PK 雙方都不使用）：擋在「HP 恢復類消耗品」的入口＝自動喝與手動點同一道閘。
+        //    ⚠️ 安特的水果(new_item_141) 一併納入——它是同一個 player.cds.pot 冷卻的補血消耗品，只擋三瓶藥水等於留一個明顯漏洞。
+        if ((item.id.includes('potion_heal') || item.id === 'potion_strong' || item.id === 'potion_ult' || item.id === 'new_item_141')
+            && typeof pvpArenaPotionBlocked === 'function' && pvpArenaPotionBlocked()) {
+            if (!silent) logSys('<span class="text-slate-300">⚔️ 決鬥中雙方都不能使用治癒藥水。</span>');
+            return;
+        }
         if (item.id.includes('potion_heal') || item.id === 'potion_strong' || item.id === 'potion_ult') {
             if (player.cds.pot > 0) return;
             let h = Math.floor(potionHealBase(d) * (1 + (getConPotionPct(player.d.con) + dollFieldVal('potionBonus') + playerEquipPotionBonusPct() + (player._miscPotionBonus || 0)) / 100));   // 🍶 藥水基準改隨機區間 valMin~valMax（紅10~20/橙30~50/白60~80）；🪆 魔法娃娃 potionBonus%（吸血鬼）；🧰 道具收集冊 材料/其他全收集：藥水恢復%

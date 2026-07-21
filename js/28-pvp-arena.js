@@ -329,6 +329,15 @@
         return mob;
     }
 
+    // 🚫 v3.7.17 決鬥禁藥（用戶指示「PK 設定雙方都不會使用治癒藥水」）：決鬥進行中且人在競技場 → 治癒藥水一律不生效。
+    //   單一真相閘，四個消費點共用：js/07 autoActions（玩家自動喝·連自動補貨一起擋）／js/08 useItem（手動點也擋＝最後防線）／
+    //   js/06 allyTryPotion（傭兵）／js/22 petTryPotion（寵物）。
+    //   ⚠️ 對手端本來就沒有喝藥水的機制——DB.mobs 全表無任何藥水消費點（怪物只有 regenFix 自然回復與治癒『技能』），
+    //      所以「雙方同一規則」實際要擋的是玩家這一側的三條管線；對手的治癒技能屬於技能不在此列。
+    function pvpArenaPotionBlocked() {
+        return !!(_duel && typeof mapState !== 'undefined' && mapState && mapState.current === PVP_ARENA_MAP);
+    }
+
     // 🔮 v3.7.16 對手法師 AI：優先施放「目前冷卻已就緒、期望傷害最高」的法術（用戶指示）。
     //   回傳那一招的 key，js/03 的施法迴圈拿它做兩件事：①這一發跳過發動機率骰（必放）②排到最前面先打。
     //   ⚠️ 只對「決鬥中的法師對手」生效——野外白目玩家與一般怪一律維持原本的機率制，不動既有平衡。
@@ -924,6 +933,7 @@
     window.pvpCardPower = pvpCardPower;
     window.pvpCardToMob = pvpCardToMob;
     window.pvpDuelBestSpellKey = pvpDuelBestSpellKey;   // 🔮 js/03 施法迴圈的「法師對手優先高傷法術」閘
+    window.pvpArenaPotionBlocked = pvpArenaPotionBlocked;   // 🚫 決鬥禁治癒藥水（js/07 autoActions・js/08 useItem・js/06 傭兵・js/22 寵物 四處共用）
     window.pvpArenaStart = pvpArenaStart;
     window.pvpArenaEnter = pvpArenaEnter;
     window.renderPvpArenaNPC = renderPvpArenaNPC;
