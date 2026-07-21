@@ -1325,6 +1325,34 @@ if (typeof window !== 'undefined' && window.addEventListener) {
     });
 }
 
+// 🧵 v3.7.33 背景全速心跳：主執行緒計時器在背景分頁會被 Chrome 節流（最壞每分鐘一拍），
+//    但 Web Worker 的計時器不受分頁節流影響——由 Worker 每秒 postMessage 喚醒主執行緒跑一次 gameLoop，
+//    上方的背景增量補跑便以近即時速率持續執行：切分頁／縮小視窗也完整照跑不停止。
+//    前景不走此路徑（100ms 主迴圈負責）；Worker 建立失敗時自動退回既有的節流喚醒＋回前景差額補跑。
+//    file:// 下外部 Worker 檔會被擋，須用 Blob URL 建立。
+//    ⚠️限制：分頁被瀏覽器整個凍結／丟棄（省電模式、記憶體回收）時 message 也不會送達，
+//    該情境仍由回前景差額補跑與 js/27 離線結算兜底。
+let _bgHeartbeatWorker = null;
+(function _initBgHeartbeat() {
+    if (typeof window === 'undefined' || typeof Worker === 'undefined' || typeof Blob === 'undefined'
+        || typeof URL === 'undefined' || !URL.createObjectURL) return;
+    try {
+        let _u = URL.createObjectURL(new Blob(['setInterval(function(){postMessage(1);},1000);'], { type: 'text/javascript' }));
+        _bgHeartbeatWorker = new Worker(_u);
+        URL.revokeObjectURL(_u);
+        _bgHeartbeatWorker.onmessage = function () {
+            if (typeof document === 'undefined' || !document.hidden) return;   // 前景由 100ms 主迴圈驅動
+            if (typeof gameLoop !== 'function' || !state.running) return;
+            gameLoop();
+            // 背景中被延後的存檔（每 5 分鐘自動存檔會進 deferCatchupSave）：趁債務已還清的空檔補寫入，
+            // 降低背景掛機中分頁被瀏覽器回收時的進度損失；js/27 的 checkpoint 凍結不受影響，仍錨在切出當下。
+            if (_tickDebt < TICK_MS && takeCatchupSaveRequest() && typeof saveGame === 'function') {
+                try { saveGame(); } catch (e) {}
+            }
+        };
+    } catch (e) { _bgHeartbeatWorker = null; }
+})();
+
 let player = {
     cls: null, name: null, lv: 1, exp: 0, gold: 1000, hp: 0, mhp: 0, mp: 0, mmp: 0, alignmentValue: 0, pvpOn: false, pvpRevengeList: [],
     base: { str:0, dex:0, con:0, int:0, wis:0, cha:8 }, bonus: 0, alloc: { str:0, dex:0, con:0, int:0, wis:0, cha:0 }, panacea: { str:0, dex:0, con:0, int:0, wis:0, cha:0 }, panaceaUsed: 0, junkPrefs: {}, bloodPledge: null, magicShieldCd: 0, lastMapByCat: {}, tracking: null, sherineWorld: false, masteryQuest: null, mastery: null, masteryChangeCnt: 0, siege: { active:false, city:'kent', gateKilled:false, towerKilled:false, endTime:0, kills:0, result:null, cooldownUntil:0, accCdUntil:0 },
