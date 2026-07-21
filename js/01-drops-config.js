@@ -1293,31 +1293,31 @@ function startGameTimers() {
 
 function _perfNow() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
 function _resetGameLoopClock() { if (typeof _ffCancelScheduledLoop === 'function') _ffCancelScheduledLoop(); _loopLast = _perfNow(); _tickDebt = 0; _ffSavePending = false; }
-// 背景時間錨點：切到背景記下時刻，回前景後排入 gameLoop 逐 tick 真實補跑。
-// 不依賴背景中可能被 Chrome 節流或凍結的 setInterval；戰鬥照算，僅抑制逐次動畫與重繪。
+// 背景期間由被 Chrome 降頻後仍能執行的 gameLoop 先增量補跑；回前景只補最後一次 callback 後的剩餘差額。
+// _loopLast 會在每次背景 gameLoop 更新，因此不能再用整段 hidden 時間入帳，否則會把已處理部分重複計算。
 let _ffHiddenAt = (typeof document !== 'undefined' && document.hidden) ? _perfNow() : 0;
+function _resumeIncrementalBackground(reason) {
+    let _now = _perfNow();
+    let _anchor = (Number.isFinite(_loopLast) && _loopLast > 0) ? _loopLast : _ffHiddenAt;
+    _ffHiddenAt = 0;
+    _loopLast = _now;
+    if (_anchor > 0 && typeof state !== 'undefined' && state.running && typeof player !== 'undefined' && player && player.cls && !player.dead) {
+        settleBackgroundMs(Math.max(0, _now - _anchor), reason);
+    }
+    // 若背景已完全追平而只剩摘要待結束，這次零差額 gameLoop 會負責統一重繪與顯示。
+    if (typeof gameLoop === 'function') gameLoop();
+}
 if (typeof document !== 'undefined' && document.addEventListener) {
     document.addEventListener('visibilitychange', function () {
         if (document.hidden) { if (!_ffHiddenAt) _ffHiddenAt = _perfNow(); return; }
-        let _now = _perfNow();
-        let _anchor = _ffHiddenAt; _ffHiddenAt = 0;
-        _loopLast = _now;
-        if (_anchor > 0 && typeof state !== 'undefined' && state.running && typeof player !== 'undefined' && player && player.cls && !player.dead) {
-            settleBackgroundMs(Math.max(0, _now - _anchor), 'visibility');
-        }
+        _resumeIncrementalBackground('visibility');
     });
 }
 if (typeof window !== 'undefined' && window.addEventListener) {
     window.addEventListener('pageshow', function (ev) {
-        // bfcache 的頁面與 JS 記憶體仍存在，視為背景掛機並排入真實補跑。
+        // bfcache 完全凍結期間沒有 callback：以最後一次 gameLoop 為錨，只補尚未執行的尾段。
         if (ev && ev.persisted) {
-            let _now = _perfNow();
-            let _anchor = _ffHiddenAt;
-            _ffHiddenAt = 0;
-            _loopLast = _now;
-            if (_anchor > 0 && typeof state !== 'undefined' && state.running && typeof player !== 'undefined' && player && player.cls && !player.dead) {
-                settleBackgroundMs(Math.max(0, _now - _anchor), 'bfcache');
-            }
+            _resumeIncrementalBackground('bfcache');
             return;
         }
         _ffHiddenAt = 0;

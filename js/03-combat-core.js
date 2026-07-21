@@ -191,15 +191,18 @@ function gameLoop() {
     }
     let elapsed = now - _loopLast;
     _loopLast = now;
+    let _hidden = typeof document !== 'undefined' && document.hidden;
 
-    // 🔀 v3.6.95 混合制：背景期間（分頁還開著）不跑也不清帳——時間由 js/01 的 visibilitychange 錨點
-    //    在回前景時整段記入 _tickDebt，這裡的補跑路徑再全額償還（補幀）。真正關閉網頁＝js/27 離線收益。
-    if (typeof document !== 'undefined' && document.hidden) { _ffCancelScheduledLoop(); return; }
+    // 🔀 背景分頁能跑多少先跑多少：Chrome 即使降低 setInterval 頻率，每次喚醒仍逐 tick 償還已經過的時間。
+    //    瀏覽器完全凍結的尾段由 visibilitychange 只補「距離最後一次 gameLoop」的差額，不會重複入帳。
     if (!state.running || player.dead) {
         _ffCancelScheduledLoop();
         _tickDebt = 0;
-        _ffAcc = null;
-        if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();
+        if (_ffAcc && !_hidden) _ffFinishCatchup();
+        else {
+            _ffAcc = null;
+            if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();
+        }
         _ffErrorStreak = 0;
         state.ff = false;
         state.ffSmall = false;
@@ -209,11 +212,14 @@ function gameLoop() {
     }
 
     if (!Number.isFinite(elapsed) || elapsed < 0) elapsed = 0;
-    _tickDebt += Math.min(elapsed, FF_MAX_ELAPSED_MS);   // 單次呼叫吸收上限 5 分鐘（防時鐘異常；背景大段時間走錨點、不經這裡）
-    if (_tickDebt < TICK_MS) return;
+    _tickDebt += _hidden ? elapsed : Math.min(elapsed, FF_MAX_ELAPSED_MS);   // 背景凍結可能超過 5 分鐘：全額保留在債務中，不能因單次上限遺失收益
+    if (_tickDebt < TICK_MS) {
+        if (!_hidden && _ffAcc) _ffFinishCatchup();
+        return;
+    }
 
     let owed = Math.floor(_tickDebt / TICK_MS);
-    if (owed <= 1) {   // 即時路徑：每次排程一個 tick（前景常態）
+    if (owed <= 1 && !_hidden && !_ffAcc) {   // 即時路徑：背景／既有補跑摘要一律走下方靜音路徑
         _tickDebt -= TICK_MS;
         state.inTick = true;
         try { tick(); } finally { state.inTick = false; settleDeadMobs(); }
@@ -273,51 +279,56 @@ function gameLoop() {
     }
     if (player.dead) _tickDebt = 0;   // 進入下方統一收尾與最終重繪，不留下死亡後的補跑債務
     if (_tickDebt < TICK_MS) {   // 補跑完畢
-        let _acc = _ffAcc;
-        let _longCatchup = !!(_acc && _acc.ticks >= 30);
-        let _deferredSave = typeof takeCatchupSaveRequest === 'function' && takeCatchupSaveRequest();
-        if (_longCatchup) {   // ≥3 秒的補跑（回前景補幀）：統一刷新＋存檔＋摘要
-            try { renderMobs(); updateUI(); renderTabs(true); } catch (e) {}
-        } else {
-            flushTickRender();
-        }
-        let _needsSave = _longCatchup || _deferredSave || (_acc && _acc.failed);
-        let _saveOk = false;
-        if (_needsSave) {
-            try { _saveOk = saveGame() === true; } catch (e) {}
-        }
-        if (_saveOk && typeof window !== 'undefined' && typeof window.offlineCatchupSaveCommitted === 'function') {
-            try { window.offlineCatchupSaveCommitted(); } catch (e) {}
-        }
-        if (_longCatchup) {
-            try {
-                let _gd = (player.gold || 0) - _acc.gold;
-                let _sec = Math.round(_acc.ticks / 10);
-                let _dur = _sec >= 60 ? Math.floor(_sec / 60) + ' 分 ' + (_sec % 60) + ' 秒' : _sec + ' 秒';
-                logSys('<span class="text-cyan-300 font-bold">⏩ 掛機補跑完成：</span>已補上 ' + _dur + ' 的進度' + (_gd > 0 ? ('，金幣 +' + _gd.toLocaleString()) : '') + '。');
-                // 🎁 v3.6.86 前舊格式（用戶指示恢復）：補跑期間獲得物品彙整輸出（物品名依稀有度上色·頓號串接·只列淨正值）
-                let _gains = [];
-                let _invAfter = _ffInventoryCounts();
-                new Set([...Object.keys(_acc.invStart || {}), ...Object.keys(_invAfter)]).forEach(id => {
-                    let n = (_invAfter[id] || 0) - ((_acc.invStart || {})[id] || 0);
-                    if (n > 0 && DB.items[id]) _gains.push({ id: id, n: n });
-                });
-                if (_gains.length) {
-                    logSys(`<span class="sys-item-gain">掛機期間獲得：` + _gains
-                        .map(g => `<span class="${getItemColor({ id: g.id, en: 0 })} font-bold">${DB.items[g.id].n} ×${g.n}</span>`)
-                        .join('、') + `</span>`);
-                }
-            } catch (e) {}
-        }
-        if (_acc && _acc.aborted && typeof logSys === 'function') {
-            logSys('<span class="text-red-400 font-bold">補跑連續發生錯誤，已停止剩餘補跑，避免進度卡在重複補跑；請重新整理後確認。</span>');
-        }
-        _ffAcc = null;
-        if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();
-        _ffErrorStreak = 0;
+        if (!_hidden) _ffFinishCatchup();   // 背景已追平也先保留摘要；回到前景後才重繪、存檔與顯示一次
     } else {
         _ffScheduleNext();   // 尚未還清：讓出短暫時間後立即續跑，不等待下一次 100ms 主迴圈
     }
+}
+
+function _ffFinishCatchup() {
+    let _acc = _ffAcc;
+    if (!_acc) { flushTickRender(); return; }
+    let _longCatchup = _acc.ticks >= 30;
+    let _deferredSave = typeof takeCatchupSaveRequest === 'function' && takeCatchupSaveRequest();
+    if (_longCatchup) {   // ≥3 秒的補跑（回前景補幀）：統一刷新＋存檔＋摘要
+        try { renderMobs(); updateUI(); renderTabs(true); } catch (e) {}
+    } else {
+        flushTickRender();
+    }
+    let _needsSave = _longCatchup || _deferredSave || _acc.failed;
+    let _saveOk = false;
+    if (_needsSave) {
+        try { _saveOk = saveGame() === true; } catch (e) {}
+    }
+    if (_saveOk && typeof window !== 'undefined' && typeof window.offlineCatchupSaveCommitted === 'function') {
+        try { window.offlineCatchupSaveCommitted(); } catch (e) {}
+    }
+    if (_longCatchup) {
+        try {
+            let _gd = (player.gold || 0) - _acc.gold;
+            let _sec = Math.round(_acc.ticks / 10);
+            let _dur = _sec >= 60 ? Math.floor(_sec / 60) + ' 分 ' + (_sec % 60) + ' 秒' : _sec + ' 秒';
+            logSys('<span class="text-cyan-300 font-bold">⏩ 掛機補跑完成：</span>已補上 ' + _dur + ' 的進度' + (_gd > 0 ? ('，金幣 +' + _gd.toLocaleString()) : '') + '。');
+            // 🎁 v3.6.86 前舊格式（用戶指示恢復）：補跑期間獲得物品彙整輸出（物品名依稀有度上色·頓號串接·只列淨正值）
+            let _gains = [];
+            let _invAfter = _ffInventoryCounts();
+            new Set([...Object.keys(_acc.invStart || {}), ...Object.keys(_invAfter)]).forEach(id => {
+                let n = (_invAfter[id] || 0) - ((_acc.invStart || {})[id] || 0);
+                if (n > 0 && DB.items[id]) _gains.push({ id: id, n: n });
+            });
+            if (_gains.length) {
+                logSys(`<span class="sys-item-gain">掛機期間獲得：` + _gains
+                    .map(g => `<span class="${getItemColor({ id: g.id, en: 0 })} font-bold">${DB.items[g.id].n} ×${g.n}</span>`)
+                    .join('、') + `</span>`);
+            }
+        } catch (e) {}
+    }
+    if (_acc.aborted && typeof logSys === 'function') {
+        logSys('<span class="text-red-400 font-bold">補跑連續發生錯誤，已停止剩餘補跑，避免進度卡在重複補跑；請重新整理後確認。</span>');
+    }
+    _ffAcc = null;
+    if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();
+    _ffErrorStreak = 0;
 }
 // ⏩ 補跑專用快速排程：每批最多運算 80ms、讓出 8ms 後續跑；仍逐 tick 真實結算。
 const FF_BUDGET_MS = 80;

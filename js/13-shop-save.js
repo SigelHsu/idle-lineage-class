@@ -1351,6 +1351,10 @@ function saveGame() {
     //    這些背景觸發會把空殼 player 寫進 currentSlot（預設 1）→ 毀掉該格真正的角色（顯示為 null／Lv.1／預設王族／資料不完整）。
     //    無 cls＝不是進行中的遊戲角色 → 一律拒寫，確保空殼永遠不覆蓋既有存檔。（真正的角色必有職業；創角於選職業後才 saveGame，不受影響。）
     if (!player || !player.cls) return false;
+    // ⏩ v3.7.30 補跑存檔延後（接上 v3.7.25 就設計好但漏接線的 deferCatchupSave）：真補跑會殺 BOSS（v3.7.24），
+    //    killMob 的頭目存檔點每殺必全量存檔（sanitize＋LZ＋寫入）拖慢補跑並造成卡頓尖峰；
+    //    補跑期間一律改記 _ffSavePending，還清後由 gameLoop 收尾的 takeCatchupSaveRequest 統一補存一次。
+    if (typeof catchupActive === 'function' && catchupActive() && typeof deferCatchupSave === 'function') return deferCatchupSave();
     if (!_roleSaveAllowed()) {
         if(!_saveFailureNotified && typeof logSys === 'function') {
             _saveFailureNotified = true;
