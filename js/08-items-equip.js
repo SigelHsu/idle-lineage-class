@@ -842,8 +842,8 @@ function playerHasWindHelm() {
 
 function equipItem(item) {
     let d = DB.items[item.id];
-    // 🦴 v3.2.37 寵物裝備改個別裝備制：玩家無寵物裝備欄——請至包武的寵物保管為單一寵物裝上
-    if (d && (d.slot === 'petwpn' || d.slot === 'petarm')) { logSys('<span class="text-amber-300">寵物裝備請到 亞丁「包武的寵物保管」為指定寵物裝上。</span>'); return; }
+    // 🦴 v3.2.37 寵物裝備改個別裝備制：玩家無寵物裝備欄——請至寵物保管為單一寵物裝上（v3.7.7 保管人兩位）
+    if (d && (d.slot === 'petwpn' || d.slot === 'petarm')) { logSys('<span class="text-amber-300">寵物裝備請到寵物保管（亞丁 包武／古魯丁 奧斯丁）為指定寵物裝上。</span>'); return; }
     let slot = d.type === 'wpn' ? 'wpn' : d.slot;
     if (d.isArrow) slot = 'arrow'; // 如果是箭矢，強制分配到 arrow 欄位
     // ⚔️ 迅猛雙斧雙持：已學迅猛雙斧且主手已是單手鈍器時，再裝單手鈍器 → 放副手 offwpn 欄
