@@ -199,6 +199,7 @@ function gameLoop() {
         _ffCancelScheduledLoop();
         _tickDebt = 0;
         _ffAcc = null;
+        if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();
         _ffErrorStreak = 0;
         state.ff = false;
         state.ffSmall = false;
@@ -224,10 +225,12 @@ function gameLoop() {
     //    未還完的債留待下次呼叫（每 16 tick 量一次 performance.now·FF_HARD_CAP 保底防單次過量）。
     //    state.ff＝全域補跑閘（VFX/動畫/音效/日誌/逐次重繪與存檔全部受抑制）；ffSmall 保留相容但固定 false。
     if (!_ffAcc) {
+        if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();
         _ffAcc = { t0: Date.now(), ticks: 0, gold: (player.gold || 0), invStart: _ffInventoryCounts() };   // ⏩ 整段補跑只在起點與終點各掃一次背包
         try { if (typeof _vfxClearAll === 'function') _vfxClearAll(); } catch (e) {}   // 補跑只保留最終收益，立即釋放尚未播完的戰鬥特效
     }
     // 真實補跑固定每次只抵 1 tick，不抽樣放大任何收益。
+    if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();   // 每批重建，隔離 8ms 讓步期間可能發生的背包操作
     state.ff = true;
     state.ffSmall = false;   // 真實補跑一律略過動畫；小補跑也只保留最終畫面與收益
     let ran = 0, budget0 = now;
@@ -310,6 +313,7 @@ function gameLoop() {
             logSys('<span class="text-red-400 font-bold">補跑連續發生錯誤，已停止剩餘補跑，避免進度卡在重複補跑；請重新整理後確認。</span>');
         }
         _ffAcc = null;
+        if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();
         _ffErrorStreak = 0;
     } else {
         _ffScheduleNext();   // 尚未還清：讓出短暫時間後立即續跑，不等待下一次 100ms 主迴圈
@@ -1363,6 +1367,7 @@ function pvpOnPlayerDeath(killers) {
 function pvpOnKillMob(mob) {
     if (!mob || !player || !player.cls) return;
     pvpEnsureState();
+    if (mob.trollPlayer && mob._wcMassTauntBattle && typeof wcMassTauntGroupBattleOnKill === 'function') wcMassTauntGroupBattleOnKill(mob);
     if (mob.trollPlayer && mob._npcClanId && typeof npcClanOnNpcKilled === 'function') npcClanOnNpcKilled(mob);
     if (mob.pledgeEnemy || mob.siegeEnemy || mob.race === '血盟' || (typeof isSiegeArea === 'function' && typeof mapState !== 'undefined' && mapState && isSiegeArea(mapState.current))) return;
     if (mob.trollPlayer) {
@@ -1776,6 +1781,7 @@ function spawnMob(idx) {
     let mobId;
     let siegeArea = isSiegeArea(mapState.current);
     let npcClanBattle = typeof npcClanGroupBattleActive === 'function' && npcClanGroupBattleActive();
+    let wcMassTauntBattle = typeof wcMassTauntGroupBattleActive === 'function' && wcMassTauntGroupBattleActive();
     let allowMultiBoss = backSlotsActive() && !siegeArea;   // 🆕 一般5格地圖可同時出現多隻頭目；攻城雖改為5格，仍維持單一城門／守護塔
     // 🏛️ 長老之室 BOSS 節流：場上最多同時 2 隻長老 BOSS；已有 1 隻時須該 BOSS 存活滿 3 分鐘才可能出現第 2 隻
     let _elderRoom = mapState.current === 'elder_room';
@@ -1785,7 +1791,7 @@ function spawnMob(idx) {
         if (_ab.length >= 2) _elderBossOk = false;
         else if (_ab.length === 1) _elderBossOk = (Date.now() - (_ab[0]._bornMs || Date.now())) >= 180000;
     }
-    let wantBoss = !npcClanBattle && (allowMultiBoss || !bossInBattle) && bossPool.length > 0 && (!_elderRoom || _elderBossOk) && (mapState.forceBoss || (siegeArea ? (!mapState.suppressSiegeBoss && Math.random() < 0.10) : (_elderRoom ? Math.random() < 0.05 : Math.random() < 0.01)));
+    let wantBoss = !npcClanBattle && !wcMassTauntBattle && (allowMultiBoss || !bossInBattle) && bossPool.length > 0 && (!_elderRoom || _elderBossOk) && (mapState.forceBoss || (siegeArea ? (!mapState.suppressSiegeBoss && Math.random() < 0.10) : (_elderRoom ? Math.random() < 0.05 : Math.random() < 0.01)));
     if(mapState.forceBoss) mapState.forceBoss = false;   // 強制旗標只作用於下一次生怪
     if(wantBoss) {
         // 🔧 同名BOSS限制：場上已有同名BOSS時不再抽到該名→需地圖池有 2 種以上「不同名」BOSS 才可能同時出現多隻；若無不同名可出則退回一般怪
@@ -1893,7 +1899,15 @@ function spawnMob(idx) {
         && Math.random() < 0.01) {
         mobId = 'lindvior';
     }
-    if (npcClanBattle && typeof npcClanCreateGroupBattleOpponent === 'function') {
+    let _actualPlayerEncounter = mapState._trollSpawn && DB.mobs[mobId] && DB.mobs[mobId].trollPlayer;
+    if (!npcClanBattle && !wcMassTauntBattle && _actualPlayerEncounter && typeof wcMassTauntMaybeStartGroupBattle === 'function' &&
+        wcMassTauntMaybeStartGroupBattle(mapState._trollSpawn)) wcMassTauntBattle = true;
+    if (wcMassTauntBattle && typeof wcMassTauntGroupBattleNextOpponent === 'function') {
+        let _massPvp = wcMassTauntGroupBattleNextOpponent();
+        if (!_massPvp) { delete mapState._trollSpawn; mapState.mobs[idx] = null; return; }
+        mobId = trollPickClassMob(_massPvp.avatar);
+        mapState._trollSpawn = _massPvp;
+    } else if (npcClanBattle && typeof npcClanCreateGroupBattleOpponent === 'function') {
         let _battle = mapState.npcClanBattle;
         let _groupPvp = npcClanCreateGroupBattleOpponent(_battle && _battle.clanId);
         if (_groupPvp) {
@@ -1934,6 +1948,8 @@ function spawnMob(idx) {
             mapState.mobs[idx]._npcClanConflict = !!_t.clanConflict;
             mapState.mobs[idx]._npcClanHasCastle = !!_t.clanHasCastle;
             mapState.mobs[idx]._npcClanBattle = !!_t._npcClanBattle;
+            mapState.mobs[idx]._wcMassTauntBattle = !!_t._wcMassTauntBattle;
+            mapState.mobs[idx]._wcMassTauntBattleKey = _t._wcMassTauntBattleKey || '';
             if (_t.siegePlayer) {
                 mapState.mobs[idx].siegeEnemy = true;
                 mapState.mobs[idx]._siegePlayer = true;
@@ -1952,7 +1968,7 @@ function spawnMob(idx) {
                 MOB_ANIM_NAMES.add(_t.n);
                 if (typeof MOB_ANIM_SPRITE_SHADOW !== "undefined") MOB_ANIM_SPRITE_SHADOW.add(_t.n);   // 16 職業資料夾皆含 _s 影子層
             }
-            logTrollEncounterTrashTalk(_t);
+            if (!_t._wcMassTauntBattle) logTrollEncounterTrashTalk(_t);
         }
         delete mapState._trollSpawn;
     }
@@ -1975,7 +1991,8 @@ function spawnMob(idx) {
 
     applySherineGrace(idx);   // 🔮 席琳的恩賜：1% 機率場上一隻一般怪變恩賜怪（與時空裂痕共用 applySherineGrace）
     if (base.boss && typeof vfxBossEntrance === 'function') { try { vfxBossEntrance(mapState.mobs[idx]); } catch (e) {} }   // 🐉 頭目出場特效＋螢幕震動（cosmetic·v3.4.95 起全頭目通用：名單有專屬配色/稱號·未註冊者依屬性配色·吃 __vfxOff/補跑）
-    if (!state.ff) renderMobs();
+    if (mapState.mobs[idx]._wcMassTauntBattle && typeof wcMassTauntGroupBattleFill === 'function') wcMassTauntGroupBattleFill();
+    if (!state.ff && !mapState._wcMassTauntBattleFilling) renderMobs();
 }
 
 function getMobColor(mobLv) {

@@ -1130,6 +1130,7 @@ function npcClanGroupBattleEnd(reason) {
 
 function npcClanOnLeaveBattleArea() {
     if (mapState && mapState.npcClanBattle) npcClanGroupBattleEnd('leave');
+    if (typeof wcMassTauntOnLeaveBattleArea === 'function') wcMassTauntOnLeaveBattleArea();
 }
 
 function npcClanMaybeStartGroupBattle(mob) {
