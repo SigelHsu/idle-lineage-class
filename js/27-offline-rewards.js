@@ -29,6 +29,7 @@
     let _offlineInternalSave = false;
     let _offlineRestoredCatchupKey = '';
     let _offlineLastBatchSavedOk = false;
+    let _offlineRoleDetached = false;
     // ⚠️ 背景分頁期間任何存檔（js/01 每 5 分鐘自動存檔在背景仍會觸發）都不得把 awaySince／
     //    checkpoint.lastActive 往後推，否則離線時長永遠湊不滿 1 分鐘下限、資格也會因
     //    「最後擊殺超過 5 分鐘」被翻成 false → 回前景永遠結不了帳。
@@ -1281,6 +1282,7 @@
     const _offlineOriginalLoadGame = window.loadGame;
     if (typeof _offlineOriginalLoadGame === 'function') {
         window.loadGame = function () {
+            _offlineRoleDetached = false;
             _offlineLoading = true;
             let result;
             try {
@@ -1294,8 +1296,32 @@
         };
     }
 
+    const _offlineOriginalStartGame = window.startGame;
+    if (typeof _offlineOriginalStartGame === 'function') {
+        window.startGame = function () {
+            _offlineRoleDetached = false;
+            return _offlineOriginalStartGame.apply(this, arguments);
+        };
+    }
+
+    window.offlinePrepareCharacterSelect = function () {
+        if (typeof player === 'undefined' || !player || !player.cls || _offlineLoading || _offlineSettling) return false;
+        let now = _offlineNow();
+        _offlineRememberPendingCatchup(now);
+        let snapshot = _offlinePrepareSnapshot(now, true);
+        _offlineInternalSave = true;
+        window.__fb5CloseFlush = true;
+        try { _offlineOriginalSaveGame(); } catch (e) {}
+        finally {
+            _offlineInternalSave = false;
+            window.__fb5CloseFlush = false;
+            _offlineRoleDetached = true;
+        }
+        return !!(snapshot && snapshot.eligible === true);
+    };
+
     function _offlinePauseAndSave() {
-        if (typeof player === 'undefined' || !player || !player.cls || _offlineLoading || _offlineSettling) return;
+        if (_offlineRoleDetached || typeof player === 'undefined' || !player || !player.cls || _offlineLoading || _offlineSettling) return;
         _offlinePrepareSnapshot(_offlineNow());
         _offlineInternalSave = true;
         try { _offlineOriginalSaveGame(); } catch (e) {}
@@ -1303,7 +1329,7 @@
     }
 
     function _offlineCloseAndSave() {
-        if (typeof player === 'undefined' || !player || !player.cls || _offlineLoading || _offlineSettling) return;
+        if (_offlineRoleDetached || typeof player === 'undefined' || !player || !player.cls || _offlineLoading || _offlineSettling) return;
         let now = _offlineNow();
         _offlineRememberPendingCatchup(now);
         _offlinePrepareSnapshot(now, true);
@@ -1315,6 +1341,7 @@
 
     if (typeof document !== 'undefined' && document.addEventListener) {
         document.addEventListener('visibilitychange', function () {
+            if (_offlineRoleDetached) return;
             if (document.hidden) {
                 if (!_offlineHiddenAt) _offlineHiddenAt = _offlineNow();
                 _offlinePauseAndSave();
@@ -1335,6 +1362,7 @@
         });
         window.addEventListener('beforeunload', _offlineCloseAndSave);
         window.addEventListener('pageshow', function (ev) {
+            if (_offlineRoleDetached) return;
             if (document.hidden) return;
             _offlineHiddenAt = 0;
             if (ev && ev.persisted) {

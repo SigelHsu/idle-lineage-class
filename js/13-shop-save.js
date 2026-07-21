@@ -788,6 +788,45 @@ function loadBackToMenu(){
     if(load) load.classList.add('hidden');
     if(main) main.classList.remove('hidden');
 }
+
+function returnToCharacterSelect(){
+    if(typeof player === 'undefined' || !player || !player.cls) return false;
+    let offlineEligible = false;
+    try {
+        if(typeof window.offlinePrepareCharacterSelect === 'function') {
+            offlineEligible = window.offlinePrepareCharacterSelect() === true;
+        } else if(typeof saveGame === 'function') {
+            saveGame();
+        }
+    } catch(e) {
+        try { if(typeof saveGame === 'function') saveGame(); } catch(_) {}
+    }
+
+    if(typeof stopGameTimers === 'function') stopGameTimers();
+    if(typeof state !== 'undefined' && state) state.running = false;
+    try { _roleSessionForget(); } catch(e) {}
+    try { if(typeof _vfxClearAll === 'function') _vfxClearAll(); } catch(e) {}
+
+    const game = document.getElementById('game-screen');
+    const creationScreen = document.getElementById('creation-screen');
+    const main = document.getElementById('main-menu');
+    const creation = document.getElementById('creation-panel');
+    const load = document.getElementById('load-select-panel');
+    if(game) game.classList.add('hidden');
+    if(creationScreen) creationScreen.classList.remove('hidden');
+    if(main) main.classList.add('hidden');
+    if(creation) creation.classList.add('hidden');
+    if(load) load.classList.remove('hidden');
+    document.body.classList.remove('game-bg-dim', 'sherine-world', 'sherine-mad');
+
+    _loadLastClickSlot = 0;
+    _loadLastClickAt = 0;
+    _loadPage = currentSlot > 4 ? 1 : 0;
+    _loadSelectedSlot = currentSlot;
+    renderLoadSelect();
+    try { if(typeof _bgmTick === 'function') { _bgmScene = null; _bgmTick(); } } catch(e) {}
+    return offlineEligible;
+}
 function renderLoadSelect(){
     const grid = document.getElementById('load-slot-grid');
     if(!grid) return;

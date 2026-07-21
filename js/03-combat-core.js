@@ -423,6 +423,19 @@ function _ffCancelScheduledLoop() {
     if (_ffResumeTimer !== null) clearTimeout(_ffResumeTimer);
     _ffResumeTimer = null;
 }
+
+function resetCatchupForRoleSwitch() {
+    _ffCancelScheduledLoop();
+    _ffAcc = null;
+    _ffErrorStreak = 0;
+    if (typeof resetCatchupGainItemIndex === 'function') resetCatchupGainItemIndex();
+    _ffProgressHide();
+    if (typeof state !== 'undefined' && state) {
+        state.ff = false;
+        state.ffSmall = false;
+        state.inTick = false;
+    }
+}
 function _ffInventoryCounts() {
     let counts = {};
     try { (player.inv || []).forEach(i => { counts[i.id] = (counts[i.id] || 0) + (Number(i.cnt) || 0); }); } catch (e) {}

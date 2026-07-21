@@ -1291,6 +1291,19 @@ function startGameTimers() {
     if (typeof _initTabGuard === 'function') _initTabGuard();           // 🚀 綁定分頁面板點擊保護＋重繪節流（避免狩獵時 賣出/強化 按鈕卡頓、點擊失效）
 }
 
+function stopGameTimers() {
+    if (typeof _ffCancelScheduledLoop === 'function') _ffCancelScheduledLoop();
+    if (typeof resetCatchupForRoleSwitch === 'function') resetCatchupForRoleSwitch();
+    if (_gameLoopId !== null) clearInterval(_gameLoopId);
+    if (_saveLoopId !== null) clearInterval(_saveLoopId);
+    _gameLoopId = null;
+    _saveLoopId = null;
+    _loopLast = null;
+    _tickDebt = 0;
+    _ffSavePending = false;
+    _ffHiddenAt = 0;
+}
+
 function _perfNow() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
 function _resetGameLoopClock() { if (typeof _ffCancelScheduledLoop === 'function') _ffCancelScheduledLoop(); _loopLast = _perfNow(); _tickDebt = 0; _ffSavePending = false; }
 // 背景期間由被 Chrome 降頻後仍能執行的 gameLoop 先增量補跑；回前景只補最後一次 callback 後的剩餘差額。
