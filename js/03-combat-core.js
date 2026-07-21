@@ -180,6 +180,7 @@ function _dpsCreditDot(src, amt) {   // DoT 依施加者標記歸因：'player'/
 }
 
 function gameLoop() {
+    if (_ffResumeTimer !== null && _tickDebt >= TICK_MS) return;   // 快速續跑已排程時，忽略一般 100ms 計時器插隊
     // 🛡️ 反盜用：非官方網域時橫幅若被移除則自動重掛（官方/本機為快取布林值判定，成本可忽略）
     if (typeof _origEnforce === 'function') _origEnforce();
     let now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -193,8 +194,9 @@ function gameLoop() {
 
     // 🔀 v3.6.95 混合制：背景期間（分頁還開著）不跑也不清帳——時間由 js/01 的 visibilitychange 錨點
     //    在回前景時整段記入 _tickDebt，這裡的補跑路徑再全額償還（補幀）。真正關閉網頁＝js/27 離線收益。
-    if (typeof document !== 'undefined' && document.hidden) return;
+    if (typeof document !== 'undefined' && document.hidden) { _ffCancelScheduledLoop(); return; }
     if (!state.running || player.dead) {
+        _ffCancelScheduledLoop();
         _tickDebt = 0;
         _ffAcc = null;
         _ffErrorStreak = 0;
@@ -222,13 +224,9 @@ function gameLoop() {
     //    未還完的債留待下次呼叫（每 16 tick 量一次 performance.now·FF_HARD_CAP 保底防單次過量）。
     //    state.ff＝全域補跑閘（VFX/動畫/音效/日誌/逐次重繪與存檔全部受抑制）；ffSmall 保留相容但固定 false。
     if (!_ffAcc) {
-        _ffAcc = { t0: Date.now(), ticks: 0, gold: (player.gold || 0), items: {} };   // ⏩ 補跑摘要：跨呼叫累計（還清時結算顯示）
+        _ffAcc = { t0: Date.now(), ticks: 0, gold: (player.gold || 0), invStart: _ffInventoryCounts() };   // ⏩ 整段補跑只在起點與終點各掃一次背包
         try { if (typeof _vfxClearAll === 'function') _vfxClearAll(); } catch (e) {}   // 補跑只保留最終收益，立即釋放尚未播完的戰鬥特效
     }
-    // 🎁 補跑期間 logSys 靜音 → 逐項「獲得物品:」訊息全被吞掉；沿用 v3.6.86 前舊制：每批補跑前後
-    //    快照背包數量、以淨增量累積到 _ffAcc.items，還清時以「掛機期間獲得：」格式統一輸出一次。
-    let _invBefore = {};
-    try { player.inv.forEach(i => { _invBefore[i.id] = (_invBefore[i.id] || 0) + i.cnt; }); } catch (e) {}
     // 真實補跑固定每次只抵 1 tick，不抽樣放大任何收益。
     state.ff = true;
     state.ffSmall = false;   // 真實補跑一律略過動畫；小補跑也只保留最終畫面與收益
@@ -271,15 +269,6 @@ function gameLoop() {
         state.ffSmall = false;
     }
     if (player.dead) _tickDebt = 0;   // 進入下方統一收尾與最終重繪，不留下死亡後的補跑債務
-    // 🎁 將本批補跑的背包淨增量併入累積（含被消耗者的負值；輸出時只列淨正值）——tick 拋例外也照併，已入袋的不漏記
-    try {
-        let _invAfter = {};
-        player.inv.forEach(i => { _invAfter[i.id] = (_invAfter[i.id] || 0) + i.cnt; });
-        new Set([...Object.keys(_invBefore), ...Object.keys(_invAfter)]).forEach(id => {
-            let d = (_invAfter[id] || 0) - (_invBefore[id] || 0);
-            if (d !== 0) _ffAcc.items[id] = (_ffAcc.items[id] || 0) + d;
-        });
-    } catch (e) {}
     if (_tickDebt < TICK_MS) {   // 補跑完畢
         let _acc = _ffAcc;
         let _longCatchup = !!(_acc && _acc.ticks >= 30);
@@ -305,9 +294,11 @@ function gameLoop() {
                 logSys('<span class="text-cyan-300 font-bold">⏩ 掛機補跑完成：</span>已補上 ' + _dur + ' 的進度' + (_gd > 0 ? ('，金幣 +' + _gd.toLocaleString()) : '') + '。');
                 // 🎁 v3.6.86 前舊格式（用戶指示恢復）：補跑期間獲得物品彙整輸出（物品名依稀有度上色·頓號串接·只列淨正值）
                 let _gains = [];
-                for (let id in (_acc.items || {})) {
-                    if (_acc.items[id] > 0 && DB.items[id]) _gains.push({ id: id, n: _acc.items[id] });
-                }
+                let _invAfter = _ffInventoryCounts();
+                new Set([...Object.keys(_acc.invStart || {}), ...Object.keys(_invAfter)]).forEach(id => {
+                    let n = (_invAfter[id] || 0) - ((_acc.invStart || {})[id] || 0);
+                    if (n > 0 && DB.items[id]) _gains.push({ id: id, n: n });
+                });
                 if (_gains.length) {
                     logSys(`<span class="sys-item-gain">掛機期間獲得：` + _gains
                         .map(g => `<span class="${getItemColor({ id: g.id, en: 0 })} font-bold">${DB.items[g.id].n} ×${g.n}</span>`)
@@ -320,15 +311,37 @@ function gameLoop() {
         }
         _ffAcc = null;
         _ffErrorStreak = 0;
-    } // 尚未還清時不重繪；全部補完後由上方統一刷新一次
+    } else {
+        _ffScheduleNext();   // 尚未還清：讓出短暫時間後立即續跑，不等待下一次 100ms 主迴圈
+    }
 }
-// ⏩ v3.6.95 補跑參數：預算 40ms/次（保留 60ms 給點擊/繪製）·硬上限 6000 tick/次·前景單次 elapsed 上限 5 分鐘
-const FF_BUDGET_MS = 40;
+// ⏩ 補跑專用快速排程：每批最多運算 80ms、讓出 8ms 後續跑；仍逐 tick 真實結算。
+const FF_BUDGET_MS = 80;
+const FF_YIELD_MS = 8;
 const FF_HARD_CAP = 6000;
 const FF_MAX_ELAPSED_MS = 300000;
 const FF_ERROR_STREAK_MAX = 3;
 let _ffAcc = null;   // 補跑摘要累計（跨多次 gameLoop 呼叫·還清時歸零）
 let _ffErrorStreak = 0;
+let _ffResumeTimer = null;
+
+function _ffScheduleNext() {
+    if (_ffResumeTimer !== null || _tickDebt < TICK_MS || !state || !state.running || !player || player.dead) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    _ffResumeTimer = setTimeout(function () {
+        _ffResumeTimer = null;
+        if (_tickDebt >= TICK_MS && state && state.running && player && !player.dead) gameLoop();
+    }, FF_YIELD_MS);
+}
+function _ffCancelScheduledLoop() {
+    if (_ffResumeTimer !== null) clearTimeout(_ffResumeTimer);
+    _ffResumeTimer = null;
+}
+function _ffInventoryCounts() {
+    let counts = {};
+    try { (player.inv || []).forEach(i => { counts[i.id] = (counts[i.id] || 0) + (Number(i.cnt) || 0); }); } catch (e) {}
+    return counts;
+}
 
 // 經驗「總累積進度」（exp＋已升等級需求總和）：跨升級仍單調，前後差＝實得經驗（升級瞬間也算得對）
 function _ffExpProgress() {

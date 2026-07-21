@@ -1261,6 +1261,7 @@ function queueCatchupMs(ms) {
     if (!Number.isFinite(ms) || ms <= 0 || !state || !state.running || !player || !player.cls || player.dead) return false;
     _loopLast = _perfNow();
     _tickDebt += ms;
+    if (typeof _ffScheduleNext === 'function') _ffScheduleNext();
     return true;
 }
 
@@ -1277,6 +1278,7 @@ function settleBackgroundMs(ms, reason) {
 
 // 統一啟動遊戲計時器：先清除既有的，再重新註冊，確保整個工作階段只會有一組計時器
 function startGameTimers() {
+    if (typeof _ffCancelScheduledLoop === 'function') _ffCancelScheduledLoop();
     if (_gameLoopId !== null) clearInterval(_gameLoopId);
     if (_saveLoopId !== null) clearInterval(_saveLoopId);
     _loopLast = null; _tickDebt = 0; _ffSavePending = false;
@@ -1290,7 +1292,7 @@ function startGameTimers() {
 }
 
 function _perfNow() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
-function _resetGameLoopClock() { _loopLast = _perfNow(); _tickDebt = 0; _ffSavePending = false; }
+function _resetGameLoopClock() { if (typeof _ffCancelScheduledLoop === 'function') _ffCancelScheduledLoop(); _loopLast = _perfNow(); _tickDebt = 0; _ffSavePending = false; }
 // 背景時間錨點：切到背景記下時刻，回前景後排入 gameLoop 逐 tick 真實補跑。
 // 不依賴背景中可能被 Chrome 節流或凍結的 setInterval；戰鬥照算，僅抑制逐次動畫與重繪。
 let _ffHiddenAt = (typeof document !== 'undefined' && document.hidden) ? _perfNow() : 0;
