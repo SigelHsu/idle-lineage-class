@@ -72,7 +72,7 @@ function _rememberCatchupGainItemStack(item) {
     cache.first = inv.length ? inv[0] : null;
     cache.last = item;
 }
-function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, deferUi=false, fixedAffixes=null) {   // ⚠️ v3.5.87 affixOld 已棄用；第 7 參僅供已預先決定詞綴的來源（如黑市上架商品）原樣交付
+function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, deferUi=false, fixedAffixes=null, blessRate=null) {   // ⚠️ 第 7 參供既定詞綴來源；第 8 參供製作等來源指定祝福率
     // 卷軸變祝福／詛咒機率：各 1%（互斥）
     if (!forceNormal && (id === 'scroll_weapon' || id === 'scroll_armor')) {
         let _r = lootRng('scrollvar');   // 🎲 committed RNG（防 SL 重抽卷軸祝福/詛咒變體）
@@ -107,11 +107,11 @@ function gainItem(id, cnt=1, silent=false, forceNormal=false, affixOld=false, de
     let attr = false;   
     
     if (!forceNormal && !_noAffixCtx && d && !isRelic(d) && ((d.type === 'wpn' && !d.isArrow) || d.type === 'arm' || d.type === 'acc')) {   // 🦴 _noAffixCtx：白板（寵物裝備製作）→ 不附詞綴；🏺 遺物永不附詞綴（不會祝福/賦予）
-        // 詞綴：所有管道只擲 1% 祝福（席琳×3/瘋狂×5·committed RNG）；屬性/遠古改由碧恩賦予卷軸取得。箭矢/遺物/白板不附加。
+        // 詞綴：一般頭目與製作 10%；席琳頭目 20%、瘋狂席琳頭目 30%；其他來源基礎 1%。箭矢/遺物/白板不附加。
         //   🗑️ v3.5.87 舊制 rollAffixesOld 已刪（與新制 byte-identical·affixOld 參數棄用不再分派）
         let _af = (fixedAffixes && typeof fixedAffixes === 'object')
             ? { attr: !!fixedAffixes.attr, bless: fixedAffixes.bless === 'cursed' ? 'cursed' : !!fixedAffixes.bless, anc: !!fixedAffixes.anc }
-            : rollAffixesNew();
+            : rollAffixesNew(Number.isFinite(blessRate) ? blessRate : ((_lootMobInfo && _lootMobInfo.boss) ? 0.10 : 0.01));
         attr = _af.attr; bless = _af.bless; anc = _af.anc;
         if (_forceBless) bless = true;   // 🔧 v3.1.27 製作材料含祝福裝備→成品必定祝福（僅在此裝備詞綴分支·寵物白板 _noAffixCtx 已於上方擋掉）
     }
@@ -290,10 +290,14 @@ function getAttrAffix(attr) {
     let c = attrCanon(attr);
     return c ? ATTR_AFFIX[c] : null;
 }
-// 武器實際屬性（屬性詞綴優先，否則用基底物品 ele）
-function getWpnEle(wpnInst, wpnBase) {
+// 武器實際屬性（屬性詞綴優先，否則用基底物品 ele）；owner 供傭兵使用，省略時沿用主玩家。
+function getWpnEle(wpnInst, wpnBase, owner) {
     let a = wpnInst && getAttrAffix(wpnInst.attr);
     if (a) return a.ele;
+    // 🏺 v3.7.54 專精劍術的魔劍士之刀：施法後 10 秒，一般攻擊變成裝備者最後施放法術的屬性。
+    let wielder = owner || ((typeof player !== 'undefined') ? player : null);
+    if (wpnBase && wpnBase.spellbladeBuff && wielder && wielder.eq && wielder.eq.wpn === wpnInst
+        && (wielder._spellbladeUntil || 0) > ((typeof state !== 'undefined' && state.ticks) || 0) && wielder._spellbladeEle) return wielder._spellbladeEle;
     return (wpnBase && wpnBase.ele) ? wpnBase.ele : 'normal';
 }
 // 屬性剋制判定（攻擊屬性 e 是否剋制怪物屬性 te），加成量由各詞綴的 counter 決定
@@ -523,7 +527,7 @@ function useItem(u, silent = false) {
         return;
     }
 
-    // 🥚 v3.2.17 頑皮幼龍蛋：原功能不變（攜帶觸發林德拜爾）＋新增可使用——寵物保管未滿時消耗，隨機獲得 淘氣龍/頑皮龍
+    // 🥚 v3.7.56 幼龍蛋（頑皮／淘氣共用 eff:'dragonegg'）：攜帶觸發林德拜爾＋可使用——寵物保管未滿時消耗，依蛋種 eggPet 定向孵化
     //   （🚫 舊「進化果實 eff:'evolve' 項圈進化」已隨項圈系統移除；新進化改於包武寵物保管介面進行）
     if (d.eff === 'dragonegg') {
         if (silent) return;
@@ -669,6 +673,8 @@ function useItem(u, silent = false) {
             if (prideTeleportBlocked()) { if (!silent) logSys('<span class="text-red-400">' + (state.riftRun ? '時空裂痕中無法使用瞬間移動卷軸。' : (state.prideRanked ? '排名挑戰中無法使用瞬間移動卷軸。' : '在此樓層需持有對應的傲慢之塔支配符才能使用瞬間移動卷軸。')) + '</span>'); return; }
             // 🏝️ 遺忘之島：途中與本島皆禁用瞬間移動卷軸（不消耗卷軸）
             if (state.oblivion) { if (!silent) logSys('<span class="text-red-400">遺忘之島的迷霧壓制了傳送，瞬間移動卷軸無法生效。</span>'); return; }
+            // 🐉 v3.7.57 侵蝕的安塔瑞斯巢穴：禁瞬間移動卷軸（不消耗卷軸）
+            if (state.antharas) { if (!silent) logSys('<span class="text-red-400">侵蝕的龍氣壓制了傳送，瞬間移動卷軸無法生效。</span>'); return; }
             // 瞬間移動卷軸：效果同傳送術。手動(非silent)+傳送控制戒指 → 必定遭遇BOSS；自動使用(silent) → 必定無戒指效果。
             if (!silent && HIDDEN_AREA_PARENT[mapState.current]) {   // 🏛️ 對應地圖手動用卷軸→進入隱藏狩獵區域（自動瞬移 silent 不進入、照常逃離頭目）；下方仍 consume 卷軸
                 enterHiddenArea(HIDDEN_AREA_PARENT[mapState.current]);
@@ -1384,7 +1390,7 @@ function _updateUIImpl() {
       if (rb) { rb.style.display = ''; rb.textContent = _txt; rb.onclick = _fn; rb.style.background = _riftLock ? '#7c3aed' : (_inTown ? '#1d4ed8' : ''); rb.style.borderColor = _riftLock ? '#c4b5fd' : (_inTown ? '#93c5fd' : ''); }
       // 🌀 順移按鈕：固定顯示（含村莊/野外/狩獵/隱藏區域），不隨敵人或每幀重繪閃爍；僅在「傳送會破壞玩法」的鎖定模式隱藏（裂痕/傲慢之塔封鎖樓/遺忘之島/軍王之室）。
       // ⚠️ 用「狀態改變才寫 DOM」的守衛：避免每個 tick 重複 toggle class / 設 display 造成按鈕閃爍。
-      { let tpb = document.getElementById('btn-teleport'); if (tpb) { let _hideTp = !!(KING_ROOMS[mapState.current] || (typeof prideTeleportBlocked === 'function' && prideTeleportBlocked()) || state.oblivion); if (tpb.classList.contains('hidden') !== _hideTp) { tpb.classList.toggle('hidden', _hideTp); tpb.style.display = _hideTp ? 'none' : ''; } } } }   // ⚠️ _hideTp 必須 !! 強轉布林：否則 (undefined||false||undefined)===undefined → 守衛 (boolean!==undefined) 恆真 → toggle('hidden', undefined) 變成「無參數 bare toggle」每幀翻轉 → 按鈕閃爍
+      { let tpb = document.getElementById('btn-teleport'); if (tpb) { let _hideTp = !!(KING_ROOMS[mapState.current] || (typeof prideTeleportBlocked === 'function' && prideTeleportBlocked()) || state.oblivion || state.antharas); if (tpb.classList.contains('hidden') !== _hideTp) { tpb.classList.toggle('hidden', _hideTp); tpb.style.display = _hideTp ? 'none' : ''; } } } }   // ⚠️ _hideTp 必須 !! 強轉布林：否則 (undefined||false||undefined)===undefined → 守衛 (boolean!==undefined) 恆真 → toggle('hidden', undefined) 變成「無參數 bare toggle」每幀翻轉 → 按鈕閃爍
     // 👑 v3.6.05 城主稱號；😤 v3.6.31 只有王族顯示「<持有城堡>主」（肯特城主…）·非王族只顯示「<持有城堡>」（肯特城…·用戶拍板·血盟福利不變）。
     //    v3.6.34 徽章王冠改與戰鬥 sprite 同一顆動態 castle-crown.gif（#victory-badge-crown）·僅王族顯示（非王族純文字）。
     //    ⚠️ 每 tick 都會跑到這裡 → 比對後才寫 DOM（比照上方按鈕的「狀態改變才寫」守衛），避免每幀重設 textContent/display。
