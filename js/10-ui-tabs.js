@@ -2522,12 +2522,14 @@ function renderSquadPanel() {
     let _summons = (typeof summonV2List === 'function' && player && player.cls) ? summonV2List().filter(s => s && !s._downed && (s.hp || 0) > 0) : [];
     let _summonSk = (typeof summonV2ActiveSk === 'function') ? summonV2ActiveSk() : '';
     let _summonVisible = _summons.length > 0 || !!(player && player._summonV2On && _summonSk && typeof summonV2Knows === 'function' && summonV2Knows(_summonSk));
-    if (!allies.length && !_pets.length && !_summonVisible) { panel.style.display = 'none'; _squadSigTeam = ''; _squadSigSkill = ''; return; }
+    let _guards = (typeof guardV2List === 'function' && player && player.cls) ? guardV2List() : [];   // 🏰 城堡護衛（可招募的協同角色）
+    if (!allies.length && !_pets.length && !_summonVisible && !_guards.length) { panel.style.display = 'none'; _squadSigTeam = ''; _squadSigSkill = ''; return; }
     panel.style.display = '';
     let _sigAllies = allies.map(a => a._slot + ':' + (a._allyName || '') + ':' + (a._downed ? 'D' : '') + ':' + (a.lv || 1)).join('|');
     let sigTeam = _sigAllies
         + '||P:' + _pets.map(p => p.uid + ':' + p.lv + ':' + (p._downed ? 'D' : '') + ':' + Math.round(p.hp / Math.max(1, p.mhp) * 20) + ':' + Math.round(p.mp / Math.max(1, p.mmp) * 20) + ':' + Math.round((p.exp || 0) / Math.max(1, petExpReq(p.lv)) * 20) + ':' + (p.potPct || 0) + ':' + Math.ceil((p._reviveCd || 0) / 10)).join('|')
-        + '||S:' + ((typeof summonTeamSignature === 'function') ? summonTeamSignature() : '');   // team 分頁：名單/倒地/等級＋寵物/召喚血量(5%階)變動才重建
+        + '||S:' + ((typeof summonTeamSignature === 'function') ? summonTeamSignature() : '')   // team 分頁：名單/倒地/等級＋寵物/召喚血量(5%階)變動才重建
+        + '||G:' + ((typeof guardTeamSignature === 'function') ? guardTeamSignature() : '');   // 🏰 城堡護衛血量/倒地/復活倒數變動才重建
     let sigSkill = _sigAllies;   // 🩹 v3.2.74 skill 分頁只看傭兵名單/等級→戰鬥中寵物/召喚掉血不重建·開啟的技能下拉不被關
     let _squadRebuilt = false;
     if (sigTeam !== _squadSigTeam) {
@@ -2558,7 +2560,8 @@ function renderSquadPanel() {
         }).join('')
             + ((typeof renderPetTeamHTML === 'function') ? renderPetTeamHTML() : '')
             + ((typeof renderSummonTeamHTML === 'function') ? renderSummonTeamHTML() : '')
-            + ((typeof renderMercSummonTeamHTML === 'function') ? renderMercSummonTeamHTML() : '');   // 隊伍排列：傭兵 → 寵物 → 玩家召喚物 → 🧱 v3.4.51 傭兵召喚物(血條比照玩家)
+            + ((typeof renderMercSummonTeamHTML === 'function') ? renderMercSummonTeamHTML() : '')
+            + ((typeof renderGuardTeamHTML === 'function') ? renderGuardTeamHTML() : '');   // 隊伍排列：傭兵 → 寵物 → 玩家召喚物 → 傭兵召喚物 → 🏰 城堡護衛
         _squadRebuilt = true;
     }
     if (sigSkill !== _squadSigSkill) {

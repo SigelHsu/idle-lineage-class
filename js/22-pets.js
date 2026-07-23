@@ -883,7 +883,8 @@ function petsTick() {
         if (d.castItv > 0 && def.sk.length && !((pst.silence || 0) > 0 || (pst.magicseal || 0) > 0)) {
             p._castCd = (p._castCd != null ? p._castCd : (d.castItv - 1)) - 1;
             if (p._castCd <= 0 && (p._actionCd || 0) <= 0) {
-                if (petCastSkill(p, d, tgt)) { p._castCd = d.castItv; p._actionCd = 4; }
+                let _ok; if (typeof threatWrap === 'function') threatWrap(p, () => { _ok = petCastSkill(p, d, tgt); }); else _ok = petCastSkill(p, d, tgt);   // 🎯 v3.7.97 仇恨：寵物技能傷害→記給該寵物
+                if (_ok) { p._castCd = d.castItv; p._actionCd = 4; }
                 else p._castCd = Math.min(10, d.castItv);
             }
         }
@@ -892,7 +893,7 @@ function petsTick() {
         p._stunCycle = false;
         if (p._atkCd <= 0 && (p._actionCd || 0) <= 0) {
             tgt = _petPickTarget(p);   // 技能可能已擊殺
-            if (tgt) { petAttackOnce(p, d, tgt); p._actionCd = 3; }
+            if (tgt) { if (typeof threatWrap === 'function') threatWrap(p, () => petAttackOnce(p, d, tgt)); else petAttackOnce(p, d, tgt); p._actionCd = 3; }   // 🎯 v3.7.97 仇恨：寵物普攻傷害→記給該寵物
             p._atkCd = Math.ceil(d.atkItv * ((pst.slowAtk || 0) > 0 ? 2 : 1));
         }
     });
@@ -1444,6 +1445,7 @@ function _petAnimApply() {
         if (!host || !layer) return;
         let outs = (typeof player !== 'undefined' && player && player.cls) ? petsOutList() : [];
         if (typeof summonRenderList === 'function') outs = outs.concat(summonRenderList());   // 🧙 v3.2.19 召喚物 v2 共用寵物圖層（同欄位協定：uid/form/_px/_py/_dir/_animAct/_downed）
+        if (typeof guardRenderList === 'function') outs = outs.concat(guardRenderList());   // 🏰 城堡護衛 v2 共用寵物圖層（同欄位協定·八方向 assets/anim/<form>/d<dir>）
         let show = _petInWild() && !(bv && bv.classList.contains('hidden'));
         // 清掉不在場的
         layer.querySelectorAll('[data-pet]').forEach(el => { if (!show || !outs.some(p => p.uid === el.getAttribute('data-pet'))) el.remove(); });

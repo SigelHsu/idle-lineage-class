@@ -1417,6 +1417,7 @@ function normalizeFacingRefsForSave() {
         else if(m._faceTgt._slot != null) m._facePartyKey = 'A:' + String(m._faceTgt._slot);
         delete m._faceTgt;
     });
+    if (typeof stripThreatForSave === 'function') stripThreatForSave();   // 🎯 v3.7.97 仇恨制：mob._threat/_threatT 是 runtime 狀態·不入檔（也避免進 SIG1 簽章）
 }
 function saveStateJson() {
     normalizeFacingRefsForSave();
@@ -1426,8 +1427,10 @@ function saveStateJson() {
     //   避免舊怪名殘留在存檔造成讀檔 null-deref，也避免每次讀檔誤報「契約到期」＋存檔肥大。
     let _sv2 = player.summonsV2;
     if (_sv2 && _sv2.length) player.summonsV2 = [];
+    let _gv2 = player.guardsV2;   // 🏰 城堡護衛實體同召喚：戰鬥暫存不入檔（名冊在血盟共用狀態·讀檔後 castleGuardSync 依名冊重建）
+    if (_gv2 && _gv2.length) player.guardsV2 = [];
     try { return JSON.stringify({ v: SAVE_VERSION, p: player, ms: mapState, ticks: state.ticks }); }
-    finally { if (_sv2 && _sv2.length) player.summonsV2 = _sv2; }
+    finally { if (_sv2 && _sv2.length) player.summonsV2 = _sv2; if (_gv2 && _gv2.length) player.guardsV2 = _gv2; }
 }
 function saveGame() {
     // 死亡狀態不寫檔：避免把 player.dead=true 存進去，導致下次讀檔卡在死亡狀態而不出怪。
@@ -1645,6 +1648,8 @@ function loadGame() {
         if(player.charmed === undefined) player.charmed = null;   // 相容舊存檔：迷魅獨立槽位
         if(player.summon && ['sk_zombie', 'sk_elf_summon', 'sk_elf_summon2'].includes(player.summon.skId)) player.summon = null;   // 🧟 v3.2.21 造屍術/屬性精靈改走 v2 實體制：清除舊管線殘留（勾選仍在→v2 自動重新召喚）
         player.summonsV2 = [];   // 🧙 v3.2.40 稽核修：v2 召喚實體不入檔（本行清 v3.2.39 以前舊檔殘留·防改名 null-deref）·勾選仍在→自動重施
+        player.guardsV2 = [];    // 🏰 城堡護衛實體不入檔（讀檔後 castleGuardSync 依血盟名冊重建）
+        if (player.castleGuard !== undefined) delete player.castleGuard;   // 🏰 v3.7.96 舊「承擔傷害的城堡護衛」已移除→清掉舊存檔殘留欄位
         if(player.summon && typeof refreshSummonBalance === 'function') refreshSummonBalance(player.summon, player);   // 召喚平衡改版：既有存檔中的召喚物同步新階級倍率、穿透與技能間隔
         if(!player.summon && player.buffs) {
             (player.skills || []).forEach(s => { if(DB.skills[s] && DB.skills[s].summon) player.buffs[s] = 0; });

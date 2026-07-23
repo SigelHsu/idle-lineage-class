@@ -1246,7 +1246,6 @@ function _enemyPhysicalAttackInner(mob, idx, stunChance = 0, atkDmg = null, atkD
 
         totalDmg = Math.floor(totalDmg * mobRageDmgMult(mob));   // 🔥 HP<門檻：一般攻擊／連擊最終傷害倍率
         totalDmg = Math.max(1, totalDmg);
-        totalDmg = castleGuardAbsorb(totalDmg, 'phys');   // 🏰 肯特城護衛：承擔 10% 一般攻擊
         totalDmg = Math.floor(totalDmg * riftDamageMult());   // 🌀 時空裂痕 30 分後每分鐘 +20% 怪物攻擊力
         totalDmg = Math.max(0, Math.floor(totalDmg * raceDrMult(player, mob)));   // 🏺 v3.7.52 隨從的護身斗篷：受拉斯塔巴德敵人傷害 -20%（物理）
         totalDmg = Math.max(0, Math.floor(totalDmg * antHelperDrMult()));   // 🐉 v3.7.57 助戰者「護衛」減免（物理）
@@ -1408,21 +1407,26 @@ function enemyAttackChooseVictim(mob, idx) {
     // 🧙 v3.2.21 召喚物 v2 加入受害者池（可被打死→全滅自動重施）：權重見下方 _sumW——v3.2.81 召喚術/造屍術＝4·屬性精靈＝3（原全 3）
     let sums = (typeof summonV2List === 'function') ? summonV2List().filter(s => s && !s._downed && (s.hp || 0) > 0) : [];
     if (typeof mercSummonList === 'function') sums = sums.concat(mercSummonList());   // 🧱 v3.4.50 傭兵召喚物（無 sprite·有血量）也入受害者池·受擊走同一 enemyAttackSummon
-    if (!allies.length && !pets.length && !sums.length && !_hasAggroHide(player)) { enemyPhysicalAttack(mob, idx); return; }   // 無傭兵無寵物無召喚且玩家未裝孵育巢：照舊打玩家（快速路徑）
+    let guards = (typeof guardAliveList === 'function') ? guardAliveList() : [];   // 🏰 城堡護衛加入受害者池（可被打→30 秒自動復活）
+    if (!allies.length && !pets.length && !sums.length && !guards.length && !_hasAggroHide(player)) { enemyPhysicalAttack(mob, idx); return; }   // 無傭兵無寵物無召喚無護衛且玩家未裝孵育巢：照舊打玩家（快速路徑）
     let pool = aggroVictimPool(allies);   // 🏺 聖甲蟲的孵育巢：未裝備者優先被指定攻擊（寵物無裝備·不參與孵育巢過濾）
     allies = pool.allies;
-    let _petW = petAggroWeight, _sumW = summonAggroWeight;   // 🐾🧙 v3.2.82 改用模組共用權重（含四寵覆寫·與魔法受害者池一致）
-    let pw = pool.playerIn ? mercAggroWeight(player) : 0;
-    let total = pw; for (let a of allies) total += mercAggroWeight(a);
-    for (let p of pets) total += _petW(p);
-    for (let s of sums) total += _sumW(s);
+    let _petW = petAggroWeight, _sumW = summonAggroWeight, _gW = (typeof guardAggroWeight === 'function') ? guardAggroWeight : (() => 4);   // 🐾🧙🏰 v3.2.82 模組共用權重
+    // 🎯 v3.7.97 仇恨制：選敵權重＝baseThreat×K + 累積仇恨（累積恆 0 時＝舊靜態權重比例·零風險回退）。base 仍走上面各 aggroWeight。
+    let _tw = (typeof victimThreatWeight === 'function') ? victimThreatWeight : (m, e, b) => b;
+    let pw = pool.playerIn ? _tw(mob, player, mercAggroWeight(player)) : 0;
+    let total = pw; for (let a of allies) total += _tw(mob, a, mercAggroWeight(a));
+    for (let p of pets) total += _tw(mob, p, _petW(p));
+    for (let s of sums) total += _tw(mob, s, _sumW(s));
+    for (let g of guards) total += _tw(mob, g, _gW(g));
     if (total <= 0) { enemyPhysicalAttack(mob, idx); return; }
     let r = Math.random() * total;
     r -= pw;
     if (r < 0) { enemyPhysicalAttack(mob, idx); return; }   // 抽中玩家
-    for (let a of allies) { r -= mercAggroWeight(a); if (r < 0) { enemyAttackAlly(mob, a); return; } }
-    for (let p of pets) { r -= _petW(p); if (r < 0) { if (typeof enemyAttackPet === 'function') enemyAttackPet(mob, p); else enemyPhysicalAttack(mob, idx); return; } }
-    for (let s of sums) { r -= _sumW(s); if (r < 0) { if (typeof enemyAttackSummon === 'function') enemyAttackSummon(mob, s); else enemyPhysicalAttack(mob, idx); return; } }
+    for (let a of allies) { r -= _tw(mob, a, mercAggroWeight(a)); if (r < 0) { enemyAttackAlly(mob, a); return; } }
+    for (let p of pets) { r -= _tw(mob, p, _petW(p)); if (r < 0) { if (typeof enemyAttackPet === 'function') enemyAttackPet(mob, p); else enemyPhysicalAttack(mob, idx); return; } }
+    for (let s of sums) { r -= _tw(mob, s, _sumW(s)); if (r < 0) { if (typeof enemyAttackSummon === 'function') enemyAttackSummon(mob, s); else enemyPhysicalAttack(mob, idx); return; } }
+    for (let g of guards) { r -= _tw(mob, g, _gW(g)); if (r < 0) { if (typeof enemyAttackGuard === 'function') enemyAttackGuard(mob, g); else enemyPhysicalAttack(mob, idx); return; } }
     // Floating-point fallback must respect aggro hiding and keep pets in the candidate pool.
     if (pool.playerIn) enemyPhysicalAttack(mob, idx);
     else if (allies.length) enemyAttackAlly(mob, allies[allies.length - 1]);
@@ -1795,27 +1799,34 @@ function castMobMagic(mob, sk) {
     let pets = (typeof petsOutList === 'function') ? petsOutList().filter(p => p && !p._downed && (p.hp || 0) > 0) : [];
     let sums = (typeof summonV2List === 'function') ? summonV2List().filter(s => s && !s._downed && (s.hp || 0) > 0) : [];   // 🧙 v3.2.82 召喚物加入魔法受害者池
     if (typeof mercSummonList === 'function') sums = sums.concat(mercSummonList());   // 🧱 v3.4.50 傭兵召喚物也入魔法受害者池（AOE 波及＋傷害型單體加權·applyMobMagicToSummon 通用）
+    let guards = (typeof guardAliveList === 'function') ? guardAliveList() : [];   // 🏰 城堡護衛（同召喚物：純 CC/DoT 對其無效·僅傷害型單體加權·全體型一律波及）
     let petWeight = petAggroWeight;   // 🐾 v3.2.82 共用模組權重（含四寵覆寫）
+    let _gW = (typeof guardAggroWeight === 'function') ? guardAggroWeight : (() => 4);
     let sumIn = !!sk.dmg && sums.length;   // 🧙 v3.2.82 召喚物僅「傷害型魔法」納入單體加權池（召喚物無狀態系統→純 CC/DoT 不重導向·以免免疫怪魔法變成召喚物 CC 海綿）；全體型一律波及（AOE 分支·純狀態對其自然無效）
-    if ((typeof MOB_PARTY_AOE_SKILLS !== 'undefined') && MOB_PARTY_AOE_SKILLS.has(sk.skn)) {   // 全體：玩家＋全部非倒地傭兵/寵物/召喚物
+    let guardIn = !!sk.dmg && guards.length;   // 🏰 護衛同上（無狀態系統）
+    if ((typeof MOB_PARTY_AOE_SKILLS !== 'undefined') && MOB_PARTY_AOE_SKILLS.has(sk.skn)) {   // 全體：玩家＋全部非倒地傭兵/寵物/召喚物/護衛
         if (!player.dead) applyMobMagic(mob, sk);
         for (let a of allies) { if (mob.curHp <= 0) break; applyMobMagicToAlly(mob, sk, a); }
         for (let p of pets) { if (mob.curHp <= 0) break; if (typeof applyMobMagicToPet === 'function') applyMobMagicToPet(mob, sk, p); }
         for (let s of sums) { if (mob.curHp <= 0) break; if (typeof applyMobMagicToSummon === 'function') applyMobMagicToSummon(mob, sk, s); }   // 🧙 v3.2.82 全體魔法波及召喚物（只吃傷害·純狀態內部略過）
+        for (let g of guards) { if (mob.curHp <= 0) break; if (typeof applyMobMagicToGuard === 'function') applyMobMagicToGuard(mob, sk, g); }   // 🏰 全體魔法波及護衛
         return;
     }
-    if (!allies.length && !pets.length && !sumIn) { applyMobMagic(mob, sk); return; }
+    if (!allies.length && !pets.length && !sumIn && !guardIn) { applyMobMagic(mob, sk); return; }
     let pool = aggroVictimPool(allies);   // 🏺 聖甲蟲的孵育巢：單體指定魔法同樣「未裝備者優先」（全體魔法走上方 AOE 分支不受影響）
     allies = pool.allies;
-    let pw = pool.playerIn ? mercAggroWeight(player) : 0, total = pw; for (let a of allies) total += mercAggroWeight(a);
-    for (let p of pets) total += petWeight(p);
-    if (sumIn) for (let s of sums) total += summonAggroWeight(s);   // 🧙 v3.2.82 傷害型魔法：召喚物入池
+    let _tw = (typeof victimThreatWeight === 'function') ? victimThreatWeight : (m, e, b) => b;   // 🎯 v3.7.97 仇恨制：單體魔法選敵同走 base×K+累積
+    let pw = pool.playerIn ? _tw(mob, player, mercAggroWeight(player)) : 0, total = pw; for (let a of allies) total += _tw(mob, a, mercAggroWeight(a));
+    for (let p of pets) total += _tw(mob, p, petWeight(p));
+    if (sumIn) for (let s of sums) total += _tw(mob, s, summonAggroWeight(s));   // 🧙 v3.2.82 傷害型魔法：召喚物入池
+    if (guardIn) for (let g of guards) total += _tw(mob, g, _gW(g));   // 🏰 傷害型魔法：護衛入池
     if (total <= 0) { applyMobMagic(mob, sk); return; }
     let r = Math.random() * total; r -= pw;
     if (r < 0) { applyMobMagic(mob, sk); return; }
-    for (let a of allies) { r -= mercAggroWeight(a); if (r < 0) { applyMobMagicToAlly(mob, sk, a); return; } }
-    for (let p of pets) { r -= petWeight(p); if (r < 0) { if (typeof applyMobMagicToPet === 'function') applyMobMagicToPet(mob, sk, p); return; } }
-    if (sumIn) for (let s of sums) { r -= summonAggroWeight(s); if (r < 0) { if (typeof applyMobMagicToSummon === 'function') applyMobMagicToSummon(mob, sk, s); return; } }   // 🧙 v3.2.82
+    for (let a of allies) { r -= _tw(mob, a, mercAggroWeight(a)); if (r < 0) { applyMobMagicToAlly(mob, sk, a); return; } }
+    for (let p of pets) { r -= _tw(mob, p, petWeight(p)); if (r < 0) { if (typeof applyMobMagicToPet === 'function') applyMobMagicToPet(mob, sk, p); return; } }
+    if (sumIn) for (let s of sums) { r -= _tw(mob, s, summonAggroWeight(s)); if (r < 0) { if (typeof applyMobMagicToSummon === 'function') applyMobMagicToSummon(mob, sk, s); return; } }   // 🧙 v3.2.82
+    if (guardIn) for (let g of guards) { r -= _tw(mob, g, _gW(g)); if (r < 0) { if (typeof applyMobMagicToGuard === 'function') applyMobMagicToGuard(mob, sk, g); return; } }   // 🏰 護衛
     if (pool.playerIn) applyMobMagic(mob, sk);
     else if (allies.length) applyMobMagicToAlly(mob, sk, allies[allies.length - 1]);
     else if (pets.length && typeof applyMobMagicToPet === 'function') applyMobMagicToPet(mob, sk, pets[pets.length - 1]);
@@ -2376,7 +2387,6 @@ function _applyMobMagicInner(mob, sk) {
           dmg = Math.floor(dmg * _drMult); }
         dmg = Math.floor(dmg * mobRageDmgMult(mob));   // 🔥 HP<門檻：技能傷害倍率
         dmg = Math.max(1, dmg);
-        dmg = castleGuardAbsorb(dmg, 'magic');   // 🏰 風木城護衛：承擔 10% 魔法攻擊
         dmg = Math.floor(dmg * riftDamageMult());   // 🌀 時空裂痕 30 分後每分鐘 +20% 怪物技能傷害
 
         dmg = Math.max(0, Math.floor(dmg * raceDrMult(player, mob)));   // 🏺 v3.7.52 隨從的護身斗篷：受拉斯塔巴德敵人傷害 -20%（魔法·固定傷害亦適用）

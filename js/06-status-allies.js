@@ -3020,7 +3020,8 @@ function alliesTick() {
             }
         }
         } finally { if (_iAura && _iBase && (ally._recompN || 0) === _iRn) { ally.d.extraDmg = _iBase.ed; ally.d.extraHit = _iBase.eh; ally.d.magicDmg = _iBase.md; }   // 🔮 還原幻覺光環（若本回合發生升級重算→ally.d 已就地重建·跳過還原·避免把光環當基底扣掉）
-                   _dpsAllyTurn = false; let _ad = _dpsDealt(_dpsASnap); if (_ad > 0) _dpsAddAlly(ally, _ad); }   // 🎯 DPS：結算該傭兵本回合輸出
+                   _dpsAllyTurn = false; let _ad = _dpsDealt(_dpsASnap); if (_ad > 0) _dpsAddAlly(ally, _ad);
+                   if (typeof threatCommitDiff === 'function') threatCommitDiff(_dpsASnap, ally); }   // 🎯 DPS＋v3.7.97 仇恨：逐傭兵回合掉血→記給該傭兵（threatMult＝職業×武器）
     });
 }
 // 🤝 Phase 3：傭兵自動治癒——若已設定治癒魔法且任一受益者低於門檻，施放舊版骰數治癒；團補逐人獨立擲骰，生命之泉補滿最低者。
@@ -3080,6 +3081,7 @@ function allyTryHeal(ally) {
     }
     // 🎬 v3.0.95 傭兵治癒視覺回饋（用戶反映「沒動作也沒效果」·數值其實有補但零視覺）：①施放者播施法動作（原本傭兵治癒完全無動畫）②治癒特效疊在被治癒者 sprite 身上（無 sprite→戰鬥區預設錨點；未註冊技能名靜默略過）
     if (typeof _allySpriteTrigger === 'function') _allySpriteTrigger(ally, 'skill', sk.n);
+    if (typeof threatHeal === 'function') threatHeal(ally, _actual);   // 🎯 v3.7.97 仇恨制：傭兵治癒＝實際回復量×0.5 記給該傭兵（overheal 不算·_actual 已排除）
     if (typeof playSelfFx === 'function') { try { playSelfFx(sk.n, (typeof _partyMemberRect === 'function') ? _partyMemberRect(lowest) : null); } catch (e) {} }
     if (sk.groupHeal) logCombat(`<span class="text-emerald-300 font-bold">協力·${ally._allyName}</span> 施放 ${sk.n}，立即治癒全隊 ${_hit} 名成員，共恢復 ${_actual} 點 HP。`, 'heal', 'mercenary');
     else { let _who = (typeof _supName === 'function') ? _supName(lowest) : ((lowest === player) ? (player.name || '你') : ('協力·' + lowest._allyName)); logCombat(`<span class="text-emerald-300 font-bold">協力·${ally._allyName}</span> 施放 ${sk.n}，為 ${_who} 恢復 ${_actual} 點 HP。`, 'heal', 'mercenary'); }

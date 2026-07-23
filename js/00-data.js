@@ -1,6 +1,6 @@
 ﻿/** 遊戲核心資料庫 */
 // 🏷️ 遊戲版本號（顯示於登入頁面下方·單一真相來源）：更新版本時只改這一行，登入頁面自動同步。
-const GAME_VERSION = 'v3.7.95';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
+const GAME_VERSION = 'v3.7.97';   // 🏷️ 版本號：末段 0~99 線性遞增，達 100 進位（中位 +1、末段歸 0）
 // ===== 💾 存檔壓縮（LZString compressToUTF16/decompressFromUTF16·MIT, Pieroxy）：localStorage 內部以 UTF-16 壓縮，省 ~89%，繞過 5MB 上限 =====
 //  ⚠️ 只壓 localStorage（存檔位/倉庫/共用桶/_bak）；匯出檔維持明文 JSON（可攜·importSave 用 JSON.parse 驗證）。_lzGet 相容舊明文存檔（無 'LZ1:' 前綴→原樣回傳）。
 var LZString = (function () {
@@ -2513,7 +2513,7 @@ const DB = {
                 { id: "npc_ally_b", n: "傭兵公會", title: "協力", type: "ally", d: "傭兵公會替你牽起命運的絲線，召喚其他存檔位的角色一起作戰。" },
                 { id: "npc_ismael", n: "伊賽馬利", title: "交換物品", type: "exchange", d: "伊賽馬利精於以物易物，以卷軸或金幣交換稀有的祝福卷軸與飾品卷軸。" },
                 { id: "npc_pandora", n: "潘朵拉", title: "黑市", type: "exchange", d: "潘朵拉的黑市藏匿著來路不明的寶物，每 10 分鐘隨機上架一件商品，可直接購買。" },
-                { id: "npc_kent_guard", n: "肯特守衛隊長", title: "城堡護衛", type: "castleguard", d: "肯特守衛隊長以盾為誓，雇用守衛替你承擔 10% 一般攻擊傷害（HP 低於設定門檻時發動）。" },
+                { id: "npc_kent_guard", n: "肯特守衛隊長", title: "城堡護衛", type: "castleguard", d: "肯特守衛隊長統領藍色鯊魚部隊，招募血厚耐打的護衛與你並肩作戰（死亡 30 秒自動復活）。" },
                 { id: "npc_esti", n: "依詩蒂", title: "血盟", type: "pledge", d: "依詩蒂低聲訴說著血盟的古老誓言，為你尋找以血為盟的夥伴。" },
                 { id: "npc_tros", n: "特羅斯", title: "血盟", type: "pledge", d: "特羅斯握劍而立，為你尋找以血為盟的夥伴。" },
                 { id: "npc_obel", n: "奧貝勒", title: "魔物追蹤", type: "exchange", d: "奧貝勒是追蹤魔物的老手，花費金幣追蹤指定地區的特定魔物。" }
@@ -2524,7 +2524,7 @@ const DB = {
             npcs: [
                 { id: "npc_landish", n: "藍迪西", title: "雜貨商人", type: "shop", d: "風木城易主後，藍迪西重新支起攤位——攻下風木城後開放的雜貨商。" },
                 { id: "npc_wh_windwood", n: "寶金", title: "倉庫", type: "warehouse", d: "寶金在風木城的庫房裡清點貨物，替你存放物品與金幣，四個存檔角色共用。" },
-                { id: "npc_ww_guard", n: "風木傭兵隊長", title: "城堡護衛", type: "castleguard", d: "風木傭兵隊長深諳抵禦法術之道，雇用守衛替你承擔 10% 魔法攻擊傷害（HP 低於設定門檻時發動）。" },
+                { id: "npc_ww_guard", n: "風木傭兵隊長", title: "城堡護衛", type: "castleguard", d: "風木傭兵隊長統領暴風之刃部隊，招募攻速最快、輸出最高的護衛與你並肩作戰（死亡 30 秒自動復活）。" },
                 { id: "npc_esti", n: "依詩蒂", title: "血盟", type: "pledge", d: "依詩蒂低聲訴說著血盟的古老誓言，為你尋找以血為盟的夥伴。" },
                 { id: "npc_tros", n: "特羅斯", title: "血盟", type: "pledge", d: "特羅斯握劍而立，為你尋找以血為盟的夥伴。" },
                 { id: "npc_hert", n: "赫特", title: "魔物追蹤", type: "exchange", d: "赫特循著魔物的氣息而行，花費金幣追蹤指定地區的特定魔物。" }
@@ -2536,7 +2536,7 @@ const DB = {
                 { id: "npc_suvan", n: "須凡", title: "雜貨商人", type: "shop", d: "海音城歸入麾下後，須凡在港邊開張——攻下海音城後開放的雜貨商。" },
                 { id: "npc_wh_heine", n: "哈金", title: "倉庫", type: "warehouse", d: "哈金守著海音城的倉庫，替你存放物品與金幣，四個存檔角色共用。" },
                 { id: "npc_ally_heinec", n: "傭兵公會", title: "協力", type: "ally", d: "傭兵公會替你牽起命運的絲線，召喚其他存檔位的角色一起作戰。" },
-                { id: "npc_heine_guard", n: "海音神官隊長", title: "城堡治療", type: "castleguard", d: "海音神官隊長以聖光庇佑同袍，雇用神官在你 HP 低於設定門檻時，每 5 秒為你施放治癒術。" },
+                { id: "npc_heine_guard", n: "海音神官隊長", title: "城堡護衛", type: "castleguard", d: "海音神官隊長統領毒蛇之牙部隊，招募攻守均衡的護衛與你並肩作戰（死亡 30 秒自動復活）。" },
                 { id: "npc_esti", n: "依詩蒂", title: "血盟", type: "pledge", d: "依詩蒂低聲訴說著血盟的古老誓言，為你尋找以血為盟的夥伴。" },
                 { id: "npc_tros", n: "特羅斯", title: "血盟", type: "pledge", d: "特羅斯握劍而立，為你尋找以血為盟的夥伴。" },
                 { id: "npc_diren", n: "帝倫", title: "魔物追蹤", type: "exchange", d: "帝倫熟知各地魔物的蹤跡，花費金幣追蹤指定地區的特定魔物。" }

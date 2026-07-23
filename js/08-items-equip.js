@@ -1453,19 +1453,7 @@ function _updateUIImpl() {
         document.getElementById('mv-mp-fill').style.width = `${Math.max(0, (player.mp/player.mmp)*100)}%`;
         document.getElementById('mv-mp-txt').innerText = `${Math.floor(player.mp)}/${Math.floor(player.mmp)}`;
     } }
-    // 🏰 城堡護衛：狀態欄依類型顯示傭兵樣式的 HP／MP
-    { let _gr = document.getElementById('castle-guard-row'), _g = player.castleGuard;
-      if (_gr) { if (_g && siegeVictoryActive()) { _gr.classList.remove('hidden');
-          let _heal = _g.mode === 'heal';
-          let _cur = _heal ? _g.mp : _g.hp, _max = _heal ? _g.maxMp : _g.maxHp;
-          document.getElementById('cg-name').innerText = _g.name + (_g.disabled ? (_heal ? '(耗盡)' : '(力竭)') : '');
-          document.getElementById('cg-txt').innerText = `${Math.floor(_cur)}/${Math.floor(_max)}`;
-          let _bar = document.getElementById('cg-bar');
-          _bar.className = `bar-fill ${_heal ? 'bg-blue-600' : 'bg-red-600'}`;
-          _bar.parentElement.title = _heal ? 'MP' : 'HP';
-          _bar.style.width = `${Math.max(0, (_cur/_max)*100)}%`;
-        } else { _gr.classList.add('hidden'); } } }
-    
+    // 🏰 v3.7.96 城堡護衛 v2：改為隊伍面板實體 HP 卡（renderGuardTeamHTML·js/31）；舊「主狀態欄承擔傷害護衛條」已移除。
     let nxtE = getExpReq(player.lv);
     let pct = player.lv >= 100 ? 100 : (nxtE > 0 && isFinite(nxtE) ? (player.exp / nxtE) * 100 : 0);
     document.getElementById('txt-exp').innerText = `${pct.toFixed(2)}%`;

@@ -529,6 +529,7 @@ function castSkillInner(skId) {
                 let _after = (typeof _supHp === 'function') ? _supHp(c) : (c === player ? player.hp : (c.curHp != null ? c.curHp : c.hp));
                 _total += Math.max(0, _after - _before); _hit++;
             });
+            if (typeof threatHeal === 'function') threatHeal(player, _total);   // 🎯 v3.7.97 仇恨制：玩家全體治癒＝實際回復×0.5 記給玩家（overheal 不算）
             logCombat(`施放 ${sk.n}，立即治癒全隊 ${_hit} 名成員，共恢復 ${_total} 點 HP。${sk.msg || ''}`, 'heal');
         } else {
             let heal = rollHealingSpell(sk, player.d, player, _hTgt);
@@ -537,6 +538,7 @@ function castSkillInner(skId) {
             if (typeof _supHeal === 'function') _supHeal(_hTgt, heal); else if (_hTgt === player) player.hp = Math.min(player.mhp, player.hp + heal); else if (_hTgt.curHp != null) _hTgt.curHp = Math.min(_hTgt.mhp, (_hTgt.curHp || 0) + heal); else _hTgt.hp = Math.min(_hTgt.mhp, (_hTgt.hp || 0) + heal);
             let _after = (typeof _supHp === 'function') ? _supHp(_hTgt) : (_hTgt === player ? player.hp : (_hTgt.curHp != null ? _hTgt.curHp : _hTgt.hp));
             let _actual = Math.max(0, _after - _before);
+            if (typeof threatHeal === 'function') threatHeal(player, _actual);   // 🎯 v3.7.97 仇恨制：玩家單體治癒＝實際回復×0.5 記給玩家
             logCombat(`施放 ${sk.n}，恢復了${_hTgt === player ? '' : (' ' + ((typeof _supName === 'function') ? _supName(_hTgt) : ('協力·' + _hTgt._allyName)))} ${_actual} 點 HP。${sk.msg || ''}`, 'heal');
         }
         return true;

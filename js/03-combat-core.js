@@ -548,7 +548,6 @@ function tick() {
     }
     _combatSrc = null;   // ⚔️ 戰鬥日誌來源：每 tick 起始重置（玩家攻擊/施法/DoT 等預設依顏色type推定；友方派發點會各自設定）
     _dpsAllyTurn = false; let _dpsPlayerSnap = _dpsSnap();   // 🎯 DPS：玩家階段起點快照（至怪物行動前的所有掉血＝玩家輸出·含自動施法/持續增益）
-    castleGuardTick();   // 🏰 城堡護衛：回血/力竭恢復/城堡擁有結束自動解散
     for(let k in player.manualCd) if(player.manualCd[k] > 0) player.manualCd[k]--;
     
     let canAct = true;
@@ -770,6 +769,7 @@ function tick() {
     }
     
     { let _pd = _dpsDealt(_dpsPlayerSnap); if (_pd > 0) _dps.player += _pd; }   // 🎯 DPS：結算玩家階段輸出（攻擊／自動施法／持續增益）；怪物中毒/出血 DoT 於 processMobStatusTick 另計入玩家
+    if (typeof threatCommitDiff === 'function') threatCommitDiff(_dpsPlayerSnap, player);   // 🎯 v3.7.97 仇恨制：玩家階段整段掉血→記給玩家（threatMult＝職業×武器·同快照差分）
     for(let i=0; i<mapState.mobs.length; i++) {   // 🆕 含後排(3,4)：所有在場怪皆會行動攻擊
         let m = mapState.mobs[i];
         if(!m) continue;
@@ -883,7 +883,7 @@ function tick() {
     }
 
     if(!player.dead) { let _auraSnap = _dpsSnap(); try { relicAuraTick(); } catch(e){} let _auraDealt = _dpsDealt(_auraSnap); if(_auraDealt > 0) _dps.player += _auraDealt; }   // 🏺 蠅災的詛咒等 auraDmg：玩家階段週期全體固定魔傷（自帶快照→正確計入玩家 DPS·修 code-review#1）
-    if(!player.dead) { _combatSrc = 'summon'; let _dpsSumSnap = _dpsSnap(); summonTick(player.summon, () => { player.summon = null; }); summonTick(player.charmed, () => { player.charmed = null; }); if (typeof summonV2Tick === 'function') { try { summonV2Tick(); } catch (e) {} }   /* 🧙 v3.2.19 召喚術 v2（多實體·js/23） */ if(player.cls === 'illusion') { cubeTick(); illuSummonTick(); } { let _sd = _dpsDealt(_dpsSumSnap); if (_sd > 0) _dps.summon += _sd; }   /* 🎯 DPS：召喚（玩家召喚/迷魅/幻術立方）輸出 */ _combatSrc = 'mercenary'; alliesTick(); _combatSrc = null; }   // ⚔️ 召喚(含迷魅)/傭兵 戰鬥訊息來源情境；🔮 幻術士立方週期效果＋幻術精通幻象
+    if(!player.dead) { _combatSrc = 'summon'; let _dpsSumSnap = _dpsSnap(); summonTick(player.summon, () => { player.summon = null; }); summonTick(player.charmed, () => { player.charmed = null; }); if (typeof summonV2Tick === 'function') { try { summonV2Tick(); } catch (e) {} }   /* 🧙 v3.2.19 召喚術 v2（多實體·js/23） */ if (typeof castleGuardTick === 'function') { try { castleGuardTick(); } catch (e) {} }   /* 🏰 城堡護衛 v2（可招募協同角色·js/31）：與召喚同階段·輸出計入 summon 桶 */ if(player.cls === 'illusion') { cubeTick(); illuSummonTick(); } { let _sd = _dpsDealt(_dpsSumSnap); if (_sd > 0) _dps.summon += _sd; }   /* 🎯 DPS：召喚（玩家召喚/迷魅/幻術立方/城堡護衛）輸出 */ _combatSrc = 'mercenary'; alliesTick(); _combatSrc = null; }   // ⚔️ 召喚(含迷魅)/傭兵 戰鬥訊息來源情境；🔮 幻術士立方週期效果＋幻術精通幻象
     if(!player.dead) pledgeBlessTick();   // 生命的祝福：場上血盟怪物持續治療
     // HoT 持續回復（體力回復術 / 生命的祝福）
 // 💤 【休眠機制】團隊 HoT（持續回復）：整條鏈路目前不可達——DB.skills 內已無任何技能宣告 hot/autoBuff
