@@ -919,7 +919,7 @@ function renderDorugaBell(div) {   // 🐉 NPC 多魯嘉貝爾：進入副本＋
     }).join('');
     div.innerHTML = `
       <div class="text-sm space-y-3">
-        <div class="text-slate-300">被侵蝕的龍之巢穴就在村外的地底深處。相同模式所有角色合計每天只能淨化一次（UTC+8 凌晨 12 點重置）；挑戰失敗不消耗次數。區內無法選擇地圖、無法使用傳送術與瞬間移動卷軸，也無法離線掛機。</div>
+        <div class="text-slate-300">被侵蝕的龍之巢穴就在村外的地底深處。相同模式所有角色合計每天只能淨化一次（UTC+8 凌晨 12 點重置）；挑戰失敗不消耗次數。區內無法選擇地圖，也無法使用傳送術與瞬間移動卷軸。</div>
         <button onclick="antharasEnter()" ${cleared ? 'disabled' : ''} class="btn w-full font-bold py-2 rounded ${cleared ? 'bg-slate-700 border-slate-600 opacity-60 cursor-not-allowed' : 'bg-amber-700 hover:bg-amber-600 border-amber-500'}">${cleared ? '今日已通關（明日凌晨重置）' : '🐉 進入 侵蝕的安塔瑞斯巢穴'}</button>
         <div class="border-t border-slate-700 pt-2"><div class="font-bold text-amber-300 mb-2">助戰者設定（最多 4 位·未雇傭角色）</div><div class="text-xs text-slate-400 mb-2">每次對話都會依來源角色的最新存檔刷新助戰能力；若角色遭刪除或在同一存檔位重建，將自動解除。助戰限制只套用目前角色的傭兵名單，不影響同模式其他角色。</div>${rows}</div>
       </div>`;

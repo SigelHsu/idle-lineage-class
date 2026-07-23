@@ -303,70 +303,36 @@ function migrateSaves(){
     let oldS = _lsGet('lineage_idle_save');
     if(oldS && !_lsGet('lineage_idle_save_1')) _lzSetStoredRaw('lineage_idle_save_1', oldS);
 }
+// 🗑️ v3.7.94 清掉離線掛機（js/27，已整檔刪除）留下的 localStorage 殘骸：
+//    checkpoint／catchup／claim／profile 四種 key 都以 `lineage_idle_offline_v1_` 開頭，現在沒有任何讀取者，
+//    留著只是白佔配額（本專案的 localStorage 配額本來就吃緊）。存檔內的 player.offlineHunt 由 loadGame 順手刪除。
+(function _purgeOfflineLeftovers(){
+    try {
+        if(typeof localStorage === 'undefined') return;
+        Object.keys(localStorage)
+            .filter(k => String(k).indexOf('lineage_idle_offline_v1_') === 0)
+            .forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
+    } catch(e){}
+})();
 // 🗑️ v3.5.83 移除 anySaveExists()：唯一用途是顯示主選單的 #btn-load，而該按鈕早已從 HTML 移除
 //    （主選單只剩「開始遊戲」→ openLoadSelect），四處 `btnLoad &&` 守衛全部恆為 null 短路。
-// 🔋「掛機中」徽章資料源（v3.6.97）：改與 js/27 離線結算同源——checkpoint（每 30 秒心跳＋關頁必寫·永遠較新）
-//    優先，退回存檔內 offlineHunt 快照。⚠️ 舊制只讀存檔快照：存檔只在 saveGame 時更新，非正常關閉
-//    （背景分頁被回收/當機）時停在數分鐘前的狀態 → 徽章與實際結算對不上。
-function _slotOfflineMeta(n, sum){
+// 🗑️ v3.7.94 用戶指定移除離線掛機（js/27 整檔刪除）：登入畫面的「掛機中」徽章、離線收益明細與其
+//    checkpoint 資料源（_slotOfflineStatusNow／_slotOfflineDuration／savedHunt／offlineId）一併移除。
+//    這個位置現在只剩「擔任傭兵」徽章，故 meta 縮到 mercEmployerOfSlot 需要的最小身分欄位。
+function _slotBadgeMeta(n, sum){
     if(!sum) return null;
-    // 身分 key 與 js/27 _offlineIdentity 同式：enSeed 缺漏時退回「存檔位|名字|職業」（角色存於第 n 格＝當時的 currentSlot）
-    let id = encodeURIComponent(String(sum.enSeed || (n + '|' + (sum.name || '') + '|' + sum.rawCls)));
-    // 🧑‍🤝‍🧑 v3.7.85 「組隊中」徽章：存下問 mercEmployerOfSlot 需要的最小身分欄位（僱傭關係會變·每次刷新現查·不快取結果）
-    return { roleFp: sum.roleFp || '', offlineId: id, savedHunt: sum.offlineHunt || null,
-        slot: n, mercWho: { cls: sum.rawCls, name: sum.name, enSeed: sum.enSeed, classic: !!sum.classic } };
+    // 🧑‍🤝‍🧑 v3.7.85 「擔任傭兵」徽章：僱傭關係會變·每次刷新現查·不快取結果
+    return { slot: n, mercWho: { cls: sum.rawCls, name: sum.name, enSeed: sum.enSeed, classic: !!sum.classic } };
 }
-// 🧑‍🤝‍🧑 v3.7.85 該存檔位角色是否正受僱為別人的傭兵（受僱＝只能待安全區→不可能離線掛機，故與「掛機中」互斥、共用同一個位置）
+// 🧑‍🤝‍🧑 v3.7.85 該存檔位角色是否正受僱為別人的傭兵（受僱＝只能待安全區）
 function _slotPartyStatusNow(meta){
     if(!meta || !meta.mercWho || typeof mercEmployerOfSlot !== 'function') return null;
     try { return mercEmployerOfSlot(meta.slot, meta.mercWho); } catch(e){ return null; }
 }
-function _slotOfflineStatusNow(meta, activeRoleFps){
-    if(!meta) return null;
-    if(meta.roleFp && activeRoleFps && activeRoleFps.has(String(meta.roleFp))) return null;   // 有分頁正在玩＝補幀軌，不是離線掛機
-    let src = meta.savedHunt;
-    let since = src ? (Number(src.awaySince) || 0) : 0;
-    try {
-        let cp = JSON.parse(_lsGet('lineage_idle_offline_v1_checkpoint_' + meta.offlineId) || 'null');
-        if(cp && typeof cp === 'object' && cp.snapshot && typeof cp.snapshot === 'object'
-            && (Number(cp.lastActive) || 0) >= ((src && Number(src.awaySince)) || 0)) {
-            src = cp.snapshot;
-            since = Math.max(Number(src.awaySince) || 0, Number(cp.lastActive) || 0);
-        }
-    } catch(e){}
-    if(!src || src.eligible !== true || !src.map) return null;
-    let prof = src.profile;
-    if(!prof || String(prof.map || '') !== String(src.map) || !(Number(prof.killsPerMin) > 0)) return null;
-    if(src.bossUnlocked === false && prof.bossRoom === true) return null;
-    return {
-        bossRoom: prof.bossRoom === true,
-        elapsedMs: Math.max(0, Date.now() - Math.max(0, since || Number(src.awaySince) || 0)),
-        mapName: String(src.mapName || prof.mapName || src.map || '狩獵區'),
-        expPer10: Math.max(0, Math.floor((Number(prof.expPerMin) || 0) * 10 * 0.70 + 1e-7)),
-        goldPer10: Math.max(0, Math.floor((Number(prof.goldPerMin) || 0) * 10 * 0.70 + 1e-7))
-    };
-}
-function _slotOfflineDuration(ms){
-    let totalSec = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
-    if(totalSec < 60) return totalSec + '秒';
-    let totalMin = Math.floor(totalSec / 60), days = Math.floor(totalMin / 1440);
-    let hours = Math.floor((totalMin % 1440) / 60), mins = totalMin % 60;
-    if(days > 0) return days + '天' + (hours ? hours + '時' : '');
-    if(hours > 0) return hours + '時' + (mins ? mins + '分' : '');
-    return totalMin + '分';
-}
-// 🧑‍🤝‍🧑 v3.7.85 第 2 參 party＝受僱中的僱主資料：與「掛機中」同一個位置（`.load-offline-badge` 頭頂置中），
-//    只換配色成紫色（`.load-badge-party`）＝與綠色的掛機中一眼可分。兩者天生互斥（受僱只能待安全區→ offlineHunt 不 eligible），故不會疊在一起。
-//    v3.7.86 用戶指定：主文字改「擔任傭兵」、拿掉下面那行副標（單行徽章）。
-function _slotOfflineStatusHtml(status, party){
-    if(!status && !party) return '';
-    // 受僱中一律以「擔任傭兵」為準：連下方的離線收益明細也不顯示（受僱＝不會離線掛機·顯示收益只會自相矛盾）。
-    if(party) return `<span class="load-offline-status"><span class="load-offline-badge load-badge-party"><strong>擔任傭兵</strong></span></span>`;
-    let fmt = n => Math.max(0, Math.floor(Number(n) || 0)).toLocaleString('zh-TW');
-    return `<span class="load-offline-status">`
-        + `<span class="load-offline-badge"><strong>${status.bossRoom ? '[BOSS] ' : ''}掛機中</strong><small>${_slotOfflineDuration(status.elapsedMs)}</small></span>`
-        + `<span class="load-offline-detail"><small>離線 / 10分</small><strong><b class="load-offline-exp">經 ${fmt(status.expPer10)}</b><b class="load-offline-gold">金 ${fmt(status.goldPer10)}</b></strong><em>${loadEsc(status.mapName)}</em></span>`
-        + `</span>`;
+// 立繪頭頂置中的單行徽章。class 名沿用 `.load-slot-badge`＋紫色 `.load-badge-party`（v3.7.94 由 .load-offline-* 更名）。
+function _slotBadgeHtml(party){
+    if(!party) return '';
+    return `<span class="load-slot-status"><span class="load-slot-badge load-badge-party"><strong>擔任傭兵</strong></span></span>`;
 }
 
 function _summaryFromRaw(s){
@@ -383,7 +349,6 @@ function _summaryFromRaw(s){
             classic: !!p.classicMode,
             avatar: p.avatar || null,
             enSeed: p.enSeed || '',
-            offlineHunt: (p.offlineHunt && typeof p.offlineHunt === 'object') ? p.offlineHunt : null,
             roleFp: _roleFingerprint(p),
             pledge: (typeof clanNameForPlayer === 'function' ? clanNameForPlayer(p) : '') || '',
             hp: p.hp || 0,
@@ -466,29 +431,39 @@ function _roleSaveAllowed(){
     return !stored || _roleFingerprint(stored) === fp;
 }
 setInterval(_roleSessionHeartbeat, 2000);
-// 🔄 登入畫面「掛機中」徽章活刷（v3.6.97）：其他分頁關頁除名／checkpoint 更新／TTL 過期都要即時反映在畫面上。
-//    只重算徽章、原地增刪 span——不整頁重繪（不打斷選取與立繪動畫），存檔面資料用 _loadSlotMeta 快取。
+// 🔄 登入畫面徽章活刷：只重算徽章、原地增刪 span——不整頁重繪（不打斷選取與立繪動畫），存檔面資料用 _loadSlotMeta 快取。
+//    🗑️ v3.7.94 移除離線掛機後這裡只剩「擔任傭兵」：僱主在別的分頁解散傭兵→這裡 2 秒內消失。
 setInterval(function(){
     let panel = document.getElementById('load-select-panel');
     if(!panel || panel.classList.contains('hidden')) return;
     let grid = document.getElementById('load-slot-grid');
     if(!grid) return;
-    const fps = new Set();
-    try { _roleOtherActiveSessions().forEach(s => { if(s && s.fp) fps.add(String(s.fp)); }); } catch(e){}
     grid.querySelectorAll('.load-slot-card[data-slot]').forEach(btn => {
-        let meta = _loadSlotMeta[Number(btn.getAttribute('data-slot'))];
-        let status = _slotOfflineStatusNow(meta, fps);
-        let party = _slotPartyStatusNow(meta);   // 🧑‍🤝‍🧑 v3.7.85 「組隊中」同樣活刷：僱主在別的分頁解散傭兵→這裡 2 秒內消失
-        let old = btn.querySelector('.load-offline-status');
-        if(status || party){
-            let html = _slotOfflineStatusHtml(status, party);
+        let party = _slotPartyStatusNow(_loadSlotMeta[Number(btn.getAttribute('data-slot'))]);
+        let old = btn.querySelector('.load-slot-status');
+        if(party){
+            let html = _slotBadgeHtml(party);
             if(old) old.outerHTML = html;
             else btn.insertAdjacentHTML('beforeend', html);
         } else if(old) old.remove();
     });
 }, 2000);
-if(typeof window !== 'undefined') window.addEventListener('beforeunload', _roleSessionForget);
-if(typeof window !== 'undefined') window.addEventListener('pagehide', _roleSessionForget);   // beforeunload 在背景分頁被關閉時常不觸發；bfcache 還原後心跳 2 秒內自動重新註冊
+// 💾 v3.7.94 關頁／切背景的最終存檔。
+//    ⚠️ **這段不是可有可無的**：離線掛機（js/27）被移除前，唯一的 visibilitychange／pagehide／beforeunload
+//    存檔掛點在 js/27 裡（_offlinePauseAndSave／_offlineCloseAndSave）。整檔刪掉而不補這段的話，
+//    自動存檔是每 5 分鐘一次 → 關分頁最多會吐掉 5 分鐘進度。
+//    __fb5CloseFlush＝繞過下方 saveGame 的「補跑期間延後存檔」閘（背景節流喚醒間 _tickDebt 常 ≥100ms，
+//    不繞過＝最終進度不落地）。旗標名沿用 v3.7.31，由此處設定與清除。
+function _flushSaveNow(){
+    if(typeof player === 'undefined' || !player || !player.cls || typeof saveGame !== 'function') return;
+    if(typeof window !== 'undefined') window.__fb5CloseFlush = true;
+    try { saveGame(); } catch(e) {}
+    finally { if(typeof window !== 'undefined') window.__fb5CloseFlush = false; }
+}
+if(typeof document !== 'undefined' && document.addEventListener)
+    document.addEventListener('visibilitychange', function(){ if(document.hidden) _flushSaveNow(); });
+if(typeof window !== 'undefined') window.addEventListener('beforeunload', function(){ _flushSaveNow(); _roleSessionForget(); });
+if(typeof window !== 'undefined') window.addEventListener('pagehide', function(){ _flushSaveNow(); _roleSessionForget(); });   // beforeunload 在背景分頁被關閉時常不觸發；bfcache 還原後心跳 2 秒內自動重新註冊
 
 // 🗑️ v3.5.83 移除 openSlotSelect／chooseSlot／slotBackToMenu 與 #slot-select-panel：
 //    主選單唯一入口早已是 openLoadSelect()（index.html「開始遊戲」），舊的兩段式存檔位面板不可達。
@@ -841,16 +816,7 @@ function loadBackToMenu(){
 
 function returnToCharacterSelect(){
     if(typeof player === 'undefined' || !player || !player.cls) return false;
-    let offlineEligible = false;
-    try {
-        if(typeof window.offlinePrepareCharacterSelect === 'function') {
-            offlineEligible = window.offlinePrepareCharacterSelect() === true;
-        } else if(typeof saveGame === 'function') {
-            saveGame();
-        }
-    } catch(e) {
-        try { if(typeof saveGame === 'function') saveGame(); } catch(_) {}
-    }
+    _flushSaveNow();   // 🗑️ v3.7.94 原本走 js/27 的 offlinePrepareCharacterSelect（存檔＋寫離線快照）；離線掛機移除後只留最終存檔
 
     if(typeof stopGameTimers === 'function') stopGameTimers();
     if(typeof state !== 'undefined' && state) state.running = false;
@@ -875,16 +841,12 @@ function returnToCharacterSelect(){
     _loadSelectedSlot = currentSlot;
     renderLoadSelect();
     try { if(typeof _bgmTick === 'function') { _bgmScene = null; _bgmTick(); } } catch(e) {}
-    return offlineEligible;
+    return true;
 }
 function renderLoadSelect(){
     const grid = document.getElementById('load-slot-grid');
     if(!grid) return;
     let html = '';
-    const activeRoleFps = new Set();
-    try {
-        _roleOtherActiveSessions().forEach(session => { if(session && session.fp) activeRoleFps.add(String(session.fp)); });
-    } catch(e){}
     const start = _loadPage * 4 + 1;
     for(let n = start; n <= start + 3; n++){
         const sum = slotSummary(n);
@@ -892,12 +854,11 @@ function renderLoadSelect(){
         const selected = n === _loadSelectedSlot;
         const empty = !sum;
         const frame = loadFirstFrame(key);
-        _loadSlotMeta[n] = _slotOfflineMeta(n, sum);
-        const offline = _slotOfflineStatusNow(_loadSlotMeta[n], activeRoleFps);
+        _loadSlotMeta[n] = _slotBadgeMeta(n, sum);
         const title = sum ? `角色 ${n} ${sum.cls} Lv.${sum.lv}` : `角色 ${n} 空`;
         html += `<button type="button" onclick="loadSelectSlot(${n})" data-slot="${n}" data-key="${key}" class="load-slot-card ${selected ? 'selected' : ''} ${empty ? 'empty' : 'filled'}" title="${loadEsc(title)}">`
             + `<img src="${loadFrameSrc(key, frame)}" alt="${loadEsc(title)}" draggable="false">`
-            + _slotOfflineStatusHtml(offline, _slotPartyStatusNow(_loadSlotMeta[n]))
+            + _slotBadgeHtml(_slotPartyStatusNow(_loadSlotMeta[n]))
             + `</button>`;
     }
     grid.innerHTML = html;
@@ -1481,7 +1442,7 @@ function saveGame() {
     //    killMob 的頭目存檔點每殺必全量存檔（sanitize＋LZ＋寫入）拖慢補跑並造成卡頓尖峰；
     //    補跑期間一律改記 _ffSavePending，還清後由 gameLoop 收尾的 takeCatchupSaveRequest 統一補存一次。
     if (typeof catchupActive === 'function' && catchupActive() && typeof deferCatchupSave === 'function'
-        && !(typeof window !== 'undefined' && window.__fb5CloseFlush)) return deferCatchupSave();   // 🔚 v3.7.31 __fb5CloseFlush＝關頁最終存檔（js/27 _offlineCloseAndSave）不延後
+        && !(typeof window !== 'undefined' && window.__fb5CloseFlush)) return deferCatchupSave();   // 🔚 v3.7.31 __fb5CloseFlush＝關頁/切背景的最終存檔（_flushSaveNow）不延後
 
     if (!_roleSaveAllowed()) {
         if(!_saveFailureNotified && typeof logSys === 'function') {
@@ -1623,6 +1584,7 @@ function loadGame() {
         //    舊文案多寫的「仍可用『刪除角色』清空」正好點名此情境唯一看不見的那顆按鈕，故移除。
         let d; try { d = JSON.parse(s); } catch(e){ alert('此存檔位的資料已毀損，無法載入。\n此欄位在載入畫面會顯示為空，請直接按「匯入進度」還原先前匯出的 .json 備份檔。'); return; }
         player = d.p; mapState = d.ms;
+        delete player.offlineHunt;   // 🗑️ v3.7.94 離線掛機已移除：舊存檔的逐地圖速率快照沒有讀取者，載入即丟掉（否則每次存檔都白帶一份）
         normalizeFacingRefsForSave();   // 舊存檔若含 v3.2.12 面向物件副本，載入時立即轉為 UID／隊員鍵並移除物件參照
         if (typeof applyGlobalAutoSellSettings === 'function') applyGlobalAutoSellSettings();   // 🔧 v2.6.91 功能5：載入角色時套用全域自動販賣設定（8 角色共用時覆蓋本檔規則）
         if (!player.enSeed) player.enSeed = 'es' + _seedHash((player.name || '') + '|' + (player.cls || '') + '|lz').toString(36);   // 🎲 舊存檔無強化種子：由角色名+職業決定論衍生（重匯入同一份舊檔也得相同種子→不能靠重匯入重洗強化）

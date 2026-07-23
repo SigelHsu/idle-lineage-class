@@ -309,9 +309,7 @@ function _ffFinishCatchup() {
     if (_needsSave) {
         try { _saveOk = saveGame() === true; } catch (e) {}
     }
-    if (_saveOk && typeof window !== 'undefined' && typeof window.offlineCatchupSaveCommitted === 'function') {
-        try { window.offlineCatchupSaveCommitted(); } catch (e) {}
-    }
+    // 🗑️ v3.7.94 移除 offlineCatchupSaveCommitted 呼叫：那是 js/27 離線掛機的「待結算補跑憑證」提交點，整套已刪除。
     if (_longCatchup) {
         try {
             let _gd = (player.gold || 0) - _acc.gold;
