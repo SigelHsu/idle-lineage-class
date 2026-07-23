@@ -409,6 +409,9 @@ function prideHasTalisman(tier, kinds) {
 }
 function mapOptDisabled(m) {
     if (m.disabled) return true;
+    // 🧑‍🤝‍🧑 v3.7.84 受僱為其他角色的傭兵期間＝只能停留在安全區 → 下拉中所有非 town_ 地圖一律灰階不可選
+    //    （與 changeMap 的 mercenaryRoleBattleBlocked 同一條規則·此處只是把它前推到 UI 上；快取版避免每個選項都掃 localStorage）
+    if (m.v && !String(m.v).startsWith('town_') && typeof mercRoleSafeAreaOnly === 'function' && mercRoleSafeAreaOnly()) return true;
     if (m.classicHide && player.classicMode) return true;   // 🔥 經典模式：席琳神殿不可進入（縱深防護，配合 populateMapSelect 隱藏選項）
     if (m.needKey && !player.inv.some(i => i.id === m.needKey && (i.cnt || 1) >= 1)) return true;   // 🔑 需鑰匙地圖：背包無鑰匙 → 灰色不可選
     // 🗼 傲慢之塔樓層門檻：2~10樓需曾擊敗潔尼斯女王；11樓以上需持有對應傳送符/支配符/移動卷軸
@@ -445,6 +448,8 @@ function onMapCategoryChange() {
         document.getElementById('map-select').value = target;
         changeMap();   // 實際移動（受控狀態時 changeMap 會擋下並還原兩個選單）
     }
+    // 🧑‍🤝‍🧑 v3.7.84 隊員期間切到「沒有安全區」的地區＝整區灰階、無可選目標 → 補一則提示，否則畫面毫無回應
+    else if (typeof mercRoleSafeAreaOnly === 'function' && mercRoleSafeAreaOnly() && typeof mercenaryRoleNotifySafeAreaOnly === 'function') mercenaryRoleNotifySafeAreaOnly();
 }
 function setMapSelectors(mapKey) {
     // 將「分類選單 + 地圖選單」同步到指定地圖
@@ -454,6 +459,14 @@ function setMapSelectors(mapKey) {
     populateMapSelect(cat);
     let sel = document.getElementById('map-select'); if (sel) sel.value = mapKey;
     updatePrideFloorIndicator();
+    updateMercRoleHint();
+}
+// 🧑‍🤝‍🧑 v3.7.84 地圖列右側「目前擔任隊員中」常駐提示：受僱期間非安全區全部灰階＝點不下去，
+//    所以改用一個常駐標籤說明原因（否則玩家只會看到一整排灰色而不知道為什麼）。setMapSelectors 與每輪 updateUI 各呼叫一次。
+function updateMercRoleHint() {
+    let el = document.getElementById('merc-role-hint'); if (!el) return;
+    let on = (typeof mercRoleSafeAreaOnly === 'function') && mercRoleSafeAreaOnly();
+    el.classList.toggle('hidden', !on);
 }
 function syncMapSelectors() { setMapSelectors(mapState.current); }
 // ===== 🖥️ 打包版自訂下拉選單（僅 pkg-build）=====
@@ -787,6 +800,7 @@ function openSiegeSelect(faction, targetEl) {
 function startSiege(faction, city) {
     city = SIEGE_CITY[city] ? city : 'kent';
     let cfg = SIEGE_CITY[city];
+    if (typeof mercenaryRoleBattleBlocked === 'function' && mercenaryRoleBattleBlocked(cfg.outer)) return;
     let s = player.siege || (player.siege = { active:false, city:'kent', gateKilled:false, towerKilled:false, endTime:0, kills:0, result:null, cooldownUntil:0, accCdUntil:0 });
     let clan = (typeof clanGetModeInfo === 'function') ? clanGetModeInfo(player) : null;
     if (!clan) { alert('你尚未加入血盟，無法宣布攻城戰。'); return; }
@@ -1229,6 +1243,10 @@ function changeMap(force) {
         return;
     }
     let _changeTarget = document.getElementById('map-select').value;
+    if (_changeTarget !== mapState.current && typeof mercenaryRoleBattleBlocked === 'function' && mercenaryRoleBattleBlocked(_changeTarget)) {
+        syncMapSelectors();
+        return false;
+    }
     saveSiegeBossHp();   // 切換地圖前，保存攻城塔/門的剩餘血量
     // 🔥 進入閘門前的權限總驗證（業務邏輯層，非僅 UI 下拉禁用）：任何被 mapOptDisabled 擋下的地圖（如未完成試煉的魔族神殿、炎魔友好度不足的炎魔謁見所、潔尼斯門檻、傳送符不足的傲慢之塔）一律不可進入。
     //    僅在「主動切換到不同地圖」時檢查（force 內部流程／原地不動除外）；以「尚未消耗鑰匙/傳送符」的原始狀態判定，故下方各自的鑰匙/卷軸消耗不受影響（持有者此處 mapOptDisabled=false 會放行）。siege/castle 動態地圖不在 MAP_CATEGORIES，_def 為 null 自動略過。
@@ -1313,7 +1331,7 @@ function changeMap(force) {
         player.mp = player.mmp;
         try { if (typeof reviveDownedMercsAtTown === 'function') reviveDownedMercsAtTown(); } catch (e) {}   // 🤝 Phase 3：回村/回城免費復活全體倒地傭兵
         try { if (typeof petsReviveAtTown === 'function') petsReviveAtTown(); } catch (e) {}   // 🐾 v3.6.29 回村：出戰寵物倒地復活＋補滿 HP/MP＋清異常（比照傭兵·js/22）
-        try { if (typeof mercBankAlliesAtTown === 'function') mercBankAlliesAtTown(); } catch (e) {}   // 🤝 v2.6.68 隊長回村：上場傭兵各記一筆待領經驗（不解散·不改來源存檔）
+        try { if (typeof refreshAllAllies === 'function') refreshAllAllies(); } catch (e) {}   // 🔄 v3.7.87 隊長進安全區＝自動刷新一次隊員資料（結算待領經驗＋依來源存檔重建戰力快照·取代 v2.6.68 只結算的 mercBankAlliesAtTown、與舊「重新招募」按鈕同動作）。⚠️ loadGame 也走 getHomeTown()+changeMap(true) 進到這裡→「隊長登入自動刷新」共用此掛點，勿再另外掛一次
         try { if (typeof mercExpClaimPending === 'function') mercExpClaimPending(); } catch (e) {}     // 🤝 v2.6.68 本角色回村/載入（loadGame 一律回家鄉村莊）：自動領取自己的待領經驗
         // 🏰 城堡護衛：回城/回村補滿血並解除力竭
         if (player.castleGuard) { let _cg = player.castleGuard; if (_cg.mode === 'heal') { _cg.mp = _cg.maxMp; _cg._healAcc = 0; } else { _cg.hp = _cg.maxHp; } _cg.disabled = false; _cg._regenAcc = 0; }
@@ -1611,6 +1629,7 @@ function _sanctConsume(id) {
 }
 function sanctuaryEnter(mapKey, costId) {
     let d0 = DB.items[costId];
+    if (typeof mercenaryRoleBattleBlocked === 'function' && mercenaryRoleBattleBlocked(mapKey)) return;
     if (!_sanctConsume(costId)) { logSys(`<span class="text-red-400">沒有 ${d0 ? d0.n : costId}，無法進入。</span>`); return; }
     logSys(`<span class="text-amber-300">你交出了 1 個 ${d0 ? d0.n : costId}，${mapKey === 'collapsed_elder_council_hall' ? '被傳送到了 崩壞的長老會議廳' : '踏入了 ' + (mapKey === 'dark_elf_sanctuary' ? '黑暗妖精聖地' : '受詛咒的黑暗妖精聖地')}……</span>`);
     closeNpcInteraction();

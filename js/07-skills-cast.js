@@ -1153,10 +1153,11 @@ if (typeof castSkillInner === 'function' && !castSkillInner._spellbladeWrapped) 
                 let _w2 = player.eq.wpn && DB.items[player.eq.wpn.id];
                 let _sk2 = DB.skills[skId];
                 if (_w2 && _w2.spellbladeBuff && _sk2 && _sk2.type === 'atk') {
-                    let _sbWas = (player._spellbladeUntil || 0) > state.ticks && player._spellbladeTier === (_sk2.tier || 1) && player._spellbladeEle === ((_sk2.ele && _sk2.ele !== 'none') ? _sk2.ele : null);
-                    player._spellbladeUntil = state.ticks + 100;
+                    let _sbEle2 = spellbladeSkillElement(_sk2.ele) || null;
+                    let _sbWas = (player._spellbladeUntil || 0) > state.ticks && player._spellbladeTier === (_sk2.tier || 1) && player._spellbladeEle === _sbEle2;
+                    player._spellbladeUntil = state.ticks + spellbladeDurationTicks();
                     player._spellbladeTier = _sk2.tier || 1;
-                    player._spellbladeEle = (_sk2.ele && _sk2.ele !== 'none') ? _sk2.ele : null;
+                    player._spellbladeEle = _sbEle2;
                     if (!_sbWas) calcStats();   // 階級/屬性有變才重算（同法術連發只刷新時限）
                 }
             }

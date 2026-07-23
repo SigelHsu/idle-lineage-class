@@ -372,11 +372,14 @@ function dragonSlayStrikeProc() {
     renderMobs();
 }
 
+function critFuryDurationTicks(seconds) {
+    return (seconds || 5) * 10;
+}
 // 🏺 v3.7.52 邪惡利牙（critFuryHaste:{pct,sec}）：攻擊爆擊時攻速加速 buff（玩家＝_fangFuryUntil·js/02 spdMult 消費·js/03 到期重算；重複觸發只刷新時限不重複重算）
 function grantCritFuryHaste(p, wpn) {
     if (!wpn || !wpn.critFuryHaste) return;
     let _was = (p._fangFuryUntil || 0) > state.ticks;
-    p._fangFuryUntil = state.ticks + (wpn.critFuryHaste.sec || 5) * 10;
+    p._fangFuryUntil = state.ticks + critFuryDurationTicks(wpn.critFuryHaste.sec);
     if (!_was) { calcStats(); logCombat(`<span class="font-bold" style="color:#c4b5fd;">【${wpn.n}】</span>嗜血的鋸齒興奮顫動，攻擊速度 +${wpn.critFuryHaste.pct || 30}%（${wpn.critFuryHaste.sec || 5} 秒）！`, 'player-special'); }
 }
 
@@ -500,6 +503,16 @@ function applyWeaponProcStatusSkill(target, cfg) {
     if (!sk || !sk.status) return;
     applyMobStatus(t, sk.status, sk.n);
 }
+// 🕸️ v3.7.75 武器附加異常狀態（procStatus:{kind,rate,dur}）：攻擊時擲 rate%，中了才進 applyMobStatus——
+//   成敗仍由「施放者魔法命中 vs 目標魔抗」決定（不帶 force），頭目由 BOSS_IMMUNE 擋。深紅之弩＝2% 束縛 6 秒。
+//   ⚠️ 與 procStatusSkill 的差別：那個要有對應技能(skId)，這個直接指定 kind，給沒有技能的純狀態用。
+function applyWeaponProcStatus(target, cfg, srcName) {
+    if (!cfg || !cfg.kind) return;
+    if (Math.random() * 100 >= (cfg.rate || 0)) return;
+    let t = (target && target.curHp > 0) ? target : null;
+    if (!t) { let alive = mapState.mobs.filter(m => m && m.curHp > 0); if (!alive.length) return; t = alive[Math.floor(Math.random() * alive.length)]; }
+    applyMobStatus(t, { kind: cfg.kind, dur: cfg.dur || 6 }, srcName || (STATUS_NAME && STATUS_NAME[cfg.kind]) || '');
+}
 // ⚔️ v3.5.97 迅猛雙斧副手 proc：副手揮擊原本只結算傷害，武器自身的 proc 欄位完全不判定。
 //   ⚠️ 副手只能裝鈍器（warriorDualWieldWpnOk 僅放行單手鈍器／巨斧精通的雙手鈍器），因此這裡**只需涵蓋
 //      鈍器上實際存在的欄位**——已用 DB.items 實查：procInstakill(強韌的大腿骨)／stoneInstakill(蛇妖的無慈悲尾刺)／
@@ -568,6 +581,7 @@ function weaponSpellProc(target, attackHit, instOverride) {
     if (wpn.procPoison) applyWeaponProcPoison(target, wpn.procPoison, wpnEnFinalMult(inst));   // 🔧 死亡之指：攻擊時毒咒（吃武器強化最終倍率）
     if (wpn.procBurstPoison) applyWeaponBurstPoison(target, wpn.procBurstPoison, capWpnEn(inst.en), wpnEnFinalMult(inst));   // 💥 破壞雙刀/鋼爪：攻擊時猛爆劇毒（吃武器強化最終倍率）
     if (wpn.procStatusSkill) applyWeaponProcStatusSkill(target, wpn.procStatusSkill);   // 🌑 惡魔王武器：攻擊時 10% 施放疾病術
+    if (wpn.procStatus) applyWeaponProcStatus(target, wpn.procStatus, wpn.n);   // 🕸️ v3.7.75 深紅之弩：攻擊時 2% 使目標束縛（成敗仍看魔法命中／魔抗·頭目免疫）
     // 🏺 v3.7.20 鋼鐵僧侶的錫杖（procHealSkill）：一般攻擊命中 rate% → 免費觸發指定治癒技能（sk_regen 全隊瞬間治癒·同施法公式吃 spCoef/魔棒倍率）
     if (wpn.procHealSkill && attackHit && Math.random() * 100 < (wpn.procHealSkill.rate || 5)) {
         let _hs = DB.skills[wpn.procHealSkill.skId];
@@ -693,6 +707,17 @@ function procFreeMagicSkill(t, skId, en, areaHit, sourceItem, illusionRecoverMp)
         });
         return;
     }
+    // 💀 v3.7.74 即死型技能的免費觸發（天使魔杖＝起死回生術）：等同法師施展——一律走 tryInstakill，
+    //    成敗仍看「目標是否具該 tag（不死）／非頭目／施放者魔法命中 vs 目標魔抗（cap 上限 60%）」。
+    //    特效只在「目標合格」時播，避免對非不死怪空放動畫；純即死技（無傷害骰）失敗即結束。
+    if (sk.instakill && typeof tryInstakill === 'function') {
+        let _ik = sk.instakill;
+        let _ikOk = !t.boss && (!_ik.tag || (typeof mobHasTag === 'function' && mobHasTag(t, _ik.tag)));
+        if (_ikOk && typeof playSpellFx === 'function') { try { playSpellFx(sk.n, t); } catch (e) {} }
+        let _ikIdx = mapState.mobs.findIndex(m => m && m.uid === t.uid);
+        if (_ikIdx !== -1 && tryInstakill(t, _ik, sk.n, _ikIdx)) return;
+        if (!sk.multiDmg && !sk.dmgDice) return;   // 無傷害骰的純即死技：失敗就結束（不必跑下方傷害流程）
+    }
     let effMr = (t.st && t.st.mrhalf > 0) ? (t.mr / 2) : t.mr;
     let mrFactor = mrMult(effMr);
     let isCrit = Math.random() * 100 < player.d.magicCrit;
@@ -734,70 +759,98 @@ function procFreeMagicSkill(t, skId, en, areaHit, sourceItem, illusionRecoverMp)
 //    且「王者加護 20%」這個常數在 playerStatusResisted 與 allyStatusResisted 兩處都要改。
 // 🪆 統一玩家狀態抵抗/免疫（含魔法娃娃 freezeResist/stunResist/immParalyze/immSlow/abnormalResist…）：
 //    kind ∈ freeze|stun|paralyze|sleep|slow|poison；掃 WEIGHT_COUNT_SLOTS（含 doll 槽）取免疫旗標/抵抗%＋通用 abnormalResist，回傳 true=本次抵抗/免疫。
+function statusResistanceFromRoll(kind, immune, percent, poisonImmune, roll) {
+    let pct = immune ? 100 : Math.min(100, Number(percent) || 0);
+    if (kind === 'poison' && poisonImmune) return true;
+    return pct > 0 && (Number(roll) || 0) * 100 < pct;
+}
 function playerStatusResisted(kind) {
     let immF = { freeze: 'immFreeze', stun: 'immStun', paralyze: 'immParalyze', sleep: 'immSleep', slow: 'immSlow', poison: 'immPoison', burn: 'immBurn', blind: 'immBlind' }[kind];   // 🏺 遺物 詛咒三頭獸的犄角：immBurn→免疫灼燒；🏺 v3.7.52 司祭的無眼頭飾：immBlind→免疫闇盲
     let resF = { freeze: 'freezeResist', stun: 'stunResist', paralyze: 'paralyzeResist', sleep: 'sleepResist', slow: 'slowResist', poison: 'poisonResist' }[kind];
-    let pct = 0;
+    // 🛡️ v3.7.77 抵抗率改「相加」（用戶指定·原為 Math.max 取最高者→多件抗性裝只有最高的那件有用）：
+    //    同類抵抗%全身相加、通用 abnormalResist 一併加總、王者加護 +20 也加，最後夾在 100（100%＝必定抵抗）。
+    //    免疫旗標（immStun/immFreeze…）維持「直接 100%」語意，不受加總順序影響。
+    let pct = 0, imm = false;
     WEIGHT_COUNT_SLOTS.forEach(k => {
         let e = player.eq[k]; if (!e) return; let dd = DB.items[e.id]; if (!dd) return;
-        if (immF && dd[immF]) pct = 100;
-        if (resF && dd[resF]) pct = Math.max(pct, dd[resF]);
-        if (dd.abnormalResist) pct = Math.max(pct, dd.abnormalResist);
+        if (immF && dd[immF]) imm = true;
+        if (resF && dd[resF]) pct += dd[resF];
+        if (dd.abnormalResist) pct += dd.abnormalResist;
     });
-    if (kind === 'stun' && player.skills && player.skills.includes('sk_royal_kingguard')) pct = Math.max(pct, 20);   // 👑 王者加護
-    if (kind === 'poison' && player.d && player.d.immPoison) return true;   // 潔尼斯戒指/龍騎士覺醒/娃娃 immPoison（recompute 已併入 d.immPoison）
-    return pct > 0 && Math.random() * 100 < pct;
+    if (kind === 'stun' && player.skills && player.skills.includes('sk_royal_kingguard')) pct += 20;   // 👑 王者加護
+    let poisonImmune = kind === 'poison' && player.d && player.d.immPoison;   // 潔尼斯戒指/龍騎士覺醒/娃娃 immPoison（recompute 已併入 d.immPoison）
+    let effectivePct = imm ? 100 : Math.min(100, pct);
+    let randomRoll = (!poisonImmune && effectivePct > 0) ? Math.random() : 0;   // 保留原本僅在需要機率判定時消耗亂數
+    return statusResistanceFromRoll(kind, imm, pct, !!poisonImmune, randomRoll);
 }
 // 🆕 v2.6.11 [傭兵能力補完 #4] 傭兵版裝備狀態抵抗/免疫（比照 playerStatusResisted·讀 ally.eq/skills/d；WEIGHT_COUNT_SLOTS 含 doll 槽→同時涵蓋娃娃 immFreeze/stunResist…）。kind ∈ freeze|stun|paralyze|sleep|slow|poison。
 function allyStatusResisted(ally, kind) {
     let immF = { freeze: 'immFreeze', stun: 'immStun', paralyze: 'immParalyze', sleep: 'immSleep', slow: 'immSlow', poison: 'immPoison', burn: 'immBurn', blind: 'immBlind' }[kind];   // 🏺 遺物 詛咒三頭獸的犄角：immBurn→免疫灼燒；🏺 v3.7.52 司祭的無眼頭飾：immBlind→免疫闇盲
     let resF = { freeze: 'freezeResist', stun: 'stunResist', paralyze: 'paralyzeResist', sleep: 'sleepResist', slow: 'slowResist', poison: 'poisonResist' }[kind];
-    let pct = 0;
+    // 🛡️ v3.7.77 抵抗率改「相加」（鏡像玩家 playerStatusResisted·規則完全一致）
+    let pct = 0, imm = false;
     WEIGHT_COUNT_SLOTS.forEach(k => {
         let e = ally.eq && ally.eq[k]; if (!e) return; let dd = DB.items[e.id]; if (!dd) return;
-        if (immF && dd[immF]) pct = 100;
-        if (resF && dd[resF]) pct = Math.max(pct, dd[resF]);
-        if (dd.abnormalResist) pct = Math.max(pct, dd.abnormalResist);
+        if (immF && dd[immF]) imm = true;
+        if (resF && dd[resF]) pct += dd[resF];
+        if (dd.abnormalResist) pct += dd.abnormalResist;
     });
-    if (kind === 'stun' && ally.skills && ally.skills.includes('sk_royal_kingguard')) pct = Math.max(pct, 20);   // 👑 王者加護
-    if (kind === 'poison' && ally.d && ally.d.immPoison) return true;
-    return pct > 0 && Math.random() * 100 < pct;
+    if (kind === 'stun' && ally.skills && ally.skills.includes('sk_royal_kingguard')) pct += 20;   // 👑 王者加護
+    let poisonImmune = kind === 'poison' && ally.d && ally.d.immPoison;
+    let effectivePct = imm ? 100 : Math.min(100, pct);
+    let randomRoll = (!poisonImmune && effectivePct > 0) ? Math.random() : 0;
+    return statusResistanceFromRoll(kind, imm, pct, !!poisonImmune, randomRoll);
+}
+function raceDrStep(multiplier, percent) {
+    return multiplier * (1 - (percent || 0) / 100);
 }
 // 🏺 v3.7.52 隨從的護身斗篷（raceDr:{race,pct}）：受到指定種族敵人的傷害減少 pct%（物理＋魔法·玩家/傭兵共用·掃全裝備欄乘算堆疊）
 function raceDrMult(entity, mob) {
     if (!entity || !entity.eq || !mob || !mob.race) return 1;
     let m = 1;
-    for (let k in entity.eq) { let e = entity.eq[k]; if (!e) continue; let dd = DB.items[e.id]; if (!dd || !dd.raceDr) continue; if (dd.raceDr.race === mob.race) m *= (1 - (dd.raceDr.pct || 0) / 100); }
+    for (let k in entity.eq) { let e = entity.eq[k]; if (!e) continue; let dd = DB.items[e.id]; if (!dd || !dd.raceDr) continue; if (dd.raceDr.race === mob.race) m = raceDrStep(m, dd.raceDr.pct); }
     return m;
 }
 // 🐉 v3.7.57 安塔瑞斯助戰者「護衛」：主玩家受到傷害 ×(1−N%)（N=指定傭兵 MR 的 10%·上限 20%·js/02 助戰者段計算存 _antHelperDr）
 //    ⚠️ 獨立函式·勿併入被 C# native-preview 包裝的 teamDmgReduceMult（該函式現僅供寵物/召喚側）。
 function antHelperDrMult() { return 1 - Math.min(20, player._antHelperDr || 0) / 100; }
+function dotMpRefundAmount(damage, percent) {
+    return Math.max(1, Math.floor(damage * percent / 100));
+}
 // 🏺 v3.7.52 受困幽魂的淚滴（dotMpRefund）：因持續傷害損失 HP 時，恢復損失 HP N% 量的 MP（玩家/傭兵共用·掃全裝備欄取最大值）
 function dotMpRefundTo(entity, dmg) {
     if (!entity || !entity.eq || !(dmg > 0)) return;
     let pct = 0;
     for (let k in entity.eq) { let e = entity.eq[k]; if (!e) continue; let dd = DB.items[e.id]; if (dd && dd.dotMpRefund) pct = Math.max(pct, dd.dotMpRefund); }
     if (!pct) return;
-    let _mp = Math.max(1, Math.floor(dmg * pct / 100));
+    let _mp = dotMpRefundAmount(dmg, pct);
     if (entity === player) player.mp = Math.min(player.mmp || 0, (player.mp || 0) + _mp);
     else entity.mp = Math.min(entity.mmp || 0, (entity.mp || 0) + _mp);
 }
 // 🪆 受傷時機率傷害減免（魔法娃娃：史巴托/巫妖 procDmgReduce{rate,amount}）：回傳減免後傷害；經典模式停用
+function dollDamageAfterReductionFromRoll(damage, rate, amount, roll) {
+    if (!((Number(roll) || 0) * 100 < (Number(rate) || 0))) return damage;
+    let reduction = Math.min(damage, Number(amount) || 0);
+    return reduction > 0 ? Math.max(0, damage - reduction) : damage;
+}
 function dollDamageReduced(dmg) {
     let e = player.eq.doll; let dd = e ? DB.items[e.id] : null;   // 🪆 經典模式亦正常生效
-    if (dd && dd.procDmgReduce && Math.random() * 100 < dd.procDmgReduce.rate) {
-        let _r = Math.min(dmg, dd.procDmgReduce.amount);
-        if (_r > 0) { dmg = Math.max(0, dmg - _r); logCombat(`<span class="text-sky-300">【${dd.n}】減免了 ${_r} 點傷害。</span>`, 'magic'); }
+    if (dd && dd.procDmgReduce) {
+        let before = dmg;
+        dmg = dollDamageAfterReductionFromRoll(dmg, dd.procDmgReduce.rate, dd.procDmgReduce.amount, Math.random());
+        let _r = before - dmg;
+        if (_r > 0) logCombat(`<span class="text-sky-300">【${dd.n}】減免了 ${_r} 點傷害。</span>`, 'magic');
     }
     return dmg;
 }
 // 🆕 v2.6.10 [傭兵能力補完 #3] 傭兵魔法娃娃受傷機率減免（procDmgReduce{rate,amount}·讀 ally.eq.doll；比照玩家 dollDamageReduced）。傭兵受物理/魔法傷害皆套。
 function allyDollDamageReduced(ally, dmg) {
     let dd = (ally && ally.eq && ally.eq.doll) ? DB.items[ally.eq.doll.id] : null;
-    if (dd && dd.procDmgReduce && Math.random() * 100 < dd.procDmgReduce.rate) {
-        let _r = Math.min(dmg, dd.procDmgReduce.amount);
-        if (_r > 0) { dmg = Math.max(0, dmg - _r); logCombat(`<span class="text-sky-300">【協力·${ally._allyName}·${dd.n}】減免了 ${_r} 點傷害。</span>`, 'magic'); }
+    if (dd && dd.procDmgReduce) {
+        let before = dmg;
+        dmg = dollDamageAfterReductionFromRoll(dmg, dd.procDmgReduce.rate, dd.procDmgReduce.amount, Math.random());
+        let _r = before - dmg;
+        if (_r > 0) logCombat(`<span class="text-sky-300">【協力·${ally._allyName}·${dd.n}】減免了 ${_r} 點傷害。</span>`, 'magic');
     }
     return dmg;
 }
@@ -1031,6 +1084,7 @@ function _statusInflictHeal(beforeKeys) {
     }
 }
 function enemyPhysicalAttack(mob, idx, stunChance = 0, atkDmg = null, atkDb = null) {
+    if (bindMobBlockedVs(mob, player)) return;   // 🕸️ v3.7.75 束縛：被束縛的怪物搆不到裝備遠距離武器的玩家（連擊技也走這裡→一併落空）
     let _snap = _playerStatusSnap(); _statusHealDepth++;
     try { return _enemyPhysicalAttackInner(mob, idx, stunChance, atkDmg, atkDb); }
     finally { _statusHealDepth--; if (_statusHealDepth === 0) _statusInflictHeal(_snap); }
@@ -1222,7 +1276,7 @@ function _enemyPhysicalAttackInner(mob, idx, stunChance = 0, atkDmg = null, atkD
             let _gmd = DB.items[player.eq.helm.id];
             if (_gmd && _gmd.golemMarkDebuff) {
                 let _gmWas = (player._golemMrDebuffUntil || 0) > state.ticks;
-                player._golemMrDebuffUntil = state.ticks + 30;
+                player._golemMrDebuffUntil = state.ticks + golemMarkDurationTicks();
                 if (!_gmWas) { calcStats(); logCombat(`<span class="text-rose-300">【${_gmd.n}】重擊震裂了印記，MR-100（3 秒）！</span>`, 'enemy'); }
             }
         }
@@ -1308,6 +1362,8 @@ function _enemyPhysicalAttackInner(mob, idx, stunChance = 0, atkDmg = null, atkD
 // 🤝 仇恨權重（玩家與傭兵同規則，不分身分）：法師/幻術士、或持弓/遠程武器(弓・十字弓)者＝1；近戰 騎士/戰士/龍騎士＝5；近戰 妖精/黑暗妖精/王族＝4；其餘＝1。（v2.6.30 近戰重裝 3→4・近戰輕裝 2→3；v3.2.81 近戰重裝 4→5・近戰輕裝 3→4）
 function mercAggroWeight(c) {
     if (!c) return 0;
+    // 🫥 v3.7.88 隱身斗篷(aggroMin)：被攻擊權重**必定為 1**（最低）——先於一切分支判定，職業/武器/其他裝備的 aggroWeight 一律不再計入。
+    if (c.eq) for (let k in c.eq) { let e = c.eq[k]; if (e) { let d = DB.items[e.id]; if (d && d.aggroMin) return 1; } }
     let _agB = 0;   // 🐍 艾庫卡伊拉的華麗兜帽：裝備 aggroWeight → 提高被攻擊權重（玩家/傭兵通用）
     if (c.eq) for (let k in c.eq) { let e = c.eq[k]; if (e) { let d = DB.items[e.id]; if (d && d.aggroWeight) _agB += d.aggroWeight; } }
     if (c.cls === 'mage' || c.cls === 'illusion') return 1 + _agB;   // 施法者：恆 1
@@ -1402,6 +1458,7 @@ function teamIlluAura(forWho, forMinion) {
 }
 function enemyAttackAlly(mob, ally) {
     if (!ally) return;
+    if (bindMobBlockedVs(mob, ally)) return;   // 🕸️ v3.7.75 束縛：被束縛的怪物搆不到裝備遠距離武器的傭兵
     if (!ally.statuses) ally.statuses = {};
     let _snap = _allyStatusSnap(ally);   // 🏺 statusHealHp（傭兵）：物理受擊也可能上異常（onHitPoison 等），與魔法路徑同型包裝
     try { return _enemyAttackAllyInner(mob, ally); }
@@ -1500,7 +1557,7 @@ function _enemyAttackAllyInner(mob, ally) {
         let _gmda = DB.items[ally.eq.helm.id];
         if (_gmda && _gmda.golemMarkDebuff) {
             let _gmaWas = (ally._golemMrDebuffUntil || 0) > state.ticks;
-            ally._golemMrDebuffUntil = state.ticks + 30;
+            ally._golemMrDebuffUntil = state.ticks + golemMarkDurationTicks();
             if (!_gmaWas && typeof _allyLevelRecompute === 'function') _allyLevelRecompute(ally);
         }
     }
@@ -2466,7 +2523,9 @@ function rollPledgeDropEnhance(safe) {
 // 野外+血盟敵人擊殺掉寶：1% 機率獲得 1 件物品（抽法同潘朵拉黑市權重 getWeightedGachaResult；詞綴走新制——只可能獲得「祝福的」1%，屬性/遠古改由象牙塔『碧恩』取得；仍依安定值附帶強化等級）
 function pledgeBonusDrop(mob, rate) {
     if (typeof isSiegeArea === 'function' && isSiegeArea(mapState.current)) return;   // 🏰 攻城區敵人／玩家NPC死亡一律不掉攜帶物
-    if (Math.random() >= (rate || 0.01) * classicDropMult()) return;   // 預設 1% 機率（😤 白目玩家傳 0.10＝10%）；classicDropMult 恆 1＝經典與一般同掉率
+    let _pledgeDropRate = (rate || 0.01) * classicDropMult();
+    if (typeof partyDropRate === 'function') _pledgeDropRate = partyDropRate(_pledgeDropRate);
+    if (Math.random() >= _pledgeDropRate) return;   // 預設 1%；有效隊伍人數使機率最高 ×8
     let id = getWeightedGachaResult(true);   // 🔧 血盟野外＋攻城敵人：權重 1 以外的物品以 2 倍權重抽取（權重100→200）
     let d0 = DB.items[id];
     if (!d0) return;
@@ -2524,7 +2583,9 @@ function playerNpcRelicDrop(mob) {
     if (typeof isSiegeArea === 'function' && isSiegeArea(mapState.current)) return;   // 🏰 攻城區一律不掉（比照 pledgeBonusDrop 首行·防無冷卻攻城變成刷遺物場）
     let _relicX2 = 1;   // 🐰 幸運暴走兔腳（需裝備）：遺物掉落機率 ×2（比照 js/05 怪物掉落表的遺物判定）
     try { for (let _k in player.eq) { let _e = player.eq[_k]; if (_e && DB.items[_e.id] && DB.items[_e.id].relicDropX2) { _relicX2 = 2; break; } } } catch (e) {}
-    if (Math.random() >= 0.00001 * _relicX2 * classicDropMult()) return;   // 0.001%＝0.00001（classicDropMult 現恆 1：經典模式的掉落/金錢/經驗懲罰已全數取消·保留呼叫僅為與其他掉落點同管線）
+    let _npcRelicRate = 0.00001 * _relicX2 * classicDropMult();
+    if (typeof partyDropRate === 'function') _npcRelicRate = partyDropRate(_npcRelicRate);
+    if (Math.random() >= _npcRelicRate) return;   // 0.001% 基礎；兔腳與有效隊伍人數倍率依序套用
     let pool = allRelicIds();
     if (!pool.length) return;
     let id = pool[Math.floor(Math.random() * pool.length)];

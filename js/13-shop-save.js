@@ -312,7 +312,14 @@ function _slotOfflineMeta(n, sum){
     if(!sum) return null;
     // 身分 key 與 js/27 _offlineIdentity 同式：enSeed 缺漏時退回「存檔位|名字|職業」（角色存於第 n 格＝當時的 currentSlot）
     let id = encodeURIComponent(String(sum.enSeed || (n + '|' + (sum.name || '') + '|' + sum.rawCls)));
-    return { roleFp: sum.roleFp || '', offlineId: id, savedHunt: sum.offlineHunt || null };
+    // 🧑‍🤝‍🧑 v3.7.85 「組隊中」徽章：存下問 mercEmployerOfSlot 需要的最小身分欄位（僱傭關係會變·每次刷新現查·不快取結果）
+    return { roleFp: sum.roleFp || '', offlineId: id, savedHunt: sum.offlineHunt || null,
+        slot: n, mercWho: { cls: sum.rawCls, name: sum.name, enSeed: sum.enSeed, classic: !!sum.classic } };
+}
+// 🧑‍🤝‍🧑 v3.7.85 該存檔位角色是否正受僱為別人的傭兵（受僱＝只能待安全區→不可能離線掛機，故與「掛機中」互斥、共用同一個位置）
+function _slotPartyStatusNow(meta){
+    if(!meta || !meta.mercWho || typeof mercEmployerOfSlot !== 'function') return null;
+    try { return mercEmployerOfSlot(meta.slot, meta.mercWho); } catch(e){ return null; }
 }
 function _slotOfflineStatusNow(meta, activeRoleFps){
     if(!meta) return null;
@@ -348,8 +355,13 @@ function _slotOfflineDuration(ms){
     if(hours > 0) return hours + '時' + (mins ? mins + '分' : '');
     return totalMin + '分';
 }
-function _slotOfflineStatusHtml(status){
-    if(!status) return '';
+// 🧑‍🤝‍🧑 v3.7.85 第 2 參 party＝受僱中的僱主資料：與「掛機中」同一個位置（`.load-offline-badge` 頭頂置中），
+//    只換配色成紫色（`.load-badge-party`）＝與綠色的掛機中一眼可分。兩者天生互斥（受僱只能待安全區→ offlineHunt 不 eligible），故不會疊在一起。
+//    v3.7.86 用戶指定：主文字改「擔任傭兵」、拿掉下面那行副標（單行徽章）。
+function _slotOfflineStatusHtml(status, party){
+    if(!status && !party) return '';
+    // 受僱中一律以「擔任傭兵」為準：連下方的離線收益明細也不顯示（受僱＝不會離線掛機·顯示收益只會自相矛盾）。
+    if(party) return `<span class="load-offline-status"><span class="load-offline-badge load-badge-party"><strong>擔任傭兵</strong></span></span>`;
     let fmt = n => Math.max(0, Math.floor(Number(n) || 0)).toLocaleString('zh-TW');
     return `<span class="load-offline-status">`
         + `<span class="load-offline-badge"><strong>${status.bossRoom ? '[BOSS] ' : ''}掛機中</strong><small>${_slotOfflineDuration(status.elapsedMs)}</small></span>`
@@ -430,6 +442,8 @@ function _roleSessionHeartbeat(){
     if(active) reg[_roleSessionId] = { ts:Date.now(), slot:currentSlot, fp:_roleFingerprint(player), name:player.name || '未命名' };
     else delete reg[_roleSessionId];
     _roleWriteObject(ROLE_SESSION_REGISTRY_KEY, reg);
+    if(active && typeof syncMercenaryEmploymentRegistry === 'function') syncMercenaryEmploymentRegistry();
+    if(active && typeof enforceMercenarySafeArea === 'function') enforceMercenarySafeArea();
 }
 function _roleOtherActiveSessions(){
     let reg = _rolePruneSessions(_roleReadObject(ROLE_SESSION_REGISTRY_KEY));
@@ -462,10 +476,12 @@ setInterval(function(){
     const fps = new Set();
     try { _roleOtherActiveSessions().forEach(s => { if(s && s.fp) fps.add(String(s.fp)); }); } catch(e){}
     grid.querySelectorAll('.load-slot-card[data-slot]').forEach(btn => {
-        let status = _slotOfflineStatusNow(_loadSlotMeta[Number(btn.getAttribute('data-slot'))], fps);
+        let meta = _loadSlotMeta[Number(btn.getAttribute('data-slot'))];
+        let status = _slotOfflineStatusNow(meta, fps);
+        let party = _slotPartyStatusNow(meta);   // 🧑‍🤝‍🧑 v3.7.85 「組隊中」同樣活刷：僱主在別的分頁解散傭兵→這裡 2 秒內消失
         let old = btn.querySelector('.load-offline-status');
-        if(status){
-            let html = _slotOfflineStatusHtml(status);
+        if(status || party){
+            let html = _slotOfflineStatusHtml(status, party);
             if(old) old.outerHTML = html;
             else btn.insertAdjacentHTML('beforeend', html);
         } else if(old) old.remove();
@@ -538,7 +554,7 @@ async function exportSave(slot){
         alert('匯出失敗：角色、倉庫、寵物、龍之鑽石或血盟資料無法正確讀取，未產生匯出檔。');
         return;
     }
-    data = _saveWrap(data);   // 🛡️ 匯出檔加完整性簽章（前綴 'SIG1:'，匯入時驗章；payload 仍為明文 JSON）
+    data = _saveWrapPortable(data);   // 🛡️ 可攜匯出固定使用 SIG1，確保網頁版與桌面版可互相匯入
     let sum = slotSummary(slotNo);
     let cname = (sum && sum.name) ? sum.name : ('slot' + slotNo);   // 未命名 → 用 slotN 當檔名
     let fname = `fable5_save_${slotNo}_${cname}.json`;
@@ -881,7 +897,7 @@ function renderLoadSelect(){
         const title = sum ? `角色 ${n} ${sum.cls} Lv.${sum.lv}` : `角色 ${n} 空`;
         html += `<button type="button" onclick="loadSelectSlot(${n})" data-slot="${n}" data-key="${key}" class="load-slot-card ${selected ? 'selected' : ''} ${empty ? 'empty' : 'filled'}" title="${loadEsc(title)}">`
             + `<img src="${loadFrameSrc(key, frame)}" alt="${loadEsc(title)}" draggable="false">`
-            + _slotOfflineStatusHtml(offline)
+            + _slotOfflineStatusHtml(offline, _slotPartyStatusNow(_loadSlotMeta[n]))
             + `</button>`;
     }
     grid.innerHTML = html;
@@ -1232,6 +1248,15 @@ function startGame() {
         backToMenu();
         return;
     }
+    // 🧼 v3.7.73 新角色＝乾淨的 player（修「刪角後創新職業，上一個角色的傭兵／萬能藥瓶數／精通狀態還在」）：
+    //   遊戲中按「返回角色選擇」→刪角→創新角色的過程沒有重載頁面，全域 player 仍是上一個角色的物件，
+    //   而本函式只逐欄覆寫其中一部分 → 未覆寫欄位被新角色整包繼承。這裡先還原成「頁面剛載入」的原型，
+    //   使之與「重新整理後創角」完全等價（下方逐欄設定的流程不變）。
+    _uiConfigReady = false;   // 還原期間 DOM 仍是上一角色的設定 → 禁止 saveGame 以它重建 config（與 loadGame 同一守則）
+    try { if (typeof _petRosterDirty !== 'undefined' && _petRosterDirty && player && player.cls && typeof petRosterSave === 'function') petRosterSave(); } catch (e) {}   // 上一角色未寫入的寵物名冊先 flush（比照 loadGame）
+    try { if (typeof _petRosterKey !== 'undefined') _petRosterKey = null; } catch (e) {}   // 失效記憶體快取→新角色重新從共用桶載入（防跨角色髒鏡像）
+    if (typeof freshPlayerState === 'function') player = freshPlayerState();
+    if (typeof freshMapState === 'function') mapState = freshMapState();
     if(typeof stopCreationFrameSfx === 'function') stopCreationFrameSfx();
     // 🔊 v3.4.17 進遊戲：隱藏 creation-panel（原本只隱藏 creation-screen 父層·子面板 classList 無 .hidden 殘留）＋停創角動畫。
     //    否則 _bgmIsCreateScreen()(js/17) 與創角逐幀動畫 tick(下方 animateCreationClassPreview) 都看 creation-panel→誤判「還在創角」→登入/創角 BGM 一直播、創角音效每 loop 重觸發。
@@ -1270,11 +1295,12 @@ function startGame() {
     player.skills = [];
     player.summon = null; player.charmed = null; player.manualCd = {}; player.hots = {}; player.elfEle = null; player.buffs = { haste: 0, brave: 0, blue: 0, cautious: 0, elfcookie: 0, poly: 0, shield: 0 };   // 🔧 v3.5.94 移除零讀取的舊制孤兒欄位 hot(單數)；團隊 HoT 休眠機制狀態一律存 hots(複數 dict)
     
+    resetConfigDomToDefaults();   // 🧼 v3.7.73 設定面板還原為預設：原本只清下面 7 個勾選框，藥水/施法門檻(HP%、MP%)、技能下拉與其餘勾選會被新角色繼承
     ['set-haste', 'set-brave', 'set-blue', 'set-cautious', 'set-poly', 'set-auto-buy-pot', 'set-auto-buy-arrow'].forEach(id => {
         let el = document.getElementById(id);
-        if(el) el.checked = false;
+        if(el) el.checked = false;   // 這 7 項維持「新角色一律關閉」（set-auto-buy-arrow 的 HTML 預設為勾選，但新角色刻意不開）
     });
-    
+
     // 依據不同職業配發專屬起始道具
     if (player.cls === 'elf') {
         gainItem('wpn_shortbow', 1, true, true);  // 短弓
@@ -1370,6 +1396,33 @@ function startGame() {
     saveGame();   // 🔧 創角完成立即存檔：先前要等 5 分鐘自動存檔，期間關閉頁面角色會直接消失
 }
 
+// 🧼 v3.7.73 自動化設定面板的「頁面載入預設值」快照＋還原（新角色專用）。
+//   不還原的話：saveGame 會用「上一個角色留在畫面上的設定」重建新角色的 player.config
+//   （藥水種類/HP%、攻擊技與 MP%、治癒技與 HP%、消耗HP技能門檻、各卷軸勾選…）。
+//   於本檔求值當下擷取——index.html 的設定面板 markup 在 <script> 標籤之前，此時取到的就是 HTML 預設值。
+const CONFIG_DOM_IDS = ['set-pot', 'set-hp-pot', 'set-auto-buy-pot', 'set-mp-atk', 'sel-atk-skill', 'set-mp-heal', 'sel-heal-skill',
+    'set-hp-skill', 'set-hp-convert', 'sel-convert-skill', 'set-haste', 'set-brave', 'set-blue', 'set-cautious',
+    'set-elfcookie', 'set-poly', 'set-magicbarrier', 'set-teleport', 'set-auto-buy-arrow'];
+const CONFIG_DOM_DEFAULTS = (function () {
+    let d = {};
+    try { CONFIG_DOM_IDS.forEach(id => { let el = document.getElementById(id); if (el) d[id] = (el.type === 'checkbox') ? el.checked : el.value; }); } catch (e) {}
+    return d;
+})();
+function resetConfigDomToDefaults() {
+    CONFIG_DOM_IDS.forEach(id => {
+        let el = document.getElementById(id);
+        if (!el || CONFIG_DOM_DEFAULTS[id] === undefined) return;
+        if (el.type === 'checkbox') el.checked = CONFIG_DOM_DEFAULTS[id]; else el.value = CONFIG_DOM_DEFAULTS[id];
+    });
+    // 藥水下拉的文字顏色由 onchange 維護，程式化賦值不會觸發 → 比照 loadGame 自行補上
+    let ps = document.getElementById('set-pot');
+    if (ps) {
+        ps.classList.remove('text-red-300', 'text-orange-300', 'text-white');
+        ps.classList.add(ps.value === 'potion_heal' ? 'text-red-300' : (ps.value === 'potion_strong' ? 'text-orange-300' : 'text-white'));
+    }
+    // 動態產生的法術 Buff 勾選列（上一角色的技能）：全部取消；新角色的清單稍後由 renderSkillSelects 重建
+    try { document.querySelectorAll('#auto-buff-skills input[type="checkbox"]').forEach(c => { c.checked = false; }); } catch (e) {}
+}
 function updateClassPotionRows() {
     // 勇敢藥水：騎士／龍騎士限定；慎重藥水：法師／幻術士限定；精靈餅乾：妖精限定
     let braveRow = document.getElementById('ui-brave-row');

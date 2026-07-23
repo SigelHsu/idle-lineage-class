@@ -516,6 +516,7 @@
         #battle-view.area-fit .mob-target.duel-fixed { position: absolute; height: 242px; width: auto; min-width: 96px; transform: translate(-50%, -50%); z-index: 1; }
         /* 🔻 v3.1.65 溢框動畫怪(MOB_ANIM_SMALL·js/09 加 .mob-anim-small·如希爾黛斯)：整體 max-height 降至 85%(較上方 100% 多一個 class → 特異性勝出)。本體+_s+_w 三層同吃此上限→等比縮小逐幀對齊；技能特效(anchored)依本體 rect 縮放→亦同步縮小。腳底對齊(object-position bottom)不變。修 v3.0.68 裁畫布過緊致 attack/death 撐到頂緣「超出圖片框」。 */
         #battle-view.area-fit .mob-target:not(.boss-slot):not(.boss-zoom) .mob-img-inner.mob-anim.mob-anim-small img { max-height: 85% !important; }
+        /* 🏰 v3.7.82 用戶指定復原：v3.7.79 的 .siege-mob 縮放（攻城敵人整體 scale .8·js/09 加 class）四條規則已整組移除，攻城敵人回到與其他怪物相同的原生尺寸。要再縮回去＝配方見記憶 siege-building-fixed-position。 */
         /* 🧝 v3.0.46 玩家變身戰鬥 sprite（js/09 _playerMorphApply 懶建）：狩獵區最下方中間偏左·原生像素三層(影子 multiply/本體/武器 screen)。
            ⚠️容器與各層皆不用 transform（隔離群組會使 _w 的 screen blend 失效＝黑框病根 v3.0.19）→ 置中由 js 以 left:calc(44% - 寬/2) 完成。 */
         #player-morph-sprite { position: absolute; bottom: 4px; height: 1px; z-index: 2; pointer-events: none; overflow: visible; }
@@ -1727,6 +1728,17 @@ button.classic-skill-cell { cursor:pointer; }
     color:#d9f99d;
     font-size:11px;
     font-weight:600;
+}
+/* 🧑‍🤝‍🧑 v3.7.85 「擔任傭兵」＝受僱為別人的傭兵（只能待安全區→不可能離線掛機·與綠色的「掛機中」互斥且共用同一個頭頂位置）。
+   只覆寫配色·幾何/字級/RWD 全部沿用上方 .load-offline-badge（含 @media 的縮小規則），避免兩套版位日後走鐘。
+   配色刻意選紫（綠↔紫互為對比色）＝一眼可分，也不撞登入畫面既有的金色系。
+   ⚠️ v3.7.86 用戶指定拿掉副標→此徽章只有 <strong> 單行（掛機中仍是 strong+small 兩行）。 */
+.load-offline-badge.load-badge-party {
+    border-color:rgba(192,132,252,.8);
+    background:rgba(26,8,42,.9);
+    color:#e9d5ff;
+    box-shadow:0 2px 5px rgba(0,0,0,.82), inset 0 1px 0 rgba(255,255,255,.08);
+    text-shadow:0 1px 2px #000, 0 0 6px rgba(168,85,247,.6);
 }
 .load-offline-detail {
     position:absolute;

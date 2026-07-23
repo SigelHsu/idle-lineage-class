@@ -770,7 +770,7 @@ const WC_TOPICS = [
         gen: function () {
             return [
                 '傷害技能放在攻擊技能設定；火牢、冰雪颶風這種持續型是輔助／狀態技能，要在自動化的增益區勾選，不會出現在攻擊技能下拉。',
-                '傭兵會讀來源角色存檔的技能與自動化設定。先切回那隻角色勾好、存檔，再重新招募或更新快照。',
+                '傭兵會讀來源角色存檔的技能與自動化設定。先切回那隻角色勾好、存檔，換回隊長再進一次安全區就會自動刷新隊員資料。',
                 '技能沒放先檢查四件事：有沒有學、MP或HP夠不夠、自動化有沒有勾、技能是否被分在攻擊／治療／輔助的另一欄。'
             ];
         }
@@ -1756,6 +1756,25 @@ function _wcPickIdleChatLine() {
     }
     return _wcRememberChatLine(_wcPick(fresh.length ? fresh : pool));
 }
+function _wcLogOptionalNpcLine(id, npc, kind, question, fallback, className) {
+    fallback = String(fallback || '').trim();
+    let token = 'wc-local-ai-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9);
+    logWorld(`<span class="${className}">${_wcNameHtml(id)}：<span id="${token}">${_wcEsc(fallback)}</span></span>`);
+    let language = (typeof window !== 'undefined') ? window.idleLineageNpcLanguage : null;
+    if (!language || typeof language.rewrite !== 'function') return;
+    Promise.resolve(language.rewrite({
+        kind: kind,
+        npcName: npc && npc.name ? npc.name : '',
+        persona: npc && npc.persona ? npc.persona : '',
+        question: question || '',
+        fallback: fallback
+    }, 9000)).then(function (rewritten) {
+        rewritten = String(rewritten || '').trim();
+        if (!rewritten || rewritten === fallback) return;
+        let target = document.getElementById(token);
+        if (target) target.textContent = rewritten;
+    }).catch(function () {});
+}
 function _wcCanIdleChat() {
     if (typeof document === 'undefined') return false;
     let game = document.getElementById('game-screen');
@@ -1772,7 +1791,7 @@ function _wcPostIdleChat() {
         setTimeout(function() {
             if (!_wcCanIdleChat()) return;
             let id = _wcSpawnNpc();
-            logWorld(`<span class="wc-answer wc-idle-chat">${_wcNameHtml(id)}：${_wcEsc(_wcPickIdleChatLine())}</span>`);
+            _wcLogOptionalNpcLine(id, _wcNpcs[id], 'chat', '', _wcPickIdleChatLine(), 'wc-answer wc-idle-chat');
         }, i * (650 + Math.floor(Math.random() * 450)));
     }
 }
@@ -2067,9 +2086,9 @@ function worldChannelAsk() {
                         let tone = WC_TONE[npc.persona] || WC_TONE.helpful;
                         logWorld(`<span class="wc-answer">${_wcNameHtml(id)}：${_wcEsc(_wcPick(tone.open) + core + _wcPick(tone.end))}</span>`);
                     } else if (kind === 'chat') {
-                        logWorld(`<span class="wc-answer">${_wcNameHtml(id)}：${_wcEsc(_wcPickIdleChatLine())}</span>`);
+                        _wcLogOptionalNpcLine(id, npc, 'chat', q, _wcPickIdleChatLine(), 'wc-answer');
                     } else {
-                        logWorld(`<span class="wc-mock">${_wcNameHtml(id)}：${_wcEsc(_wcPick(WC_MOCK_LINES))}</span>`);
+                        _wcLogOptionalNpcLine(id, npc, 'mock', q, _wcPick(WC_MOCK_LINES), 'wc-mock');
                     }
                 } catch (e) {}
             }, delay);

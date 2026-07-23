@@ -798,6 +798,7 @@ function relicPurposeLabels(d) {
     if (d.hitstunReduce) out.push(`受擊硬直縮短${(d.hitstunReduce / 10).toFixed(1)}秒`);
     if (d.aggroHide) out.push('隱匿仇恨（較不容易成為敵人目標）');
     if (d.aggroWeight) out.push(`${d.aggroWeight > 0 ? '提高' : '降低'}仇恨（${d.aggroWeight > 0 ? '更' : '較不'}容易被攻擊）`);
+    if (d.aggroMin) out.push('被攻擊權重必定為 1（最低·無視職業與其他仇恨裝備）');   // 🫥 v3.7.88 隱身斗篷
 
     if (d.auraDmg) out.push(`傷害光環（每${((d.auraDmg.interval || 10) / 10).toFixed(1)}秒對全體敵人造成${d.auraDmg.dmg}點傷害）`);
     if (d.thorns) out.push(`受擊反傷（反彈${d.thorns}點傷害）`);
@@ -1097,6 +1098,7 @@ function buildItemDescHTML(item) {
             let _statusName = (DB.skills[d.procStatusSkill.skId] && DB.skills[d.procStatusSkill.skId].n) || '異常狀態';
             _eff.push(`異常攻擊 ${d.procStatusSkill.rate || 0}%（命中時造成${_statusName}）`);
         }
+        if (d.procStatus && d.procStatus.kind) _eff.push(`異常攻擊 ${d.procStatus.rate || 0}%（攻擊時使目標${(typeof STATUS_NAME !== 'undefined' && STATUS_NAME[d.procStatus.kind]) || '異常狀態'} ${d.procStatus.dur || 6} 秒）`);   // 🕸️ v3.7.75 深紅之弩：束縛
         if (d.procPoison)            _eff.push(`中毒 ${d.procPoison.rate || 0}%（命中時使目標中毒${d.procPoison.dur ? `，持續${d.procPoison.dur}秒` : ''}）`);
         else if (d.procPoisonRate)   _eff.push(`中毒 ${d.procPoisonRate}%（命中時使目標中毒）`);
         if (d.procInstakill) {
@@ -1168,7 +1170,11 @@ function buildItemDescHTML(item) {
     if(d.magicHit) statsArr.push(`魔法命中${formatBonus(d.magicHit)}`);
     if(d.extraDmg) statsArr.push(`額外傷害${formatBonus(d.extraDmg)}`);
     if(d.extraHit) statsArr.push(`額外命中${formatBonus(d.extraHit)}`);
-    if(d.dr) statsArr.push(`傷害減免${formatBonus(d.dr)}`);
+    if(d.dr) {
+        // 🐉 v3.7.69 安塔瑞斯四防具：傷害減免隨強化成長（+7 起每 +1 再 +1・最高 +3）→ 顯示「該實體當前實際值」，不是死的基礎值
+        let _drGrow = d.drEnFrom7Max3 ? Math.min(3, Math.max(0, (typeof capEn === 'function' ? capEn(item && item.en, d) : (item && item.en) || 0) - 6)) : 0;
+        statsArr.push(`傷害減免${formatBonus(d.dr + _drGrow)}` + (d.drEnFrom7Max3 ? `（強化 +7 起每 +1 再增加 1，最高 +${d.dr + 3}）` : ''));
+    }
     if(d.er) statsArr.push(`迴避(ER)${formatBonus(d.er)}`);
     if(d.weightCap) statsArr.push(`負重上限${formatBonus(d.weightCap)}`);
     if(d.potionBonus) statsArr.push(`藥水恢復量+${d.potionBonus}%`);
