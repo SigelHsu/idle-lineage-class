@@ -75,6 +75,9 @@ const SPELL_FX = {
     '極道落雷': { dir:'極道落雷', prefix:'10-0', n:6, fps:14, blend:'screen', h:2, ax:0.50, ay:0.98 },
     // ⚡ v3.7.52 審判落雷（遺物 克特之盾＋克特之劍·極道落雷升級版）：gfx7004 12幀單向·雷擊發光型→screen；錨點=spr 世界原點(135,198)=落雷著地點
     '審判落雷': { dir:'審判落雷', prefix:'jl', n:12, fps:14, blend:'screen', h:2, ax:0.413, ay:0.762 },
+    // ⚡ v3.7.92 致命落雷（sk_holy_lightning·聖晶魔杖 procSkill）：沿用審判落雷的同一組幀，dir 指同資料夾不另存圖檔。
+    //   走 procFreeMagicSkill → playSpellFx(sk.n, t)，查表鍵＝技能顯示名，故此處鍵名必須與 DB.skills.sk_holy_lightning.n 完全一致。
+    '致命落雷': { dir:'審判落雷', prefix:'jl', n:12, fps:14, blend:'screen', h:2, ax:0.413, ay:0.762 },
     '毒咒': { dir:'毒咒', prefix:'745-0', n:8, fps:14, blend:'screen', h:0.8, ax:0.50, ay:0.55 },
     '沉睡之霧': { dir:'沉睡之霧', prefix:'760-0', n:21, fps:16, blend:'screen', h:0.9, ax:0.50, ay:0.55 },
     '流星雨': { dir:'流星雨', prefix:'762-0', n:20, fps:16, blend:'screen', h:1.9, ax:0.50, ay:0.88 },
