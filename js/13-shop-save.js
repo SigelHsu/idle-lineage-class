@@ -1097,6 +1097,8 @@ function showCreation() {
     if(main) main.classList.add('hidden');
     if(load) load.classList.add('hidden');
     if(creation) creation.classList.remove('hidden');
+    const classicToggle = document.getElementById('create-classic-toggle');
+    if(classicToggle) classicToggle.checked = false;   // 刪角後同頁重創時不得沿用上一輪的經典模式勾選
 
     creationSelectedClassBase = 'royal';
     creationSelectedGender = 'm';
@@ -1569,6 +1571,7 @@ function purgeOrphanItems() {
 
 function loadGame() {
     _uiConfigReady = false;   // 🛡️ 審計#1：載入期間 DOM 仍是上一個畫面/預設值，禁止 saveGame 以它重建 config
+    let _masteryRepair = null;
     // 🐾 v3.3.16 換角色前：先把上一角色未存的寵物進度 flush 進共用桶，再失效記憶體快取→新角色 petRoster() 從桶重載（防跨角色髒鏡像互洗裝備/出戰）。
     try { if (typeof _petRosterDirty !== 'undefined' && _petRosterDirty && player && player.cls && typeof petRosterSave === 'function') petRosterSave(); } catch (e) {}
     try { if (typeof _petRosterKey !== 'undefined') _petRosterKey = null; } catch (e) {}
@@ -1763,6 +1766,7 @@ function loadGame() {
         // 🔧 架構#6：集中式預設值合併（放在所有「轉換型」遷移之後，作為缺漏欄位的統一保底）。
         // 日後新增欄位只需登錄於 SAVE_DEFAULTS；上方逐項 if(undefined) 為歷史遷移，不必再增列。
         applySaveDefaults(player);
+        if (typeof repairMasteryState === 'function') _masteryRepair = repairMasteryState(player);
         if (!player.siege || typeof player.siege !== 'object') player.siege = {};
         if (player.ismaelAccUsed && !(player.siege.accCdUntil > 0)) player.siege.accCdUntil = Date.now() + 24 * 3600 * 1000;
         delete player.ismaelAccUsed;   // 舊版「攻城獲勝重置額度」遷移為購買後 24 小時冷卻。
@@ -1871,6 +1875,14 @@ function loadGame() {
         // 計時器統一由 startGameTimers() 註冊（內含去重），含每 5 分鐘自動存檔。
         startGameTimers();
         logSys(`===== 歡迎回來 =====`);
+        if (_masteryRepair && _masteryRepair.reset) {
+            if (_masteryRepair.reason === 'class-mismatch') {
+                logSys('<span class="text-amber-300 font-bold">已修復舊版刪角殘留的跨職業精通資料；此角色可重新向威頓村的漢接取精通任務。</span>');
+            } else if (_masteryRepair.reason === 'classic-mode') {
+                logSys('<span class="text-slate-400">已清除經典模式角色中不應存在的舊精通資料。</span>');
+            }
+        }
+        if (_masteryRepair && _masteryRepair.changed) saveGame();   // 修復後立即固化，避免重載時再次遇到同一壞狀態
         try { if (typeof purgeReplacedAllies === 'function') purgeReplacedAllies(); } catch (e) {}   // 🤝 v3.4.23 載入後掃描：出戰傭兵的來源存檔位若已換成新角色（enSeed 不同）→ 自動解散
     }
 }
