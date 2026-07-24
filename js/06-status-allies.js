@@ -2562,6 +2562,7 @@ function allyAtkSkillInterval(ally, support, current) {
 // 以「攻擊技能冷卻(_atkSkillCd)」閘門包住職業 act：冷卻好且有攻擊技→本回合施放該技並重設冷卻；否則暫時清空 _atkSkill 讓職業 act 走各自「普攻」路徑(保留妖精連射/黑妖連擊/法師光箭/幻術奇古獸等)。
 function allyActWithSkillGate(ally, actFn) {
     let _sk = ally._atkSkill ? DB.skills[ally._atkSkill] : null;
+    if (_sk && !allySkillElementOk(ally, ally._atkSkill)) _sk = null;   // 🧝 v3.8.5 換屬性後不可用的屬性攻擊技（地面障礙/封印禁地/污濁之水）→視同未設定，走下方普攻分支（會暫清 _atkSkill·職業 act 內部一律退普攻）
     let _mpPct = allyCastMpPct(ally);   // 🆕 v2.6.27 施法MP門檻：MP% 高於此值才施放攻擊技（0=不限）；未達→退回普攻·且不重設冷卻(MP 回滿即施放)
     let _mpOk = (_mpPct <= 0) || ((ally.mp || 0) >= (ally.mmp || 0) * _mpPct / 100);
     // 💙 v3.5.76 究極光裂術（reqJustice）：傭兵以「招募時記錄的來源存檔性向值」判定·非正義（<1000）→本回合退普攻（不設冷卻·同 MP 未達行為）
@@ -2660,6 +2661,22 @@ function _mercAutoOn(ally, sid) {
     if (ally && ally._autoBuff && Object.prototype.hasOwnProperty.call(ally._autoBuff, sid)) return !!ally._autoBuff[sid];   // 🆕 v3.0.97 隊伍面板「逐兵自動維持」覆寫優先（setAllyAutoBuff·存 ally._autoBuff·隨存檔）
     return !!(ally && ally.config && ally.config.autoBuffSkills && ally.config.autoBuffSkills[sid]);   // 否則沿用來源角色存檔的自動施放勾選快照
 }
+// 🧝 v3.8.5 妖精屬性閘（傭兵版·單一真相）：妖精換屬性後，舊屬性的三/四/五階精靈魔法在他自己身上是「灰色不可用」
+//   （玩家端 canCast js/07:395-396 的 reqEle／reqEleAny 閘）。傭兵路徑原本**完全沒有這道閘** → 隊伍面板照列出來、
+//   自動維持照跑（舊屬性 buff 照吃衍生值又照扣 MP）。用戶要求：擔任傭兵時自動隱藏 → 隱藏＋停止施放成對，
+//   否則會變成「看不到卻還在生效」。
+//   ⚠️判定必須用 **ally.elfEle**（傭兵快照自帶·buildAlly 深拷貝來源存檔）——不可用 player.elfEle，那是拿隊長的屬性
+//     去判傭兵的技能（也正是 _allySkillOptions 原註解說「不可用 reqEle 判可用性」的原因；改讀 ally 後就成立了）。
+//   granted（裝備/頭盔賦予）比照玩家豁免屬性閘。非妖精職業的技能無 reqEle/reqEleAny → 一律 true，零影響。
+function allySkillElementOk(ally, sid) {
+    let sk = DB.skills[sid]; if (!sk) return true;
+    if (!sk.reqEle && !sk.reqEleAny) return true;
+    if (ally && ally.grantedSkills && ally.grantedSkills.includes(sid)) return true;
+    let ele = (ally && ally.elfEle) || '';
+    if (sk.reqEle && ele !== sk.reqEle) return false;   // 屬性不符（換屬性後的舊屬性魔法）
+    if (sk.reqEleAny && !ele) return false;             // 尚未選擇屬性
+    return true;
+}
 // 🔮 v2.7.96 幻術士傭兵立方屬性抗性 rider（補 parity）：玩家立方 buff 給 d:{resFire/resEarth/resWind:+30}(recompute 讀 player.buffs)；傭兵立方走 allyCubeTick 不寫 ally.buffs→抗性原本拿不到。改在重算後(buildAlly/_allyLevelRecompute)直接補「已學會＋來源有勾自動施放」的立方抗性到 ally.d（與 allyCubeTick 傷害的勾選閘一致；受屬性攻擊時 js/04:891-894/1007-1010 讀 ally.d.res*）。
 // Helmet-granted and learned versions are the same buff. Prefer the helmet version when both are enabled.
 const _MERC_HELM_BUFF_PRIORITY = { sk_ench_wpn: 'sk_helm_str1', sk_dex_up: 'sk_helm_dex1', sk_reveal: 'sk_helm_str2' };
@@ -2702,6 +2719,7 @@ function allyAutoCastableSkills(ally) {
     for (let i = 0; i < ally.skills.length; i++) {
         let sid = ally.skills[i]; if (seen[sid]) continue;
         let sk = DB.skills[sid]; if (!sk) continue;
+        if (!allySkillElementOk(ally, sid)) continue;   // 🧝 v3.8.5 換屬性後不可用的屬性魔法→不列入「自動維持」勾選（同步下方維持迴圈的閘）
         let cat = null;
         if (sid === 'sk_antidote' || sid === 'sk_holy_light' || sid === 'sk_cancel') cat = '淨化';
         else if (sk.type === 'heal' && sk.hot && sk.autoBuff) cat = '團隊回復';
@@ -2757,6 +2775,7 @@ function allyMaintainBuffs(ally) {
         for (let sid of ally.skills) {
             let sk = DB.skills[sid];
             if (!_isMercSelfBuff(sk, sid)) continue;
+            if (!allySkillElementOk(ally, sid)) continue;   // 🧝 v3.8.5 妖精換屬性後的舊屬性 buff（火焰武器/烈炎武器/大地防護…）不再維持：面板已隱藏·此處同步停放（原本會照吃 d 加成又照扣 MP）
             // 🆕 v2.7.29 傭兵自我增益改「比照玩家 opt-in」：玩家的 buff 是勾選框控制（auto-sk-<id>·預設未勾＝不施放），
             //    存於 config.autoBuffSkills（buildAlly 深拷貝已帶入傭兵快照）。傭兵原本無條件維持「所有已學 buff」→會維持玩家根本沒開的 buff 白扣 MP（王族/龍騎士尤其明顯：MP 只出不進）。
             //    改為：只維持「來源角色有勾選自動施放」的 buff（沒有 config 或未勾＝不維持·與該角色親自遊玩時完全一致）。⚠️summon/HoT 走各自區塊·此閘只管 _isMercSelfBuff 自我增益。
@@ -2793,8 +2812,8 @@ function allyMaintainBuffs(ally) {
         if (!_live) {
             // 👑 v2.7.95 召喚也吃「開啟閘」：只召「來源角色有勾選自動施放」的召喚術（比照玩家 autoActions·玩家沒開→傭兵不耗 MP 召喚）；優先強力版 sk_summon>sk_elf_summon2>其他，但每個候選都須通過 _mercAutoOn
             let _sumSid = (ally.skills.includes('sk_summon') && _mercAutoOn(ally, 'sk_summon')) ? 'sk_summon'
-                : (ally.skills.includes('sk_elf_summon2') && _mercAutoOn(ally, 'sk_elf_summon2')) ? 'sk_elf_summon2'   // 🩸 妖精傭兵優先「召喚強力屬性精靈」(上級精靈)：先學的一般版 sk_elf_summon 排在前面，.find 會先抓到它 → 傭兵永遠只召弱版；顯式優先強力版修正
-                : ally.skills.find(s => { let d = DB.skills[s]; return d && d.type === 'buff' && d.summon && _mercAutoOn(ally, s); });
+                : (ally.skills.includes('sk_elf_summon2') && _mercAutoOn(ally, 'sk_elf_summon2') && allySkillElementOk(ally, 'sk_elf_summon2')) ? 'sk_elf_summon2'   // 🩸 妖精傭兵優先「召喚強力屬性精靈」(上級精靈)：先學的一般版 sk_elf_summon 排在前面，.find 會先抓到它 → 傭兵永遠只召弱版；顯式優先強力版修正。🧝 v3.8.5 屬性精靈召喚是 reqEleAny → 尚未選屬性者不召（比照玩家）
+                : ally.skills.find(s => { let d = DB.skills[s]; return d && d.type === 'buff' && d.summon && _mercAutoOn(ally, s) && allySkillElementOk(ally, s); });
             if (_sumSid) {
                 let _ssk = DB.skills[_sumSid];
                 let _scost = (ally.d && typeof ally.d.getMpCost === 'function') ? ally.d.getMpCost(_ssk.mp, _ssk.tier) : (_ssk.mp || 0);
@@ -2948,6 +2967,7 @@ function alliesTick() {
         // 🍃 傭兵維持團隊 HoT（生命的祝福/體力回復術）：已學會的 hot+autoBuff 技能·該技能團隊 HoT 未在持續中→施放(全隊回復·消耗傭兵MP)·安全區不施放·硬控/沉默/魔封中不施放
         if (!_ccBlock && !_castBlock && (ally._healCastCd || 0) <= 0 && ally.skills && ally.skills.length && !mapState.current.startsWith('town_')) for (let _hid of ally.skills) {   // 🛡️ v2.6.69 審計#19：補 !_castBlock——沉默中不能補血卻能放 HoT 自相矛盾（玩家路徑走 castSkillInner 有沉默閘）
             let _hsk = DB.skills[_hid]; if (!_hsk || !_hsk.hot || !_hsk.autoBuff) continue;
+            if (!allySkillElementOk(ally, _hid)) continue;   // 🧝 v3.8.5 生命的祝福需水屬性：換屬性後不再施放（面板已隱藏其自動維持勾選）
             if (!_mercAutoOn(ally, _hid)) continue;   // 👑 v2.7.95 團隊 HoT(生命的祝福/體力回復術)也吃「開啟閘」：來源角色沒勾自動施放→傭兵不耗 MP 放（比照玩家 autoActions js/07:814-817）
             if (player.hots && player.hots[_hid] && player.hots[_hid].ticksLeft > 0) continue;   // 已在持續→不重複(單一團隊實例·後放取代先放)
             let _hcost = (ally.d && typeof ally.d.getMpCost === 'function') ? ally.d.getMpCost(_hsk.mp || 0, _hsk.tier) : (_hsk.mp || 0);   // 🛡️ v2.6.69 審計#20：套 mpReduce/學徒折扣（比照傭兵攻擊技/淨化）
@@ -2960,7 +2980,7 @@ function alliesTick() {
         // 🔄 傭兵轉換技能：安全區／硬控／沉默不施放，頻率改由自身職業／變身 cast 控制，不再固定每 3 秒。
         if (!_ccBlock && !_castBlock && (ally._convertSkillCd || 0) <= 0 && ally._convertSkill && !mapState.current.startsWith('town_')) {
             let _cvsk = DB.skills[ally._convertSkill];
-            if (_cvsk && _cvsk.type === 'convert' && ally.skills && ally.skills.includes(ally._convertSkill)) {
+            if (_cvsk && _cvsk.type === 'convert' && ally.skills && ally.skills.includes(ally._convertSkill) && allySkillElementOk(ally, ally._convertSkill)) {   // 🧝 v3.8.5 屬性閘一致性（現行 convert 技皆無 reqEle·未來新增即自動涵蓋）
                 let _hs = allyHpSkillPct(ally);
                 let _hpOk = (_hs <= 0) || ((ally.curHp || 0) > (ally.mhp || 1) * _hs / 100);   // 🛡️ 低於停耗HP技門檻→暫停(轉換技耗HP)
                 if (_hpOk && (ally.mp || 0) < (ally.mmp || 0) * 0.9 && allyCastConvert(ally, _cvsk)) ally._convertSkillCd = allyAtkSkillInterval(ally, true, ally._convertSkillCd);
@@ -3031,6 +3051,7 @@ function allyTryHeal(ally) {
     let sid = ally._healSkill; if (!sid) return false;
     if ((ally._healCastCd || 0) > 0) return false;   // 🔮 治癒套用與攻擊施法相同的職業／變身 cast 間隔
     let sk = DB.skills[sid]; if (!sk) return false;
+    if (!allySkillElementOk(ally, sid)) return false;   // 🧝 v3.8.5 生命之泉/生命的祝福需水屬性：換屬性後停放（下拉已隱藏·殘留的舊選擇不再生效；換回原屬性即自動恢復）
     // 🩸 v2.6.69 審計#9：治癒欄支援吸血魔法（寒冷戰慄/吸血鬼之吻·type:'atk'+healSlot）——UI 可選但原讀取端只收 type:'heal'，選了永不施放。
     //    吸血只回復施放者本人 → 只看「自身」HP 門檻；有存活目標且 MP 足夠→走 allyCastMagic（其 lifesteal 分支回復 ally.curHp）
     if (sk.type === 'atk' && sk.healSlot) {

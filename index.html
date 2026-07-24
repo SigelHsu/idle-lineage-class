@@ -393,7 +393,13 @@
                 <!-- 🔧 v2.6.74 自動化設定改「分頁內嵌」（原 v2.6.73 浮動視窗取消）：與 能力/技能 同框架，switchTab(automation) 切換；set-* 控制項恆在 DOM 供 saveGame/自動化讀取 -->
                 <div id="tab-automation" class="p-4 text-base overflow-y-auto h-full hidden">
                     <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 flex flex-col gap-2">
-                        <button type="button" class="btn w-24 py-1 mb-2 text-sm font-bold bg-slate-700 hover:bg-slate-600 border-slate-500 text-slate-100" onclick="returnToCharacterSelect()">回選角</button>
+                        <div class="flex items-center gap-2 mb-2">
+                            <button type="button" class="btn w-24 py-1 text-sm font-bold bg-slate-700 hover:bg-slate-600 border-slate-500 text-slate-100" onclick="returnToCharacterSelect()">回選角</button>
+                            <label id="npc-language-setting" class="btn min-w-32 py-1 px-3 text-sm font-bold bg-slate-700 hover:bg-slate-600 border-slate-500 text-cyan-100 cursor-pointer flex items-center justify-center gap-2" title="本機 NPC AI 對話">
+                                <input type="checkbox" id="set-npc-language-on" class="w-4 h-4" onchange="setNpcLanguageEnabled(this.checked)">
+                                <span>NPC AI 對話</span>
+                            </label>
+                        </div>
                         <div class="flex items-center justify-between gap-3">
                             <label class="cursor-pointer flex items-center gap-2"><input type="checkbox" id="set-sfx-on" class="w-4 h-4" onchange="try{setSfxOn(this.checked)}catch(e){}"><span class="text-sm text-amber-200 font-bold">🔊 戰鬥音效</span></label>
                             <input type="range" id="set-sfx-vol" min="0" max="100" value="50" step="5" class="flex-1 max-w-[150px]" oninput="try{setSfxVol(this.value)}catch(e){}" title="音效音量">
@@ -551,11 +557,11 @@
     <script src="js/03-combat-core.js?v=v3.8.4-guard-support"></script>
     <script src="js/04-combat-attack.js?v=v3.8.3-dancefire-team"></script>
 <script src="js/05-kill-progression.js?v=v3.8.2-main-gear"></script>
-    <script src="js/06-status-allies.js?v=v3.8.4-guard-support"></script>
+    <script src="js/06-status-allies.js?v=v3.8.5-merc-elf-ele"></script>
     <script src="js/07-skills-cast.js?v=v3.7.97-threat"></script>
 <script src="js/08-items-equip.js?v=v3.7.96"></script>
 <script src="js/09-vfx-render.js?v=v3.7.95"></script>
-<script src="js/10-ui-tabs.js?v=v3.8.1-catchup-squadpanel"></script>
+<script src="js/10-ui-tabs.js?v=v3.8.5-merc-elf-ele"></script>
 <script src="js/11-world-map.js?v=v3.7.99-wino-sprite"></script>
 <script src="js/12-npc-quests.js?v=v3.7.56"></script>
 <script src="js/13-shop-save.js?v=v3.8.2-merc-exp-monotonic"></script>
@@ -571,7 +577,7 @@
     <script src="js/22-pets.js?v=v3.8.3-dancefire-team"></script>
     <script src="js/24-pandora-relic-market.js?v=v3.7.70"></script>
     <script src="js/25-clan-system.js?v=v3.7.96-castle-guards"></script>
-    <script src="js/26-world-channel.js?v=v3.7.95"></script>
+    <script src="js/26-world-channel.js?v=v3.8.4-npc-language"></script>
 <script src="js/28-pvp-arena.js?v=v3.7.89-stage33-host-sign"></script>
 <script src="js/29-siege-v2-data.js?v=v3.7.63-siege-v2"></script>
 <script src="js/30-siege-v2.js?v=v3.7.89-castle-ring-layout"></script>
