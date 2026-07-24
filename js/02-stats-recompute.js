@@ -1,4 +1,12 @@
 let _recomputingAlly = false;   // 🌟 v3.0.100 recompute 對象是否為傭兵（buildAlly/_allyLevelRecompute 設 true）：true→跳過「傭兵來源幻覺攻擊光環注入玩家」段（傭兵走 alliesTick 逐回合注入·勿於此重複）
+function mainPlayerHasEquippedEffect(flag) {
+    if (!flag || typeof player === 'undefined' || !player || player._allyName || _recomputingAlly || !player.eq) return false;
+    for (let slot in player.eq) {
+        let item = player.eq[slot], def = item && DB.items[item.id];
+        if (def && def[flag]) return true;
+    }
+    return false;
+}
 function critFurySpeedMultiplier(active, percent) {
     return active ? (1 / (1 + ((percent || 30) / 100))) : 1;
 }
@@ -387,7 +395,7 @@ d.mr += (baseMr + bonusMr);
         if(ed.wearerEle) d.wearerEle = ed.wearerEle;          // 🏺 遺物 火焰/寒冷化身：裝備者化為某屬性（受擊屬性剋制·js/04）
         if(ed.physDrGated) d.physDrGated += ed.physDrGated;   // 🐍 遺物 祭祀儀式陶罐：受一般攻擊傷害減少%（3秒節流·js/04）
         if(ed.lowMpRegenBonus) d.lowMpRegenBonus += ed.lowMpRegenBonus;   // 🐍 遺物 蛇神的凝視：MP<15% 時 MP自然恢復額外+N（js/03 _regenMP）
-        if(ed.moveSpeedPct) d.moveSpeedPct += ed.moveSpeedPct;   // 🏺 遺物 寄居蟹背殼：移動速度%（影響怪物重生延遲）
+        if(!_recomputingAlly && !p._allyName && ed.moveSpeedPct) d.moveSpeedPct += ed.moveSpeedPct;   // 移速裝備只計主操作玩家；傭兵裝備不影響全隊接敵／補怪速度
         if(e.gw && Array.isArray(e.gw)) e.gw.forEach(w => {   // 🏺 v3.6.44 巨靈的三個願望（非六維願望·六維於 Phase 1 區塊套用）
             if (w === 'hp60') p.mhp += 60; else if (w === 'mp30') p.mmp += 30;
             else if (w === 'md3') d.meleeDmg += 3; else if (w === 'rd3') d.rangedDmg += 3;
@@ -1017,7 +1025,7 @@ function playerMoveDelayMultiplier() {
     if (dashSid) mult *= 1 / ((DB.skills[dashSid] && DB.skills[dashSid].moveSpeedMult) || 1.33);   // 神聖疾走／風之疾走：移速+33%（速度×1.33）；若舊存檔同時殘留，風之疾走優先且不疊加
     if (buffs.elfcookie > 0 && !windDashOn) mult *= (1/1.15);  // 精靈餅乾：移速+15%；風之疾走存在時只保留餅乾攻速，不疊加移速
     if (buffs.sk_dark_walkhaste > 0) mult *= (1/1.15);         // 行走加速：移速+15%（🔧 v3.5.37 1/1.15）
-    let equipPct = p.d && p.d.moveSpeedPct ? Math.max(-95, p.d.moveSpeedPct) : 0;
+    let equipPct = !p._allyName && !_recomputingAlly && p.d && p.d.moveSpeedPct ? Math.max(-95, p.d.moveSpeedPct) : 0;
     if (equipPct) mult *= 1 / (1 + equipPct / 100);            // 裝備移動速度
     return Math.max(0.001, mult);
 }

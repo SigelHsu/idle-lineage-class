@@ -2591,8 +2591,7 @@ function allRelicIds() {
 //   命中 0.001% 後，再從「全部遺物」等機率抽 1 件（非依 gachaWeight 權重──遺物權重一律 0，用權重抽會全員 0 抽不出東西）。
 function playerNpcRelicDrop(mob) {
     if (typeof isSiegeArea === 'function' && isSiegeArea(mapState.current)) return;   // 🏰 攻城區一律不掉（比照 pledgeBonusDrop 首行·防無冷卻攻城變成刷遺物場）
-    let _relicX2 = 1;   // 🐰 幸運暴走兔腳（需裝備）：遺物掉落機率 ×2（比照 js/05 怪物掉落表的遺物判定）
-    try { for (let _k in player.eq) { let _e = player.eq[_k]; if (_e && DB.items[_e.id] && DB.items[_e.id].relicDropX2) { _relicX2 = 2; break; } } } catch (e) {}
+    let _relicX2 = (typeof mainPlayerHasEquippedEffect === 'function' && mainPlayerHasEquippedEffect('relicDropX2')) ? 2 : 1;   // 幸運暴走兔腳只讀主操作玩家裝備；傭兵／寵物裝備不影響掉落率
     let _npcRelicRate = 0.00001 * _relicX2 * classicDropMult();
     if (typeof partyDropRate === 'function') _npcRelicRate = partyDropRate(_npcRelicRate);
     if (Math.random() >= _npcRelicRate) return;   // 0.001% 基礎；兔腳與有效隊伍人數倍率依序套用
