@@ -694,7 +694,7 @@ d.mr += (baseMr + bonusMr);
     }
     if(p.buffs.sk_dragon_bloodlust > 0) spdMult *= (1/1.15);   // 🐉 血之渴望：攻速+15%（速度×1.15；與加速/覺醒/變身相乘疊加）
     // 🌟 v3.0.100 玩家攻擊也吃「傭兵提供的幻覺攻擊光環」(化身+10/歐吉+4傷+4命/巫妖+2魔傷)：玩家自身幻覺已由上方 buff 迴圈套入 d·此處只補「傭兵來源」(teamIlluAura(p) 已排除玩家自身避免雙算)·限玩家(_recomputingAlly=false·傭兵走 alliesTick 注入)。傭兵化身狀態變動時由 allyMaintainBuffs 觸發 calcStats 刷新此段。
-    if (!_recomputingAlly && typeof teamIlluAura === 'function') { let _mia = teamIlluAura(p); if (_mia) { d.extraDmg += _mia.ed; d.extraHit += _mia.eh; d.magicDmg += _mia.md; } }
+    if (!_recomputingAlly && typeof teamIlluAura === 'function') { let _mia = teamIlluAura(p); if (_mia) { d.extraDmg += _mia.ed; d.extraHit += _mia.eh; d.magicDmg += _mia.md; d.meleeDmg += (_mia.mel || 0); } }   // 🔥 v3.8.3 mel＝舞躍之火團隊光環（近距離傷害·自身持有時已由上方 buff 迴圈算入·此處只補其他隊員來源）
     // 🏺 人面獅身的漆黑羽翼（drPerEr）：傷害減免 +（完整 ER ÷ N）。ER 的迴避效益遞減由 effResistPct 處理，此處不設上限。
     if (p.eq) { for (let _dk in p.eq) { let _de = p.eq[_dk]; if (!_de) continue; let _dd = DB.items[_de.id];
         if (_dd && _dd.drPerEr) d.dr += relicDrPerErBonus(d.er, _dd.drPerEr); } }

@@ -1457,8 +1457,16 @@ function teamIlluAura(forWho, forMinion) {
         let r = (DB.skills.sk_royal_burnweapon && DB.skills.sk_royal_burnweapon.d) || {};
         royalEd = r.extraDmg || 0; ed += royalEd; eh += r.extraHit || 0;
     }
-    if (ed === 0 && eh === 0 && md === 0) return null;
-    return { ed: ed, eh: eh, md: md, royalEd: royalEd };
+    // 🔥 v3.8.3 舞躍之火（團隊光環）：任一隊員維持 → 全隊「近距離傷害 +3」＝玩家／傭兵／寵物／召喚物／城堡護衛。
+    //    受益者自身持有時其 meleeDmg 已由 recomputeStats 的 buff 迴圈算進自身 d → 此處不補（避免雙算），比照上方灼熱武器。
+    //    寵物/召喚/護衛沒有 .buffs 也沒有 d.meleeDmg → 一律取得光環，由各自傷害式直接加 mel。
+    let mel = 0;
+    if (!(forWho && forWho.buffs && (forWho.buffs.sk_elf_dancefire || 0) > 0) && _teamAuraHas('sk_elf_dancefire', forWho)) {
+        let f = (DB.skills.sk_elf_dancefire && DB.skills.sk_elf_dancefire.d) || {};
+        mel = f.meleeDmg || 0;
+    }
+    if (ed === 0 && eh === 0 && md === 0 && mel === 0) return null;
+    return { ed: ed, eh: eh, md: md, mel: mel, royalEd: royalEd };
 }
 function enemyAttackAlly(mob, ally) {
     if (!ally) return;
